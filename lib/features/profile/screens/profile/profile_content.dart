@@ -471,7 +471,8 @@ extension _ProfileContent on _ProfileScreenState {
                 ),
                 // ADR-0022 / plan 5.2: a binary that sells nothing links to no
                 // website (a store reviewer may read any such link as steering).
-                if (showsUpgradeAffordance())
+                // OI-519: nor does a Play build, which DOES sell (steering).
+                if (PurchaseMode.current.showsWebLinks)
                 ProfileRow(
                   icon: Icons.language_outlined,
                   title: 'icanbefitter.com',

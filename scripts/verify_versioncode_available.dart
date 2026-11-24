@@ -29,9 +29,12 @@
 //   dart run scripts/verify_versioncode_available.dart               # check only
 //   dart run scripts/verify_versioncode_available.dart --record apk  # check + record artifact=apk
 //   dart run scripts/verify_versioncode_available.dart --record aab  # check + record artifact=aab
+//   ... --record aab --purchase-mode play_billing  # also records what the binary sells (OI-519; optional)
 
 import 'dart:convert';
 import 'dart:io';
+
+import 'resolve_purchase_mode.dart' show kPurchaseModes, purchaseModeArg;
 
 void main(List<String> args) {
   final projectRoot = Directory.current.path;
@@ -45,6 +48,23 @@ void main(List<String> args) {
   if (shouldRecord && (artifact != 'apk' && artifact != 'aab')) {
     stderr.writeln(
         '[versioncode-guard] ERROR — --record requires "apk" or "aab" (got: ${artifact ?? '<none>'}).');
+    exit(1);
+  }
+
+  // OI-519: optional, recorded with the entry so the ledger says what each
+  // binary sells (`/build-apk` passes the mode it resolved).
+  // Read exactly as the resolver reads it (both spellings, lower-cased), so
+  // whatever `/build-apk` accepted before the build is what it records after.
+  String? purchaseMode;
+  try {
+    purchaseMode = purchaseModeArg(args);
+  } on FormatException catch (e) {
+    stderr.writeln('[versioncode-guard] ERROR — ${e.message}.');
+    exit(1);
+  }
+  if (purchaseMode != null && !kPurchaseModes.contains(purchaseMode)) {
+    stderr.writeln(
+        '[versioncode-guard] ERROR — --purchase-mode must be razorpay, none or play_billing (got: $purchaseMode).');
     exit(1);
   }
 
@@ -113,11 +133,13 @@ void main(List<String> args) {
     ledger[version] = {
       'artifact': artifact,
       'built_at': now,
+      if (purchaseMode != null) 'purchase_mode': purchaseMode,
     };
     ledgerFile
       ..createSync(recursive: true)
       ..writeAsStringSync(const JsonEncoder.withIndent('  ').convert(ledger));
-    stdout.writeln('[versioncode-guard] RECORDED — $version (artifact=$artifact).');
+    stdout.writeln('[versioncode-guard] RECORDED — $version (artifact=$artifact'
+        '${purchaseMode != null ? ', purchase_mode=$purchaseMode' : ''}).');
   }
 }
 

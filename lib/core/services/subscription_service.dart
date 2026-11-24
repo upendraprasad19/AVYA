@@ -16,6 +16,32 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 /// not yet renewed. Decided by the pure [SubscriptionService.expiryBannerSeverity].
 enum ExpiryBannerSeverity { none, expiringSoon, lapsed }
 
+/// The Play display fields of one subscription read (OI-519, plan section 5).
+typedef PlayDisplayFields = ({
+  String? store,
+  bool? autoRenews,
+  String? storeExpiresAt,
+});
+
+/// PURE. Reads `store`, `auto_renew` and `store_expires_at` from a
+/// `subscriptions` row (refreshFromSupabase) or a `verify-subscription` /
+/// `revenuecat-sync` body. Only a `store == 'play'` source yields values; any
+/// other source (our own rows, an old server without the fields) yields all
+/// null, which [SubscriptionService.writeSubscriptionState] turns into a
+/// DELETE of the three keys.
+PlayDisplayFields playDisplayFields(Map<String, dynamic> source) {
+  if (source['store'] != 'play') {
+    return (store: null, autoRenews: null, storeExpiresAt: null);
+  }
+  final rawExpiry = source['store_expires_at'];
+  final expiry = rawExpiry is String ? DateTime.tryParse(rawExpiry) : null;
+  return (
+    store: 'play',
+    autoRenews: source['auto_renew'] == true,
+    storeExpiresAt: expiry?.toIso8601String(),
+  );
+}
+
 /// Manages PRO subscription state.
 ///
 /// Reads/writes Hive configBox for instant local checks (offline-first).
@@ -124,6 +150,16 @@ class SubscriptionService {
   /// NOT stamped on cross-account/sign-out wipes — only the genuine-expiry
   /// branch in [isPro] sets it.
   static const String _proLapsedAtKey = 'pro_lapsed_at';
+
+  /// Play subscription display state (OI-519, plan section 5). Written only by
+  /// [writeSubscriptionState] (a `null` argument DELETES the key, so every
+  /// non-Play write clears them) and deleted by [_downgradeLocally]. Gating
+  /// never reads them: it keeps using [_expiresAtKey] (= the row's end_date).
+  /// NOT `auto_renew`: `ai_snapshot_builder` once read a config key by that
+  /// name (plan round 2 #3).
+  static const String _proStoreKey = 'pro_store';
+  static const String _proAutoRenewsKey = 'pro_auto_renews';
+  static const String _proStoreExpiresAtKey = 'pro_store_expires_at';
 
   /// Debug-only (year-sim harness). When true, [refreshFromSupabase] skips its
   /// server query + downgrade so a dev-granted PRO state survives a simulation.
@@ -279,6 +315,9 @@ class SubscriptionService {
     required bool isPro,
     required String expiresAt,
     required String plan,
+    String? store,
+    bool? autoRenews,
+    String? storeExpiresAt,
   }) async {
     // Phase 2 Unit C — capture old PRO state BEFORE the write so we
     // can detect a free→PRO TRANSITION below. If the box is not yet
@@ -296,6 +335,11 @@ class SubscriptionService {
       await MigratedKey.write(_isProKey, isPro);
       await MigratedKey.write(_expiresAtKey, expiresAt);
       await MigratedKey.write(_planKey, plan);
+      // OI-519: the Play display keys. `null` = not a Play row: DELETE, so
+      // every existing (Razorpay, dev, sim) caller clears them on its write.
+      await _writeOrDelete(_proStoreKey, store);
+      await _writeOrDelete(_proAutoRenewsKey, autoRenews);
+      await _writeOrDelete(_proStoreExpiresAtKey, storeExpiresAt);
       // Renewal/activation clears the lapsed marker so the Home expiry banner
       // disappears once PRO is active again (diagnose 2026-06-06).
       await MigratedKey.delete(_proLapsedAtKey);
@@ -938,11 +982,16 @@ class SubscriptionService {
         return;
       }
 
-      // Active subscription — upgrade locally (atomic write).
+      // Active subscription — upgrade locally (atomic write). The Play
+      // display fields are null on every non-Play row (OI-519).
+      final play = playDisplayFields(response);
       await writeSubscriptionState(
         isPro: true,
         expiresAt: expiresAt.toIso8601String(),
         plan: plan ?? 'monthly',
+        store: play.store,
+        autoRenews: play.autoRenews,
+        storeExpiresAt: play.storeExpiresAt,
       );
       // APK Test #12.8 — success ping so dashboard can correlate "I paid
       // but pill is stuck" reports against actual server-confirmed state.
@@ -1067,10 +1116,14 @@ class SubscriptionService {
 
       if (serverIsPro && serverExpiresAt != null) {
         // Server confirms PRO — update local cache (atomic write)
+        final play = playDisplayFields(data);
         await writeSubscriptionState(
           isPro: true,
           expiresAt: serverExpiresAt,
           plan: serverPlan ?? 'monthly',
+          store: play.store,
+          autoRenews: play.autoRenews,
+          storeExpiresAt: play.storeExpiresAt,
         );
         // Webhook has fired — clear the grace window so subsequent
         // verifies behave normally (no false-positive grace).
@@ -1106,6 +1159,30 @@ class SubscriptionService {
           '— trust local isPro=${proStateSnapshot()}');
       return proStateSnapshot();
     }
+  }
+
+  static Future<void> _writeOrDelete(String key, Object? value) =>
+      value == null ? MigratedKey.delete(key) : MigratedKey.write(key, value);
+
+  /// The store that owns the active row (`'play'`), or null for our own rows
+  /// (Razorpay, referral days, dev grants).
+  String? get proStore {
+    final raw = MigratedKey.read<dynamic>(_proStoreKey);
+    return raw is String && raw.isNotEmpty ? raw : null;
+  }
+
+  /// True only for a Play row the server reported as auto-renewing.
+  bool get proAutoRenews =>
+      MigratedKey.read<dynamic>(_proAutoRenewsKey) == true;
+
+  /// The date to SHOW for the active PRO: the store's own expiry when set
+  /// (a Play row's end_date carries a 3-hour renewal window, which can move a
+  /// 21:00-23:59 IST expiry to the next IST day), else [expiresAt]. Gating
+  /// never reads this.
+  DateTime? get displayExpiresAt {
+    final raw = MigratedKey.read<dynamic>(_proStoreExpiresAtKey);
+    final store = raw == null ? null : DateTime.tryParse(raw.toString());
+    return store ?? expiresAt;
   }
 
   /// Returns the current plan name (e.g., "monthly", "yearly"), or null.
@@ -1153,13 +1230,20 @@ class SubscriptionService {
   /// PURE production helper (shared by the Home banner provider + tested
   /// directly): which expiry banner to show. `lapsed` wins over `expiringSoon`;
   /// `expiringSoon` requires an active PRO with < 7 days left.
+  ///
+  /// [renewsAutomatically] (OI-519): a Play subscription that renews by itself
+  /// gets no amber "expiring soon" banner; a real lapse still shows red.
   static ExpiryBannerSeverity expiryBannerSeverity({
     required bool isPro,
     required int daysUntilExpiry,
     required bool isLapsed,
+    bool renewsAutomatically = false,
   }) {
     if (isLapsed) return ExpiryBannerSeverity.lapsed;
-    if (isPro && daysUntilExpiry >= 0 && daysUntilExpiry < 7) {
+    if (isPro &&
+        !renewsAutomatically &&
+        daysUntilExpiry >= 0 &&
+        daysUntilExpiry < 7) {
       return ExpiryBannerSeverity.expiringSoon;
     }
     return ExpiryBannerSeverity.none;
@@ -1198,6 +1282,9 @@ class SubscriptionService {
     await MigratedKey.write(_isProKey, false);
     await MigratedKey.delete(_expiresAtKey);
     await MigratedKey.delete(_planKey);
+    await MigratedKey.delete(_proStoreKey);
+    await MigratedKey.delete(_proAutoRenewsKey);
+    await MigratedKey.delete(_proStoreExpiresAtKey);
     await MigratedKey.delete('localActivationAt');
     await MigratedKey.delete(_lastVerifiedKey);
     // APK Test #12.2 — fire reactivity hook so widgets re-render

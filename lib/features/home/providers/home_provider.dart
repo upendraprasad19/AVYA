@@ -544,6 +544,7 @@ class SubscriptionExpiryBannerNotifier extends Notifier<ExpiryBannerState> {
       isPro: isProNow,
       daysUntilExpiry: daysLeft,
       isLapsed: !isProNow && sub.proLapsedAt != null,
+      renewsAutomatically: sub.proAutoRenews,
     );
     if (severity == ExpiryBannerSeverity.none) {
       return const ExpiryBannerState();

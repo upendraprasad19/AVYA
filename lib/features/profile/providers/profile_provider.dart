@@ -538,12 +538,33 @@ class SubscriptionInfoData {
   /// or the payment grace window (kPaymentGraceWindow) expires.
   final bool isVerifying;
 
+  /// OI-519: `'play'` when Google Play owns the active row, else null (our
+  /// own rows: Razorpay, referral days, dev grants).
+  final String? store;
+
+  /// OI-519: true only for a Play row that renews by itself.
+  final bool autoRenews;
+
+  /// OI-519: the date to SHOW (the store's own expiry for a Play row, else
+  /// [expiresAt]). Gating never reads it.
+  final DateTime? displayExpiresAt;
+
   const SubscriptionInfoData({
     this.isPro = false,
     this.plan,
     this.expiresAt,
     this.isVerifying = false,
+    this.store,
+    this.autoRenews = false,
+    this.displayExpiresAt,
   });
+
+  /// OI-519: Google Play owns the active PRO (the manage link goes there).
+  bool get isPlayStore => isPro && store == 'play';
+
+  /// OI-519: an active PAID plan (any store): the paywall shows "PRO until"
+  /// and no buy button. Referral days are not paid (the user may buy).
+  bool get hasActivePaidPlan => isPro && plan != kReferralTrialPlan;
 
   /// OI-341 Piece B2b — the user is on a referral trial (copy only: the
   /// paywall's stacking line; it gates nothing).
@@ -603,6 +624,9 @@ class SubscriptionInfoNotifier extends Notifier<SubscriptionInfoData> {
       plan: sub.currentPlan,
       expiresAt: sub.expiresAt,
       isVerifying: inFlight,
+      store: localIsPro ? sub.proStore : null,
+      autoRenews: localIsPro && sub.proAutoRenews,
+      displayExpiresAt: localIsPro ? sub.displayExpiresAt : null,
     );
   }
 }

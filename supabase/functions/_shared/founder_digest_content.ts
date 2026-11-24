@@ -35,7 +35,9 @@ import { fetchAllByIds, fetchAllPages } from "./paged_fetch.ts";
 import { sanitizeIdentifier } from "./sanitize_for_prompt.ts";
 import {
   fetchLatestActiveEndByUser,
+  fetchRenewingPlayUserIds,
   usersWithLatestEndIn,
+  withoutRenewingPlay,
 } from "./subscription.ts";
 import {
   envSwitchOn,
@@ -119,6 +121,9 @@ export const DIGEST_KEYS: readonly DigestKey[] = [
   // land on the previous day's digest.
   { key: "create_order", label: "create-razorpay-order", kind: "subday" },
   { key: "promo_validate", label: "validate-promo", kind: "subday" },
+  // 1-hour UTC buckets, totals only (OI-519 +51): Play store checks from the app (revenuecat-sync, limit 20 per user per
+  // hour; RESTORE and the post-purchase confirm). Same rule and the same <=30-min/day slop as create_order above.
+  { key: "revenuecat_sync", label: "revenuecat-sync", kind: "subday" },
   // 6h buckets, totals only — daily-snapshot's coaching-notes extraction
   // meter (a2b, single-owner batch, 2026-09-27; OI-162-class recurrence).
   // Same "totals only, no cap shown" precedent as delete_account/
@@ -155,6 +160,10 @@ export interface AlertRow {
 export interface SubscriptionRow {
   plan: string;
   created_at: string;
+  /** OI-519 U4: `'play'` for a Google Play row (never priced into New MRR), else null. */
+  store?: string | null;
+  /** OI-519: a Play row's `store_environment`; only PRODUCTION is a paid subscription (SANDBOX = a tester). */
+  store_environment?: string | null;
 }
 
 /**
@@ -259,10 +268,20 @@ const KNOWN_ZERO_PRICE_PLANS = new Set(["referral_trial"]);
  */
 export function computeNewMrr(
   rows: readonly SubscriptionRow[],
-): { rupees: number; unknownPlanCount: number } {
+): { rupees: number; unknownPlanCount: number; playCount: number; playTesterCount: number } {
   let rupeesExact = 0;
   let unknownPlanCount = 0;
+  // OI-519 U4 (founder Q4/Q5): a Google Play row is priced by Google (₹449 /
+  // ₹3,499, less Google's fee), never by PLAN_PRICES_RUPEES: counted apart,
+  // MRR stays web-only.
+  let playCount = 0;
+  let playTesterCount = 0; // SANDBOX: a license tester, never paid (hermes seat 3)
   for (const r of rows) {
+    if (r.store === "play") {
+      if (r.store_environment === "PRODUCTION") playCount++;
+      else playTesterCount++;
+      continue;
+    }
     if (KNOWN_ZERO_PRICE_PLANS.has(r.plan)) continue;
     const price = PLAN_PRICES_RUPEES[r.plan];
     if (price === undefined) {
@@ -271,7 +290,7 @@ export function computeNewMrr(
     }
     rupeesExact += r.plan === "yearly" ? price / 12 : price;
   }
-  return { rupees: Math.round(rupeesExact), unknownPlanCount };
+  return { rupees: Math.round(rupeesExact), unknownPlanCount, playCount, playTesterCount };
 }
 
 /**
@@ -292,6 +311,7 @@ export const NON_ACTIVITY_KEYS: ReadonlySet<string> = new Set([
   "verify_payment",
   "create_order",
   "promo_validate",
+  "revenuecat_sync",
 ]);
 
 /**
@@ -387,6 +407,11 @@ export interface DigestInput {
    * founder-accepted) — the digest copy states this explicitly (B3).
    */
   cancelledYesterday: { count: number } | { unreadable: string };
+  /**
+   * OI-519 (hermes seat 1): Google Play rows the mirror marked `cancelled` (a refund) inside yesterday's IST window,
+   * counted apart from the manual web cancellations above. Optional: absent = not read (older callers, tests).
+   */
+  playRefundsYesterday?: { count: number } | { unreadable: string };
   /**
    * Count of users whose PRO access lapsed: their LATEST `status='active'`
    * `subscriptions.end_date` fell inside yesterday's IST window (a user who
@@ -732,6 +757,12 @@ export function buildDigestText(input: DigestInput): string {
     // a discount that is never persisted on the row — review round 1).
     const mrr = computeNewMrr(input.subscriptions.rows);
     lines.push(`New MRR: ₹${mrr.rupees} (gross, before promo discounts)`);
+    if (mrr.playCount > 0) {
+      lines.push(`New Google Play subscriptions: ${mrr.playCount} (not in MRR)`);
+    }
+    if (mrr.playTesterCount > 0) {
+      lines.push(`New Google Play test purchases: ${mrr.playTesterCount} (not paid)`);
+    }
     if (mrr.unknownPlanCount > 0) {
       lines.push(
         `⚠ ${mrr.unknownPlanCount} subscription(s) with an unpriced plan value excluded from MRR — add to PLAN_PRICES_RUPEES`,
@@ -751,6 +782,13 @@ export function buildDigestText(input: DigestInput): string {
     lines.push(unreadableLine("cancelled (manual)", input.cancelledYesterday.unreadable));
   } else {
     lines.push(`Cancelled (manual): ${input.cancelledYesterday.count}`);
+  }
+  if (input.playRefundsYesterday !== undefined) {
+    if ("unreadable" in input.playRefundsYesterday) {
+      lines.push(unreadableLine("Google Play refunds", input.playRefundsYesterday.unreadable));
+    } else if (input.playRefundsYesterday.count > 0) {
+      lines.push(`Google Play refunds: ${input.playRefundsYesterday.count}`);
+    }
   }
   if ("unreadable" in input.lapsedYesterday) {
     lines.push(unreadableLine("lapsed", input.lapsedYesterday.unreadable));
@@ -956,7 +994,7 @@ export async function gatherDigestInput(
       () =>
         supabase
           .from("subscriptions")
-          .select("id, plan, created_at")
+          .select("id, plan, created_at, store, store_environment")
           .eq("status", "active")
           .gte("created_at", yStart)
           .lt("created_at", tStart),
@@ -975,6 +1013,8 @@ export async function gatherDigestInput(
   // count queries; `null` means the read FAILED, which each section must
   // surface as "unreadable", never as a zero.
   const latestEndRead = fetchLatestActiveEndByUser(supabase, yStart);
+  // OI-519: renewing Play subscribers are not "expiring" (their end_date moves every period).
+  const renewingPlayRead = fetchRenewingPlayUserIds(supabase, now.toISOString());
 
   // Users whose subscription expires within 7 / 30 days of `now` — a
   // point-in-time snapshot (not windowed to yesterday), so it uses `now`
@@ -983,11 +1023,13 @@ export async function gatherDigestInput(
     try {
       const latestEnd = await latestEndRead;
       if (latestEnd === null) throw new Error("subscriptions latest-end read failed");
+      const renewingPlay = await renewingPlayRead;
+      if (renewingPlay === null) throw new Error("subscriptions renewing-play read failed");
       const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       const in30d = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       return {
-        count7d: usersWithLatestEndIn(latestEnd, now, in7d, true).length,
-        count30d: usersWithLatestEndIn(latestEnd, now, in30d, true).length,
+        count7d: withoutRenewingPlay(usersWithLatestEndIn(latestEnd, now, in7d, true), renewingPlay).length,
+        count30d: withoutRenewingPlay(usersWithLatestEndIn(latestEnd, now, in30d, true), renewingPlay).length,
       };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
@@ -1063,6 +1105,26 @@ export async function gatherDigestInput(
         .from("subscriptions")
         .select("id", { count: "exact", head: true })
         .eq("status", "cancelled")
+        // OI-519: a Play refund is not a manual cancellation; counted on its own line below.
+        .or("store.is.null,store.neq.play")
+        .gte("cancelled_at", yStart)
+        .lt("cancelled_at", tStart);
+      if (error) throw new Error(error.message);
+      return { count: count ?? 0 };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.error(`[${callerLabel}] section read failed:`, reason.slice(0, 300));
+      return { unreadable: reason };
+    }
+  })();
+
+  const playRefundsYesterdayRead: Promise<NonNullable<DigestInput["playRefundsYesterday"]>> = (async () => {
+    try {
+      const { count, error } = await supabase
+        .from("subscriptions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "cancelled")
+        .eq("store", "play")
         .gte("cancelled_at", yStart)
         .lt("cancelled_at", tStart);
       if (error) throw new Error(error.message);
@@ -1183,6 +1245,7 @@ export async function gatherDigestInput(
     engagementMetrics,
     signupsYesterday,
     cancelledYesterday,
+    playRefundsYesterday,
     lapsedYesterday,
     userNames,
   ] = await Promise.all([
@@ -1194,6 +1257,7 @@ export async function gatherDigestInput(
     engagementMetricsRead,
     signupsYesterdayRead,
     cancelledYesterdayRead,
+    playRefundsYesterdayRead,
     lapsedYesterdayRead,
     userNamesRead,
   ]);
@@ -1211,6 +1275,7 @@ export async function gatherDigestInput(
     engagementMetrics,
     signupsYesterday,
     cancelledYesterday,
+    playRefundsYesterday,
     lapsedYesterday,
     userNames,
   };

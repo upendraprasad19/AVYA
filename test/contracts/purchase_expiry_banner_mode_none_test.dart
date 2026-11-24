@@ -93,11 +93,27 @@ void main() {
     expect(s.severity, ExpiryBannerSeverity.expiringSoon);
   });
 
-  for (final mode in [PurchaseMode.none, PurchaseMode.playBilling]) {
-    test('${mode.wireName}: the SAME user gets no banner', () {
-      final s = _read(mode);
-      expect(s.show, isFalse);
-      expect(s.severity, ExpiryBannerSeverity.none);
-    });
-  }
+  test('none: the SAME user gets no banner', () {
+    final s = _read(PurchaseMode.none);
+    expect(s.show, isFalse);
+    expect(s.severity, ExpiryBannerSeverity.none);
+  });
+
+  // OI-519: a Play build sells, so a plan that ends gets its banner; a Play
+  // row that renews by itself does not (plan section 5, round 1 #5).
+  test('play_billing: the SAME user (not renewing) gets the amber banner', () {
+    final s = _read(PurchaseMode.playBilling);
+    expect(s.show, isTrue);
+    expect(s.severity, ExpiryBannerSeverity.expiringSoon);
+  });
+
+  test('play_billing: a Play row that renews by itself gets no banner',
+      () async {
+    final cfg = HiveService.instance.configBox;
+    await cfg.put('pro_store', 'play');
+    await cfg.put('pro_auto_renews', true);
+    final s = _read(PurchaseMode.playBilling);
+    expect(s.show, isFalse);
+    expect(s.severity, ExpiryBannerSeverity.none);
+  });
 }

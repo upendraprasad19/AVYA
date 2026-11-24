@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/play_billing_service.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet_phase_variant.dart';
@@ -25,7 +26,12 @@ Future<void> _open(WidgetTester tester, PurchaseMode mode) async {
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(ProviderScope(
-    overrides: [subscriptionInfoProvider.overrideWith(() => _Sub())],
+    overrides: [
+      subscriptionInfoProvider.overrideWith(() => _Sub()),
+      // OI-519: keyless, so the Play build here sells nothing (explicit: a
+      // run with the key defined cannot flip it).
+      playStoreProvider.overrideWithValue(_NoKeyStore()),
+    ],
     child: MaterialApp(
       home: Scaffold(
         body: Builder(
@@ -51,6 +57,14 @@ Future<void> _open(WidgetTester tester, PurchaseMode mode) async {
     if (nav.canPop()) nav.pop();
     await tester.pumpAndSettle();
   });
+}
+
+class _NoKeyStore implements PlayStore {
+  @override
+  bool get hasKey => false;
+  @override
+  dynamic noSuchMethod(Invocation i) =>
+      throw StateError('no store call without a key: ${i.memberName}');
 }
 
 void main() {

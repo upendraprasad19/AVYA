@@ -38,6 +38,10 @@ static const Set<String> _highValueFeatures = {
 
 In a binary whose `PurchaseMode` is not `razorpay`, no surface names a price or offers to buy: `ProPillButton` reads `PRO`, the Profile UPGRADE chip, the expiry banner, the coach overflow item and the website row are hidden, and a locked feature opens `PaywallSheet` as the neutral body ("WHAT PRO INCLUDES", `CHECK MY PRO STATUS`, `CLOSE`). `gate()` and `verifyFromServer()` are unchanged: the `subscriptions` table stays the entitlement source, so an account that is PRO from the web keeps every feature on Android. See `docs/architecture/payment.md` (Purchase mode).
 
+### Google Play build (`play_billing`, OI-519)
+
+Upgrade affordances show again (`showsPurchaseUi`); prices, promo and website stay behind `showsRazorpay` / `showsWebLinks`. Three user-scoped Hive keys carry the Play display state, written only by `writeSubscriptionState` (a `null` argument DELETES the key, so every non-Play write clears them) and deleted by `_downgradeLocally`: `pro_store` (`'play'`), `pro_auto_renews`, `pro_store_expires_at`. Gating never reads them. They drive: no amber expiry banner for a renewing Play row, Profile `RENEWS` (only when it renews) / `EXPIRES`, the shown date (the store's own expiry, as the IST day), MANAGE IN GOOGLE PLAY for a Play row, and the paywall's "PRO until" view (an active paid plan of any store shows no buy button; referral days may buy). `SubscriptionInfoData` exposes `store`, `autoRenews`, `displayExpiresAt`, `isPlayStore`, `hasActivePaidPlan`.
+
 ## Shareable Cards (ALL FREE — growth engine)
 ```
 workout_receipt        → PNG after every completed workout + viewable later via "View Card"

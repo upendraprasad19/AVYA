@@ -158,6 +158,10 @@ const _kTokenWatchSites = <String, int>{
   'lib/features/train/providers/video_render_provider.dart': 1,
   'lib/features/train/widgets/swap_confirm_sheet.dart': 1,
   'lib/shared/mixins/hive_tab_scaffold.dart': 1,
+  // 2 = the multi-line import's `show` line + the watch in playBuyerUidProvider
+  // (OI-519: static reads of the auth uid and the Hive owner, never a box, so no
+  // case; it needs a live Supabase client, which a pure-VM test does not have).
+  'lib/shared/widgets/paywall_play_body.dart': 2,
 };
 
 List<_Case> _cases() => <_Case>[
