@@ -10,7 +10,10 @@ import {
   type ReconcileDb,
   type ReconcileDeps,
   RECONCILE_STARVED_ALERT_SOURCE,
+  mergeReconcileCandidates,
   STALL_ALERT_SOURCE,
+  SWITCH_OFF_CATCH_UP_MAX,
+  switchOffCatchUpUids,
 } from "./logic.ts";
 
 const NOW = Date.parse("2026-11-24T10:00:00Z");
@@ -320,4 +323,70 @@ Deno.test("an unknown user among failing reads does not hide an outage: the run 
   const r = await run(f, { mirror: (uid) => uid === U1 ? { outcome: "unknown_user" } : new RevenueCatReadError("http_503") });
   assertEquals(r.status, 500);
   assertEquals(f.telemetry, ["start", "end:failed"]);
+});
+
+Deno.test("more failed reads than good ones ends the run failed; a tie or fewer does not (hermes seat 2)", async () => {
+  const U3 = "00000000-0000-4000-8000-000000000003";
+  const f = new Fake();
+  f.uids = [U1, U2, U3];
+  const r = await run(f, { mirror: (uid) => uid === U3 ? ACTIVE : new RevenueCatReadError("http_503") });
+  assertEquals(r.status, 500);
+  assertEquals(f.telemetry, ["start", "end:failed"]);
+  const g = new Fake();
+  g.uids = [U1, U2];
+  const r2 = await run(g, { mirror: (uid) => uid === U2 ? ACTIVE : new RevenueCatReadError("http_503") });
+  assertEquals(r2.status, 200, "1 failed, 1 mirrored: a tie is not an outage");
+});
+
+Deno.test("switchOffCatchUpUids: a switch_off event newer than the user's last Play read (or no Play row) is caught up", () => {
+  const t = (h: number) => new Date(NOW - h * H).toISOString();
+  const U3 = "00000000-0000-4000-8000-000000000003";
+  const U4 = "00000000-0000-4000-8000-000000000004";
+  const got = switchOffCatchUpUids(
+    [
+      { user_id: U1, received_at: t(5) }, // no Play row at all -> in
+      { user_id: U2, received_at: t(3) }, // read 1 h ago, after the event -> out
+      { user_id: U3, received_at: t(2) }, // read 4 h ago, before the event -> in
+      { user_id: U3, received_at: t(6) }, // an older event of the same user changes nothing
+      { user_id: U4, received_at: t(1) }, // read at the same instant -> out (>=)
+      { user_id: null, received_at: t(1) }, // no user -> ignored
+    ],
+    [
+      { user_id: U2, store_read_at: t(1) },
+      { user_id: U3, store_read_at: t(4) },
+      { user_id: U4, store_read_at: t(1) },
+    ],
+  );
+  assertEquals(got, [U3, U1], "newest event first");
+});
+
+Deno.test("mergeReconcileCandidates: regular candidates first; catch-up after them, deduplicated and capped", () => {
+  const reg = ["a", "b", "a"];
+  assertEquals(mergeReconcileCandidates(reg, ["b", "c", "d"]), ["a", "b", "c", "d"]);
+  const many = Array.from({ length: SWITCH_OFF_CATCH_UP_MAX + 10 }, (_, i) => `u${i}`);
+  const out = mergeReconcileCandidates(["r"], ["r", ...many]);
+  assertEquals(out[0], "r");
+  assertEquals(out.length, 1 + SWITCH_OFF_CATCH_UP_MAX, "the cap counts NEW users only");
+});
+
+Deno.test("reconcileDb: a failing switch-off catch-up read never costs the regular candidates (B-pass round 2)", async () => {
+  const { reconcileDb } = await import("./index.ts");
+  // deno-lint-ignore no-explicit-any
+  const builder = (result: () => Promise<unknown>): any => {
+    // deno-lint-ignore no-explicit-any
+    const b: any = {};
+    for (const m of ["select", "eq", "or", "order", "not", "gte", "in"]) b[m] = () => b;
+    b.limit = () => result();
+    b.range = () => result();
+    return b;
+  };
+  const client = {
+    from: (table: string) =>
+      table === "subscription_events"
+        ? builder(() => Promise.reject(new Error("statement timeout")))
+        : builder(() => Promise.resolve({ data: [{ user_id: U1 }, { user_id: U2 }], error: null })),
+  };
+  // deno-lint-ignore no-explicit-any
+  const uids = await reconcileDb(client as any).reconcileUids(NOW);
+  assertEquals(uids, [U1, U2]);
 });

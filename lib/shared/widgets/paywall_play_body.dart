@@ -209,23 +209,27 @@ class _PaywallPlayBodyState extends ConsumerState<PaywallPlayBody> {
         unawaited(ErrorTelemetry.logEvent('play_purchase_owned_elsewhere',
             message: 'code=${outcome.errorCode}'));
         setState(() => _phase = _PlayPhase.confirming);
-        bool mine;
+        PlayConfirmResult mine;
         try {
           mine = await confirmer(afterPurchase: false);
         } catch (e) {
           unawaited(ErrorTelemetry.logEvent('play_confirm_failed',
               message: 'type=${e.runtimeType}'));
-          mine = false;
+          mine = PlayConfirmResult.couldNotCheck;
         }
         if (!mounted) return;
         ref.invalidate(subscriptionInfoProvider);
         setState(() {
           _phase = _PlayPhase.ready;
-          if (mine) {
-            _say(PurchaseCopy.playRestored, ok: true);
-          } else {
-            _showManage = true;
-            _say(PurchaseCopy.playOwnedByOtherAccount);
+          switch (mine) {
+            case PlayConfirmResult.pro:
+              _say(PurchaseCopy.playRestored, ok: true);
+            case PlayConfirmResult.couldNotCheck:
+              // Never "another account" on a check that failed (seat B).
+              _say(PurchaseCopy.playCheckFailed);
+            case PlayConfirmResult.notPro:
+              _showManage = true;
+              _say(PurchaseCopy.playOwnedByOtherAccount);
           }
         });
       case PlayPurchaseStatus.identityMismatch:
@@ -253,15 +257,16 @@ class _PaywallPlayBodyState extends ConsumerState<PaywallPlayBody> {
       _phase = _PlayPhase.confirming;
       _say(null);
     });
-    bool pro;
+    PlayConfirmResult result;
     try {
-      pro = await ref.read(playProConfirmerProvider)(
+      result = await ref.read(playProConfirmerProvider)(
           afterPurchase: afterPurchase);
     } catch (e) {
       unawaited(ErrorTelemetry.logEvent('play_confirm_failed',
           message: 'type=${e.runtimeType}'));
-      pro = false;
+      result = PlayConfirmResult.couldNotCheck;
     }
+    final pro = result == PlayConfirmResult.pro;
     if (!mounted) return;
     ref.invalidate(subscriptionInfoProvider);
     setState(() {
@@ -274,9 +279,12 @@ class _PaywallPlayBodyState extends ConsumerState<PaywallPlayBody> {
       if (pro) {
         _say(afterPurchase ? PurchaseCopy.playWelcome : PurchaseCopy.playRestored,
             ok: true);
+      } else if (afterPurchase) {
+        _say(PurchaseCopy.playConfirmSlow);
       } else {
-        _say(afterPurchase
-            ? PurchaseCopy.playConfirmSlow
+        // A failed check is never "no PRO found" (hermes seat 2).
+        _say(result == PlayConfirmResult.couldNotCheck
+            ? PurchaseCopy.playCheckFailed
             : PurchaseCopy.playNothingToRestore);
       }
     });

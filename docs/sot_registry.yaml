@@ -1385,10 +1385,10 @@ concepts:
       Local proofs: test/sql/play_subscriptions_local.sh, test/sql/revenuecat_reconcile_postgrest_local.sh.
     writers:
       - file: supabase/functions/_shared/revenuecat_mirror.ts
-        line_range: 204-238
+        line_range: 223-278
         method: mirrorRevenueCatCustomer (uid guard, read_at before the GET, map, upsert)
       - file: supabase/functions/_shared/revenuecat_mirror.ts
-        line_range: 247-293
+        line_range: 287-339
         method: supabaseMirrorDb (upsertPlayRow -> RPC upsert_play_subscription, alert, userExists)
     reader_manifest_complete: true
     readers:
@@ -1413,13 +1413,13 @@ concepts:
         semantic: flag-check
         fields_read: [store, auto_renew, status, end_date]
       - file: supabase/functions/admin-dashboard-data/index.ts
-        line_range: 153-171
+        line_range: 163-185
         method: bucketActivePlans (a Play row counts only as playActive; MRR web-only)
         semantic: aggregated
         fields_read: [plan, store]
       - file: supabase/functions/delete-account/index.ts
-        line_range: 312-344
-        method: cancelAndDeletePlayCustomer (cancel each non-refunded Play subscription, then delete the RevenueCat customer)
+        line_range: 314-347
+        method: cancelPlayRows via playDeps.readPlayTxns (section 4b; cancel each non-refunded Play subscription; the RevenueCat customer is deleted after the auth delete, section 6b)
         semantic: pass-through
         fields_read: [store_original_transaction_id, store, status]
 
@@ -9793,17 +9793,17 @@ concepts:
         semantic: derived-latest-end-per-user
         fields_read: [subscriptions.user_id, subscriptions.end_date, subscriptions.status]
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 984-1010
+        line_range: 1005-1035
         method: gatherDigestInput latestEndRead + expiringSoon
         semantic: one-shared-read-two-sections
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 1096-1108
+        line_range: 1141-1153
         method: gatherDigestInput lapsedYesterday
         semantic: half-open-yesterday-window
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/telegram-admin-bot/index.ts
-        line_range: 289-308
+        line_range: 306-326
         method: cmdExpiring
         semantic: throws-on-null
         fields_read: [subscriptions.user_id, subscriptions.end_date]
@@ -9813,7 +9813,7 @@ concepts:
         semantic: latest-end-per-user
         fields_read: [subscriptions.user_id, subscriptions.end_date]
       - file: supabase/functions/admin-dashboard-data/index.ts
-        line_range: 100-130
+        line_range: 105-138
         method: loadExpiryRows
         semantic: latest-end-in-window-plus-emails
         fields_read: [subscriptions.user_id, subscriptions.end_date, users.email]
@@ -11543,7 +11543,7 @@ concepts:
           offline hold never emits because AppEventsService drops failed inserts
           with no queue.
       - file: lib/features/admin/widgets/revenue_tab.dart
-        line_range: 1-181
+        line_range: 1-187
         method: RevenueTab.build
         semantic: aggregated
         fields_read: [current.activeSubscriptions, current.freeUsers, current.proExpired, revenue.monthlyActive, revenue.yearlyActive, revenue.trialActive, revenue.otherActive, revenue.derivedMrrInr, revenue.currentMonthlyPriceInr, revenue.currentYearlyPriceInr, subscriptionsExpiring.expired, subscriptionsExpiring.expiring7d, subscriptionsExpiring.expiring30d]
@@ -11759,7 +11759,7 @@ concepts:
           (rolling 168h, matching the 093/101 house convention), holders_total
           (all-time distinct users). The parity test pins the count at 3.
       - file: supabase/functions/admin-dashboard-data/index.ts
-        line_range: 130-264
+        line_range: 138-278
         method: handler
         semantic: pass-through
         fields_read: [holds_started_today, holds_started_7d, holders_total]
@@ -18268,7 +18268,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: supabase/functions/_shared/subscription.ts
-        line_range: 356-394
+        line_range: 368-406
         method: readProState
         semantic: three-state-pro-read
         fields_read: [subscriptions.user_id, subscriptions.status, subscriptions.end_date]
@@ -20035,11 +20035,11 @@ concepts:
         method: createOrder — non-409 non-2xx -> _extractServerError(details) shown verbatim
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 88-140
+        line_range: 90-142
         method: DIGEST_KEYS create_order (subday, no cap)
         semantic: aggregate
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 302-323
+        line_range: 308-329
         method: NON_ACTIVITY_KEYS + QUOTA_KILL_SWITCHES (create_order, promo_validate)
         semantic: aggregate
     hive:
@@ -20076,7 +20076,7 @@ concepts:
         method: _validatePromoCode — valid == true, else shows data['reason']; the call passes spendsQuotaPerCall (OI-414), so a thrown gateway error reaches the catch after one attempt
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 88-140
+        line_range: 90-142
         method: DIGEST_KEYS promo_validate (subday, no cap)
         semantic: aggregate
     hive:

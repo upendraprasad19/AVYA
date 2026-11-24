@@ -28,7 +28,7 @@ psql_db "$DB" -c "grant usage on schema public to anon, authenticated, service_r
 
 psql_db "$DB" <<'SQL' >/dev/null
 INSERT INTO users SELECT ('00000000-0000-4000-8000-0000000' || x)::uuid
-  FROM unnest(ARRAY['0c001','0c002','0c003','0d001','0d002','0d003','0d004','0d005','0d006']) x;
+  FROM unnest(ARRAY['0c001','0c002','0c003','0d001','0d002','0d003','0d004','0d005','0d006','0d007','0d008','0d009']) x;
 INSERT INTO store_reward_deferrals (id, user_id, store, days, status, created_at) VALUES
   ('66666666-0000-4000-8000-000000000001', '00000000-0000-4000-8000-00000000c001', 'play', 7, 'pending', now() - interval '30 hours'),
   ('66666666-0000-4000-8000-000000000002', '00000000-0000-4000-8000-00000000c001', 'play', 7, 'pending', now() - interval '26 hours'),
@@ -42,6 +42,19 @@ INSERT INTO subscriptions (user_id, plan, status, start_date, end_date, store, s
   ('00000000-0000-4000-8000-00000000d003', 'yearly',  'active',  now() - interval '10 days', now() + interval '20 days', 'play', 'avya_pro', 'PRODUCTION', now() - interval '30 hours'),
   ('00000000-0000-4000-8000-00000000d004', 'yearly',  'active',  now() - interval '10 days', now() + interval '20 days', 'play', 'avya_pro', 'PRODUCTION', now() - interval '1 hour'),
   ('00000000-0000-4000-8000-00000000d005', 'monthly', 'expired', now() - interval '35 days', now() - interval '5 days', 'play', 'avya_pro', 'SANDBOX', now() - interval '1 hour');
+-- Webhooks answered while the switch was OFF (hermes seat 4): d007 has no Play row (caught up); d004 was read 1 h ago,
+-- after its event (not); d008's event is 10 days old (not); d008's recent event was mirrored, not switch_off (not).
+INSERT INTO subscription_events (provider, provider_event_id, user_id, event_type, outcome, received_at) VALUES
+  ('revenuecat', 'ev-d007', '00000000-0000-4000-8000-00000000d007', 'INITIAL_PURCHASE', 'switch_off', now() - interval '2 hours'),
+  ('revenuecat', 'ev-d004', '00000000-0000-4000-8000-00000000d004', 'RENEWAL', 'switch_off', now() - interval '3 hours'),
+  ('revenuecat', 'ev-d008a', '00000000-0000-4000-8000-00000000d008', 'INITIAL_PURCHASE', 'switch_off', now() - interval '10 days'),
+  ('revenuecat', 'ev-d008b', '00000000-0000-4000-8000-00000000d008', 'RENEWAL', 'mirrored', now() - interval '1 hour'),
+  ('revenuecat', 'ev-anon', NULL, 'TEST', 'switch_off', now() - interval '1 hour');
+-- A noisy tester (d009, no Play row): 250 switch_off events NEWER than d007's. A read cut at 200 rows before the dedupe
+-- would see only d009 and hide d007 (B-pass on the hermes fixes, seat A); the paged read must find both.
+INSERT INTO subscription_events (provider, provider_event_id, user_id, event_type, outcome, received_at)
+  SELECT 'revenuecat', 'ev-d009-' || g, '00000000-0000-4000-8000-00000000d009', 'RENEWAL', 'switch_off', now() - interval '1 minute'
+  FROM generate_series(1, 250) g;
 INSERT INTO subscriptions (user_id, plan, status, start_date, end_date, razorpay_payment_id) VALUES
   ('00000000-0000-4000-8000-00000000d006', 'monthly', 'active', now() - interval '29 days', now() + interval '12 hours', 'pay_local');
 SQL

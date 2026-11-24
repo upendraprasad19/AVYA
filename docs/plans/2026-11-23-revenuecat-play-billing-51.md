@@ -538,6 +538,20 @@ laptop `.env` is the founder's. NEW step 8: Play Console > `avya_pro` > yearly b
 Order: U1 migration apply (go) -> U3/U4 deploys with the switch OFF (go each) -> founder steps 1-4 -> RevenueCat "Send
 test event" -> `subscription_events` row with `outcome='switch_off'` -> switch ON -> sandbox `GET` via
 `revenuecat-sync` for the founder uid -> +51 bump + bundle -> internal testing -> license-tester purchase.
+**Deploy precondition (hermes seat 4, 2026-11-24):** all 10 functions (3 new + verify-subscription, expiry-reminder,
+redeem-referral, delete-account, admin-dashboard-data, telegram-admin-bot, founder-digest) deploy ONLY from `main`
+after this branch merged, with `git diff --name-only HEAD origin/main -- supabase/functions` empty. A deploy of any of
+them from an older tree silently drops its Play handling (delete-account would stop cancelling Play: a deleted user
+keeps being billed, with no alert because the alerting code is gone). After each deploy, `GET /functions/<slug>` shows
+the new version, and the delete-account payload (`.claude/_payload_delete-account.json`) contains
+`revenuecat_delete_failed`. The same rule holds for every later deploy of these functions.
+**What each check proves:** the test event's `switch_off` row proves the webhook URL, the auth header and the ledger
+write ONLY. It does not prove `REVENUECAT_SECRET_KEY`: the sandbox `revenuecat-sync` GET is the only gate for the
+secret (a wrong key answers 503 `no_secret` / `http_401` there).
+**Draft SQL applied at L2 with the cron (each its own go):** `docs/plans/2026-11-24-revenuecat-upsert-start-date.migration-draft.sql`
+(the `start_date` rule keys on a REALLY running row; local proof `test/sql/play_upsert_start_date_local.sh`).
+**Switch OFF then ON:** a webhook answered while OFF is caught up by the reconcile within the hour after ON (7-day
+window), so a purchase in that gap is mirrored without the user tapping RESTORE.
 Rollback: unset `ENABLE_PLAY_BILLING_MIRROR` (server stops writing; existing Play rows keep their end dates) and
 release the `none` build. The migration columns/tables stay. The migration's ROLLBACK block restores the three
 changed live bodies (`redeem_referral_atomic`, `process_referral_conversions`, `grant_referral_days`) and drops the
@@ -929,3 +943,56 @@ Round 3 (one fresh Sonnet seat on the round-2 diff only): 0 P0/P1, 1 P2, 2 P3.
 | T3 P3 | a dead ternary in the leg test | real | written as "both answer 410" |
 
 Converged: round 3 found nothing new at P0/P1, and its one P2 is a documented, contained residue of the round-2 timeout.
+
+## 28. Hermes pass and the B-pass rounds on its fixes (2026-11-24; each finding checked by me)
+
+Hermes (four fresh Sonnet seats, one wave, on `ad057818` plus this plan's live sequence): 0 P0/P1, 3 P2, 15 P3; 16
+fixed in this batch, 2 verified clean. Report: `docs/audit/2026-11-24-hermes-oi519-play-billing.md`. Mutants on the
+hermes fixes, each applied (count checked), run and restored: H1-H23 (customer DELETE skipped after the auth delete,
+cancel never allows the delete, a same-instant read not counted, catch-up dropped (real PostgREST), the failed-run rule
+back to `mirrored === 0`, SANDBOX counted in admin / bot / digest, renewing Play listed as expiring in admin / bot /
+digest, Play rows under monthly, manual cancels including Play, 429 retried at once, the entry-missing alert on any
+read, product id unbounded, the whole webhook body read, no uid cap, no over-limit log, the raw configBox
+`expiresAt`, a failed last check read as notPro, RESTORE showing couldNotCheck as no PRO, a 503 read as notPro): all 23
+red.
+
+B-pass on the hermes fixes, round 1 (two fresh Sonnet seats: A the server half, B the client and the SQL draft):
+
+| # | Finding | Verdict | Fix |
+|---|---|---|---|
+| A1 P3 | catch-up users whose read writes nothing (no entry, unknown product, `sandbox_refused`, `stale_read`) stay candidates for 7 days, sorted FIRST, and can use up the run budget | real | catch-up goes AFTER the regular candidates and is capped at 50 (`mergeReconcileCandidates`, `SWITCH_OFF_CATCH_UP_MAX`) |
+| A2 P3 | the switch_off read deduped after `.limit(200)`: one noisy tester hides every other user | real | paged read (`fetchAllPages`, id desc), first 200 distinct uids; harness user d009 with 250 events |
+| A3 P3 | the diagnostic entry-missing read ran after the upsert and could turn a good mirror into a failed read | real | try/catch, logs the code only (`pgErrorCode`) |
+| A4 P3 | `boundedText` stores the product id JSON-quoted | real | `plainBounded` (separators and controls to `?`, no quotes) |
+| A5 P3 | `failed > mirrored` pages on a mostly healthy run | accepted: noisier by design; the old rule recorded 199/200 failed as success | none |
+| B1 P2 | "already owned" collapsed couldNotCheck into notPro and said "another account" to a payer whose check failed | real | the owned branch switches on the three results: couldNotCheck -> `playCheckFailed`, no manage link; test added |
+| B2 P2 | store PRO + a failed verify read as notPro ("no PRO found") | real | `last == notPro` is the only notPro; anything else not verified is couldNotCheck; the `(1, no)` pin is now `(1, unk)` |
+| B3 P2 | the draft's `status = 'active' AND end_date > now()` rule restarts a chain whose renewal is read late (> 3 h) | real | the restart depends on the new period: `excluded.start_date < s.end_date` keeps the start; harness cases C4 (late renewal kept) and C5 |
+| B4 P3 | the test pinned B2's defect | real | repointed with B2 |
+
+Found by me while fixing B2: with the mirror switch OFF, `revenuecat-sync` answered the row's shape and the client read
+a payer as "no PRO found". Fix: the switch-OFF answer carries `store_checked: false`; `playSyncAnswerForBody` reads it as
+unavailable (couldNotCheck on the last check).
+
+Mutants on the round-1 fixes, each applied, run and restored (R1-R11): the draft back to the status + end_date rule, the
+draft's boundary moved, store PRO + failed verify read as notPro, owned showing couldNotCheck as another account, the
+client ignoring `store_checked`, the server dropping it, the catch-up read cut at 200 before the dedupe (real
+PostgREST), catch-up before the regular candidates, no catch-up cap, the entry-missing read failure propagating, the
+product id unbounded: all 11 red.
+
+Round 2 (one fresh Sonnet seat on the round-1 fix diff only): 0 P0/P1, 1 conditional P2, 2 P3.
+
+| # | Finding | Verdict | Fix |
+|---|---|---|---|
+| S1 P2 (conditional) | the paged catch-up read throws past 20 full pages and fails the whole run, regular candidates included | real | the catch-up is best effort: any error logs "switch-off catch-up skipped this run" and the run keeps the regular candidates (test: a failing catch-up fake) |
+| S2 P3 | a renewal read at exactly the old end_date restarts the chain (`<`) | real | `<=`; harness case C6 uses the row's own end_date (a fixed date let the boundary mutant survive) |
+| S3 P3 | catch-up users that never write can starve an older purchaser past the cap | accepted: bounded at 7 days and 50 a run, newest first; the user's RESTORE re-reads at once | none |
+
+Mutants on the round-2 fixes: `<=` back to `<` (C6 red), the catch-up `catch` turned into `throw` (reconcile suite red,
+22 passed / 1 failed): both red.
+
+Converged: round 2 found nothing at P0/P1, its P2 and one P3 are fixed and mutated, the other P3 is a bounded,
+self-healing residue. Gates on the final tree: whole-project analyze with no warning; Deno webhook 18, sync 11,
+reconcile 23, delete-account 17, admin 26, bot 54, verify-subscription 3, redeem-referral 12, founder-digest 69,
+`_shared` 1013; both local docker harnesses ALL PASSED; targeted Flutter 251 green (the log-safety contract classifies
+the new `pgErrorCode(e)` line in the mirror).

@@ -10,6 +10,10 @@ import {
   mirrorRevenueCatCustomer,
   PLAY_RENEWAL_WINDOW_MS,
   type PlayRow,
+  ENTRY_MISSING_ALERT_SOURCE,
+  plainBounded,
+  RETRY_429_DEFAULT_WAIT_MS,
+  RETRY_429_MAX_WAIT_MS,
   RevenueCatReadError,
   supabaseMirrorDb,
   UNKNOWN_PRODUCT_ALERT_SOURCE,
@@ -309,4 +313,66 @@ Deno.test("adapter: alert sends nothing when its dedup read fails, one insert wh
   const open: unknown[] = [];
   await supabaseMirrorDb(fakeClient({ data: [{ id: 1 }], error: null }, open)).alert("s", "critical", "x", {});
   assertEquals(open.length, 0);
+});
+
+Deno.test("fetch (hermes seat 2): a 429 waits before its one retry (Retry-After, bounded); a 5xx does not wait", async () => {
+  const waits: number[] = [];
+  const sleep = (ms: number) => (waits.push(ms), Promise.resolve());
+  const c1: Calls = { gets: [], upserts: [], alerts: [] };
+  await fetchRevenueCatCustomer(UID, "sk_test", fakeFetch(c1, [ok({}, 429), ok(FIXTURE)]), 1000, sleep);
+  assertEquals(waits, [RETRY_429_DEFAULT_WAIT_MS]);
+  const ra = new Response("{}", { status: 429, headers: { "Retry-After": "1" } });
+  await fetchRevenueCatCustomer(UID, "sk_test", fakeFetch(c1, [ra, ok(FIXTURE)]), 1000, sleep);
+  assertEquals(waits.at(-1), 1000);
+  const big = new Response("{}", { status: 429, headers: { "Retry-After": "120" } });
+  await fetchRevenueCatCustomer(UID, "sk_test", fakeFetch(c1, [big, ok(FIXTURE)]), 1000, sleep);
+  assertEquals(waits.at(-1), RETRY_429_MAX_WAIT_MS, "never longer than the cap");
+  const n = waits.length;
+  await fetchRevenueCatCustomer(UID, "sk_test", fakeFetch(c1, [ok({}, 503), ok(FIXTURE)]), 1000, sleep);
+  assertEquals(waits.length, n, "a 5xx retries at once");
+});
+
+Deno.test("mirror (hermes seat 1): a good read with no avya_pro entry while a Play row grants PRO alerts; nothing is written", async () => {
+  const empty = structuredClone(FIXTURE);
+  empty.subscriber.subscriptions = {};
+  for (const active of [true, false]) {
+    const calls: Calls = { gets: [], upserts: [], alerts: [] };
+    const db = { ...fakeDb(true, calls), hasActivePlayRow: () => Promise.resolve(active) };
+    const out = await mirrorRevenueCatCustomer(UID, {
+      db, secretKey: "sk_test", fetchFn: fakeFetch(calls, [ok(empty)]), nowMs: () => T0,
+    });
+    assertEquals(out.outcome, "mirrored");
+    assertEquals(calls.upserts, [], "never a revoke on an absence");
+    assertEquals(calls.alerts, active ? [ENTRY_MISSING_ALERT_SOURCE] : [], `active=${active}`);
+  }
+  // an entry present: no entry-missing alert even with an active row
+  const calls: Calls = { gets: [], upserts: [], alerts: [] };
+  const db = { ...fakeDb(true, calls), hasActivePlayRow: () => Promise.resolve(true) };
+  await mirrorRevenueCatCustomer(UID, { db, secretKey: "sk_test", fetchFn: fakeFetch(calls, [ok(customer())]), nowMs: () => T0 });
+  assertEquals(calls.alerts, []);
+});
+
+Deno.test("mirror (hermes seat 4): the unknown product id from RevenueCat's body is bounded before it reaches alerts", async () => {
+  const ctx: Record<string, unknown>[] = [];
+  const calls: Calls = { gets: [], upserts: [], alerts: [] };
+  const db: MirrorDb = {
+    ...fakeDb(true, calls),
+    alert: (_s, _sev, _sum, c) => (ctx.push(c), Promise.resolve()),
+  };
+  await mirrorRevenueCatCustomer(UID, {
+    db, secretKey: "sk_test", fetchFn: fakeFetch(calls, [ok(customer({}, "x".repeat(500) + "\u2028"))]), nowMs: () => T0,
+  });
+  const pid = String(ctx[0].product_id);
+  assertEquals(pid, "x".repeat(64), "bounded to 64 characters, stored unquoted");
+  assertEquals(plainBounded("avya_pro2\u2028\nz", 64), "avya_pro2??z", "separators and controls replaced");
+});
+
+Deno.test("mirror (seat A): a failing entry-missing read never turns a good mirror into a failure", async () => {
+  const empty = structuredClone(FIXTURE);
+  empty.subscriber.subscriptions = {};
+  const calls: Calls = { gets: [], upserts: [], alerts: [] };
+  const db = { ...fakeDb(true, calls), hasActivePlayRow: () => Promise.reject(new Error("db down")) };
+  const out = await mirrorRevenueCatCustomer(UID, { db, secretKey: "sk_test", fetchFn: fakeFetch(calls, [ok(empty)]), nowMs: () => T0 });
+  assertEquals(out.outcome, "mirrored");
+  assertEquals(calls.alerts, []);
 });

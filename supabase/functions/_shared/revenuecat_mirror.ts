@@ -22,6 +22,8 @@ export const PLAY_SUBSCRIPTION_ID = "avya_pro";
 export const PLAY_RENEWAL_WINDOW_MS = 3 * 60 * 60 * 1000;
 export const REVENUECAT_TIMEOUT_MS = 10_000;
 export const UNKNOWN_PRODUCT_ALERT_SOURCE = "revenuecat_unknown_product";
+/** A running Play row whose customer read shows no avya_pro Play entry (hermes seat 1). */
+export const ENTRY_MISSING_ALERT_SOURCE = "revenuecat_entry_missing";
 /** The secret REST key is unset while the switch is on: every read fails, so nobody gets PRO from Play (B-pass F2). */
 export const SECRET_MISSING_ALERT_SOURCE = "revenuecat_secret_missing";
 
@@ -141,6 +143,8 @@ export type MirrorDb = {
   userExists(uid: string): Promise<boolean>;
   upsertPlayRow(uid: string, row: PlayRow, readAtIso: string): Promise<UpsertResult>;
   alert(source: string, severity: "warn" | "critical", summary: string, context: Record<string, unknown>): Promise<void>;
+  /** Whether the user holds an `active` Play row. Optional: absent = the entry-missing check is skipped. */
+  hasActivePlayRow?(uid: string): Promise<boolean>;
 };
 
 export type MirrorDeps = {
@@ -162,12 +166,22 @@ export class RevenueCatReadError extends Error {
   }
 }
 
-/** One GET with a timeout; one retry on 5xx / 429 / network error. Returns the parsed body. */
+/** PURE. Text from RevenueCat's body for a jsonb field: at most [n] characters, no control or line-separator or
+ *  format characters (replaced by "?"), never quoted (B-pass on the hermes fixes, seat A: `boundedText` adds quotes). */
+export function plainBounded(v: unknown, n: number): string {
+  return String(v).slice(0, n).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g, "?");
+}
+
+export const RETRY_429_DEFAULT_WAIT_MS = 500;
+export const RETRY_429_MAX_WAIT_MS = 2000;
+
+/** One GET with a timeout; one retry on 5xx / 429 / network error (a 429 waits first). Returns the parsed body. */
 export async function fetchRevenueCatCustomer(
   uid: string,
   secretKey: string,
   fetchFn: typeof fetch = fetch,
   timeoutMs = REVENUECAT_TIMEOUT_MS,
+  sleepFn: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): Promise<unknown> {
   let lastCode = "unknown";
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -185,6 +199,11 @@ export async function fetchRevenueCatCustomer(
       await res.body?.cancel();
       lastCode = `http_${res.status}`;
       if (!(res.status >= 500 || res.status === 429)) break; // a 4xx other than 429 will not get better
+      if (res.status === 429 && attempt === 1) {
+        // An immediate retry of a 429 is a second 429: wait Retry-After (seconds), bounded (hermes seat 2).
+        const ra = Number(res.headers.get("Retry-After") ?? "");
+        await sleepFn(Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, RETRY_429_MAX_WAIT_MS) : RETRY_429_DEFAULT_WAIT_MS);
+      }
     } catch (e) {
       lastCode = (e as { name?: string })?.name === "AbortError" ? "timeout" : "network";
     } finally {
@@ -221,7 +240,8 @@ export async function mirrorRevenueCatCustomer(uid: string, deps: MirrorDeps): P
       UNKNOWN_PRODUCT_ALERT_SOURCE,
       "critical",
       `RevenueCat returned a Play subscription the mirror does not know (${issue.kind}); no row was written`,
-      { kind: issue.kind, product_id: issue.productId },
+      // productId comes from RevenueCat's body: bounded and escaped before it is stored (hermes seat 4).
+      { kind: issue.kind, product_id: plainBounded(issue.productId, 64) },
     );
   }
 
@@ -233,6 +253,26 @@ export async function mirrorRevenueCatCustomer(uid: string, deps: MirrorDeps): P
       console.warn("[revenuecat-mirror] upsert result=sandbox_refused (a SANDBOX read was not allowed over PRODUCTION)");
     }
     out.push({ productId: row.productId, status: row.status, result });
+  }
+  // A good read with NO avya_pro Play entry while our Play row still grants PRO: nothing writes that row (the mirror
+  // never revokes on an absence: a missing entry can be a RevenueCat-side oddity, and a wrong revoke takes PRO from a
+  // payer). The founder checks it by hand (hermes seat 1, 2026-11-24).
+  // Diagnostic only: its read or alert failing must never turn a good mirror into a failed one (B-pass on the hermes
+  // fixes, seat A). One open alert per source per day (the shared `alert` dedup): the summary says how to find the rest.
+  if (rows.length === 0 && issues.length === 0 && deps.db.hasActivePlayRow) {
+    try {
+      if (await deps.db.hasActivePlayRow(uid)) {
+        await deps.db.alert(
+          ENTRY_MISSING_ALERT_SOURCE,
+          "critical",
+          "A Play row grants PRO but RevenueCat shows no Play subscription for this customer: check it by hand " +
+            "(one alert per day; others may exist: compare every active Play row with RevenueCat)",
+          { user_id: uid },
+        );
+      }
+    } catch (e) {
+      console.warn(`[revenuecat-mirror] entry-missing check failed (ignored) code=${pgErrorCode(e)}`);
+    }
   }
   return { outcome: "mirrored", rows: out, mapped: rows };
 }
@@ -250,6 +290,12 @@ export function supabaseMirrorDb(client: ServiceClient): MirrorDb {
       const { data, error } = await client.from("users").select("id").eq("id", uid).maybeSingle();
       if (error) throw new Error(`users read failed: ${(error as { code?: string }).code ?? "unknown"}`);
       return !!data;
+    },
+    async hasActivePlayRow(uid) {
+      const { data, error } = await client.from("subscriptions").select("id").eq("user_id", uid).eq("store", "play")
+        .eq("status", "active").limit(1);
+      if (error) throw new Error(`play row read failed: ${(error as { code?: string }).code ?? "unknown"}`);
+      return Array.isArray(data) && data.length > 0;
     },
     async upsertPlayRow(uid, row, readAtIso) {
       // oi79-ok: the function RETURNS text (one scalar: 'written', 'stale_read' or 'sandbox_refused'); any other answer throws below.

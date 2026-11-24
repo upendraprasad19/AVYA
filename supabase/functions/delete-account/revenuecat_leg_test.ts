@@ -1,7 +1,7 @@
 // OI-519 U4: delete-account's Google Play leg. A fake fetch records every RevenueCat call and answers per URL.
 // Run: deno test --allow-read supabase/functions/delete-account/revenuecat_leg_test.ts
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { cancelAndDeletePlayCustomer, type PlayDeleteDeps, type PlayTxn } from "./revenuecat_leg.ts";
+import { cancelAndDeletePlayCustomer, cancelPlayRows, deletePlayCustomer, type PlayDeleteDeps, type PlayTxn } from "./revenuecat_leg.ts";
 
 const UID = "11111111-2222-4333-8444-555555555555";
 const BASE = `https://api.revenuecat.com/v1/subscribers/${UID}`;
@@ -178,9 +178,14 @@ Deno.test("an alert that throws never fails the erasure leg", async () => {
 Deno.test("index.ts: the leg runs after the Razorpay leg, reads non-refunded Play rows, alerts critical", async () => {
   const src = (await Deno.readTextFile(new URL("./index.ts", import.meta.url))).replace(/\s+/g, " ");
   const razor = src.indexOf("razorpayStatus = `cancel_failed:");
-  const leg = src.indexOf("await cancelAndDeletePlayCustomer(userId, {");
+  const leg = src.indexOf("const play = await cancelPlayRows(userId, playDeps);");
   const authDel = src.indexOf("admin.auth.admin.deleteUser(userId)");
-  assertEquals(razor > 0 && leg > razor && authDel > leg, true);
+  const authFail = src.indexOf('return jsonError(500, "auth_delete_failed", requestId);');
+  const custDel = src.indexOf("if (play.deleteCustomer) { try { const customer = await deletePlayCustomer(userId, playDeps);");
+  // cancels before the auth delete; the customer DELETE only after it succeeded (never before: a cancel's webhook
+  // would re-create the customer while the users row exists).
+  assertEquals(razor > 0 && leg > razor && authDel > leg && authFail > authDel && custDel > authFail, true);
+  assertEquals(src.includes("cancelAndDeletePlayCustomer"), false, "the function never runs both steps together");
   assertEquals(
     src.includes(
       '.select("store_original_transaction_id, status") .eq("user_id", userId) .eq("store", "play") .neq("status", "cancelled")',
@@ -190,4 +195,33 @@ Deno.test("index.ts: the leg runs after the Razorpay leg, reads non-refunded Pla
   assertEquals(src.includes('expired: r.status === "expired",'), true);
   assertEquals(src.includes('severity: "critical",'), true);
   assertEquals(src.includes('secret: Deno.env.get("REVENUECAT_SECRET_KEY") ?? null,'), true);
+});
+
+Deno.test("step 1 (cancelPlayRows) never DELETEs the customer; it says whether step 2 may", async () => {
+  const calls: string[] = [];
+  const deps: PlayDeleteDeps = {
+    secret: "sk",
+    readPlayTxns: () => Promise.resolve({ txns: [{ txn: "GPA.1", expired: false }] }),
+    fetchFn: ((url: string, init: RequestInit) => {
+      calls.push(`${init.method} ${url}`);
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }) as unknown as typeof fetch,
+    alert: () => Promise.resolve(),
+  };
+  const c = await cancelPlayRows(UID, deps);
+  assertEquals(c, { status: "cancelled:1", deleteCustomer: true });
+  assertEquals(calls, [`POST ${BASE}/subscriptions/GPA.1/cancel`]);
+  const d = await deletePlayCustomer(UID, deps);
+  assertEquals(d, { status: "customer_deleted:200", customerDeleted: true });
+  assertEquals(calls.at(-1), `DELETE ${BASE}`);
+});
+
+Deno.test("step 1 with a failed cancel: deleteCustomer false (the handle is kept for the hand cancel)", async () => {
+  const deps: PlayDeleteDeps = {
+    secret: "sk",
+    readPlayTxns: () => Promise.resolve({ txns: [{ txn: "GPA.1", expired: false }] }),
+    fetchFn: (() => Promise.resolve(new Response("{}", { status: 500 }))) as unknown as typeof fetch,
+    alert: () => Promise.resolve(),
+  };
+  assertEquals((await cancelPlayRows(UID, deps)).deleteCustomer, false);
 });

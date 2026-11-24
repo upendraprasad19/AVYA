@@ -103,6 +103,7 @@ late _Store _store;
 late List<String> _events;
 late List<bool> _confirms;
 late bool _confirmAnswer;
+late bool _confirmUnknown;
 late int _manageOpens;
 
 Future<void> _open(
@@ -126,7 +127,8 @@ Future<void> _open(
       playProConfirmerProvider.overrideWithValue(
           ({required bool afterPurchase}) async {
         _confirms.add(afterPurchase);
-        return _confirmAnswer;
+        if (_confirmUnknown) return PlayConfirmResult.couldNotCheck;
+        return _confirmAnswer ? PlayConfirmResult.pro : PlayConfirmResult.notPro;
       }),
       playManageOpenerProvider.overrideWithValue(() async => _manageOpens++),
     ],
@@ -210,6 +212,7 @@ void main() {
     _events = [];
     _confirms = [];
     _confirmAnswer = true;
+    _confirmUnknown = false;
     _manageOpens = 0;
     ErrorTelemetry.debugOnLogEventForTests =
         (op, {message}) => _events.add('$op|${message ?? ''}');
@@ -316,6 +319,20 @@ void main() {
       expect(_confirms, [true, false]);
       expect(_statusText(tester), PurchaseCopy.playRestored);
       expect(_store.calls.where((c) => c.startsWith('purchase')).length, 1);
+    });
+
+    testWidgets('"already owned" and the check itself failed: the '
+        'could-not-check line, never "another account" (seat B)',
+        (tester) async {
+      _store.outcome = const PlayPurchaseOutcome(
+          PlayPurchaseStatus.ownedByOtherAccount,
+          errorCode: 'productAlreadyPurchasedError');
+      _confirmUnknown = true;
+      await _open(tester);
+      await _tap(tester, _buy);
+      expect(_confirms, [false]);
+      expect(_statusText(tester), PurchaseCopy.playCheckFailed);
+      expect(_manage, findsNothing);
     });
 
     testWidgets('the sheet closes while Google is charging: the confirm '
@@ -479,6 +496,25 @@ void main() {
       expect(_statusText(tester), PurchaseCopy.playRestored);
     });
 
+    testWidgets('RESTORE when the store check failed (503 / rate limit / '
+        'network) says "could not check", never "no PRO found" '
+        '(hermes seat 2)', (tester) async {
+      _confirmUnknown = true;
+      await _open(tester);
+      await _tap(tester, find.text('RESTORE'));
+      expect(_confirms, [false]);
+      expect(_statusText(tester), PurchaseCopy.playCheckFailed);
+    });
+
+    testWidgets('after a purchase a failed check is the slow line (RESTORE '
+        'later), not an error', (tester) async {
+      _confirmUnknown = true;
+      await _open(tester);
+      await _tap(tester, _buy);
+      expect(_statusText(tester), PurchaseCopy.playConfirmSlow);
+      expect(_buy, findsNothing);
+    });
+
     testWidgets('RESTORE with nothing to restore says so', (tester) async {
       _confirmAnswer = false;
       await _open(tester);
@@ -563,7 +599,7 @@ void main() {
         expect(playSyncAnswerForStatus(s), PlaySyncAnswer.stop, reason: '$s');
       }
       for (final s in [408, 500, 502, 503, 0]) {
-        expect(playSyncAnswerForStatus(s), PlaySyncAnswer.notPro,
+        expect(playSyncAnswerForStatus(s), PlaySyncAnswer.unavailable,
             reason: '$s');
       }
     });
@@ -599,29 +635,62 @@ void main() {
       expect(log, ['next']);
     });
 
-    test('confirmPlayPro: stops on PRO or stop, always ends with verify',
-        () async {
-      Future<(int, bool)> run(List<PlaySyncAnswer> answers, bool verified,
+    test('playSyncAnswerForBody: is_pro true -> pro; store_checked false '
+        '(switch off) -> unavailable; else notPro', () {
+      expect(playSyncAnswerForBody({'is_pro': true}), PlaySyncAnswer.pro);
+      expect(playSyncAnswerForBody({'is_pro': false, 'store_checked': false}),
+          PlaySyncAnswer.unavailable);
+      expect(playSyncAnswerForBody({'is_pro': false}), PlaySyncAnswer.notPro);
+      expect(playSyncAnswerForBody(null), PlaySyncAnswer.notPro);
+      expect(playSyncAnswerForBody({'is_pro': true, 'store_checked': false}),
+          PlaySyncAnswer.pro);
+    });
+
+    test('confirmPlayPro: stops on PRO or stop, always ends with verify; a '
+        'failed or refused last check is couldNotCheck, never notPro', () async {
+      const pro = PlayConfirmResult.pro;
+      const no = PlayConfirmResult.notPro;
+      const unk = PlayConfirmResult.couldNotCheck;
+      Future<(int, PlayConfirmResult)> run(
+          List<PlaySyncAnswer> answers, bool verified,
           {int attempts = 4}) async {
         var asked = 0;
-        final ok = await confirmPlayPro(
+        final r = await confirmPlayPro(
           syncOnce: () async => answers[asked++],
           verify: () async => verified,
           attempts: attempts,
           wait: (_) async {},
         );
-        return (asked, ok);
+        return (asked, r);
       }
 
-      expect(await run([PlaySyncAnswer.pro], true), (1, true));
+      expect(await run([PlaySyncAnswer.pro], true), (1, pro));
       expect(
-          await run([PlaySyncAnswer.notPro, PlaySyncAnswer.pro], true), (2, true));
-      expect(await run([PlaySyncAnswer.stop], false), (1, false));
+          await run([PlaySyncAnswer.notPro, PlaySyncAnswer.pro], true), (2, pro));
+      expect(await run([PlaySyncAnswer.stop], false), (1, unk));
       expect(
-          await run(List.filled(4, PlaySyncAnswer.notPro), false), (4, false));
-      // The sync answer alone never makes the app PRO: verify decides.
-      expect(await run([PlaySyncAnswer.pro], false), (1, false));
-      expect(await run([PlaySyncAnswer.notPro], true, attempts: 1), (1, true));
+          await run(List.filled(4, PlaySyncAnswer.notPro), false), (4, no));
+      // The sync answer alone never makes the app PRO: verify decides; a store
+      // "PRO" the verify call could not confirm is couldNotCheck, never notPro.
+      expect(await run([PlaySyncAnswer.pro], false), (1, unk));
+      expect(await run([PlaySyncAnswer.notPro], true, attempts: 1), (1, pro));
+      // A failed check (503 / network) is retried like notPro...
+      expect(
+          await run([PlaySyncAnswer.unavailable, PlaySyncAnswer.pro], true),
+          (2, pro));
+      // ...and when it is the LAST answer, not PRO means "could not check".
+      expect(await run([PlaySyncAnswer.unavailable], false, attempts: 1),
+          (1, unk));
+      expect(
+          await run(List.filled(4, PlaySyncAnswer.unavailable), false), (4, unk));
+      expect(
+          await run([PlaySyncAnswer.unavailable, PlaySyncAnswer.notPro], false,
+              attempts: 2),
+          (2, no),
+          reason: 'a real "not PRO" read after a failed one is notPro');
+      // A failed check never beats a confirmed PRO.
+      expect(await run([PlaySyncAnswer.unavailable], true, attempts: 1),
+          (1, pro));
     });
   });
 }

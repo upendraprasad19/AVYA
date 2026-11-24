@@ -75,7 +75,11 @@ Deno.test("switch OFF -> no mirror, current row returned", async () => {
   const r = await handler(req(), deps(log, { mirrorEnabled: () => false }));
   assertEquals(r.status, 200);
   assertEquals(log.some((l) => l.startsWith("mirror:")), false);
-  assertEquals((await r.json()).is_pro, true);
+  const body = await r.json();
+  assertEquals(body.is_pro, true);
+  assertEquals(body.store_checked, false, "the store was not read: never proof of 'no PRO'");
+  const on = await (await handler(req(), deps([]))).json();
+  assertEquals("store_checked" in on, false, "a real store read carries no flag");
 });
 
 Deno.test("mirror failure -> 503 store_unavailable", async () => {
@@ -108,4 +112,9 @@ Deno.test("a missing secret key (the mirror throws no_secret) -> 503 store_unava
   const r = await handler(req(), deps(log, { mirror: () => Promise.reject(new RevenueCatReadError("no_secret")) }));
   assertEquals(r.status, 503);
   assertEquals((await r.json()).error_code, "store_unavailable");
+});
+
+Deno.test("an exhausted quota leaves a log line with the request id only (hermes seat 2)", async () => {
+  const src = (await Deno.readTextFile(new URL("./logic.ts", import.meta.url))).replace(/\s+/g, " ");
+  assertEquals(src.includes('if (used === -1) { const retry = Math.max(1, Math.ceil((bucketStartMs + SYNC_WINDOW_MS - now()) / 1000)); // Telemetry on the over-limit path (hermes seat 2): the request id only, never the user. console.warn(`[revenuecat-sync] request_id=${rid} rate_limited`);'), true);
 });

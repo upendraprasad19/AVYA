@@ -441,6 +441,22 @@ void main() {
       expect(sub['plan'], 'monthly');
     });
 
+    test('expires_at and plan come from the per-user box (MigratedKey), '
+        'like auto_renew (OI-519 hermes seat 1)', () async {
+      final expiry = DateTime.utc(2026, 12, 23, 17);
+      await HiveService.instance.configBox.delete('expiresAt');
+      await HiveService.instance.configBox.delete('plan');
+      await HiveService.instance.userBox
+          .put('expiresAt', expiry.toIso8601String());
+      await HiveService.instance.userBox.put('plan', 'yearly');
+      final ctx = AiCoachRepository.instance.buildAiContext();
+      final sub = ctx['subscription'] as Map;
+      expect(sub['expires_at'], expiry.toIso8601String());
+      expect(sub['plan'], 'yearly');
+      await HiveService.instance.userBox.delete('expiresAt');
+      await HiveService.instance.userBox.delete('plan');
+    });
+
     test('has all required keys', () {
       final ctx = AiCoachRepository.instance.buildAiContext();
       final sub = ctx['subscription'] as Map;

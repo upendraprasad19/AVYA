@@ -6,6 +6,7 @@ import {
   type EventRecord,
   handler,
   MAX_BODY_BYTES,
+  MAX_UIDS_PER_EVENT,
   PAID_NO_ROW_ALERT_SOURCE,
   TRANSFER_ALERT_SOURCE,
   type WebhookDeps,
@@ -179,4 +180,31 @@ Deno.test("duplicate event id (a retry) still re-mirrors: idempotent", async () 
   await handler(post(ev()), deps(s));
   assertEquals(s.mirrored, [U1, U1]);
   assertEquals(s.events.map((e) => e.provider_event_id), ["evt_1", "evt_1"]);
+});
+
+Deno.test("a chunked body with no Content-Length is cut at MAX_BODY_BYTES + 1, never read in full (hermes seat 2)", async () => {
+  let pulled = 0;
+  const chunk = new TextEncoder().encode(" ".repeat(16 * 1024));
+  const body = new ReadableStream<Uint8Array>({
+    pull(c) {
+      pulled++;
+      if (pulled > 100) return c.close(); // 1.6 MB available
+      c.enqueue(chunk);
+    },
+  });
+  const h = new Headers({ "Content-Type": "application/json", Authorization: SECRET });
+  const req = new Request("http://x/revenuecat-webhook", { method: "POST", headers: h, body });
+  const s = fresh();
+  assertEquals((await handler(req, deps(s))).status, 413);
+  assertEquals(pulled <= Math.ceil(MAX_BODY_BYTES / chunk.byteLength) + 2, true, `pulled ${pulled} chunks`);
+  assertEquals(s.events, []);
+});
+
+Deno.test("a TRANSFER naming many customers re-reads at most MAX_UIDS_PER_EVENT and says so (hermes seat 2)", async () => {
+  const many = Array.from({ length: 8 }, (_, i) => `00000000-0000-4000-8000-0000000000${String(10 + i)}`);
+  const s = fresh();
+  await handler(post(ev({ type: "TRANSFER", app_user_id: undefined, transferred_from: many.slice(0, 4), transferred_to: many.slice(4) })),
+    deps(s, { known: many }));
+  assertEquals(s.mirrored.length, MAX_UIDS_PER_EVENT);
+  assertEquals(s.alerts, [TRANSFER_ALERT_SOURCE, TRANSFER_ALERT_SOURCE], "the transfer page + the cap page");
 });

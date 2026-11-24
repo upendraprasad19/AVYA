@@ -14,7 +14,17 @@ import {
   type ServiceClient,
   supabaseMirrorDb,
 } from "../_shared/revenuecat_mirror.ts";
-import { DRAIN_BATCH, FN_NAME, handler, type ReconcileDb, type ReconcileDeps } from "./logic.ts";
+import {
+  DRAIN_BATCH,
+  FN_NAME,
+  handler,
+  mergeReconcileCandidates,
+  type ReconcileDb,
+  type ReconcileDeps,
+  SWITCH_OFF_CATCH_UP_DAYS,
+  switchOffCatchUpUids,
+} from "./logic.ts";
+import { fetchAllPages } from "../_shared/paged_fetch.ts";
 
 const H = 3600 * 1000;
 
@@ -40,7 +50,35 @@ export function reconcileDb(client: ServiceClient): ReconcileDb {
         .order("store_read_at", { ascending: true })
         .limit(200);
       if (error) throw new Error("reconcile candidates read failed");
-      return [...new Set<string>((data ?? []).map((r: { user_id: string }) => r.user_id))];
+      // Plus every user whose webhook arrived while the switch was OFF and who has not been read since (a purchase made
+      // between the deploy and the switch ON, or during a rollback, would otherwise never be mirrored).
+      const regular = (data ?? []).map((r: { user_id: string }) => r.user_id);
+      // The catch-up is best effort: any failure (a read error, more than 20 pages of events) skips it for this run and
+      // never costs the regular candidates (B-pass round 2 on the hermes fixes).
+      let catchUp: string[] = [];
+      try {
+        // Paged, newest first: one noisy user's events must not hide another user's (dedupe AFTER every page; B-pass on
+        // the hermes fixes, seat A).
+        type Ev = { user_id: string | null; received_at: string };
+        const events = await fetchAllPages<Ev>(
+          () => client.from("subscription_events").select("user_id, received_at").eq("outcome", "switch_off")
+            .not("user_id", "is", null).gte("received_at", iso(now - SWITCH_OFF_CATCH_UP_DAYS * 24 * H)),
+          { orderBy: [{ column: "id", ascending: false }], pageSize: 1000, maxPages: 20, label: "revenuecat-reconcile switch-off events" },
+        );
+        // The 200 most recent distinct users (one Play row each, so one read row each).
+        const evUids = [...new Set<string>(events.map((r) => r.user_id).filter((u): u is string => !!u))].slice(0, 200);
+        let reads: { user_id: string; store_read_at: string | null }[] = [];
+        if (evUids.length > 0) {
+          const rd = await client.from("subscriptions").select("user_id, store_read_at").eq("store", "play")
+            .in("user_id", evUids).limit(400);
+          if (rd.error) throw new Error("switch-off catch-up reads failed");
+          reads = rd.data ?? [];
+        }
+        catchUp = switchOffCatchUpUids(events.filter((e) => e.user_id && evUids.includes(e.user_id)), reads);
+      } catch (e) {
+        console.warn(`[revenuecat-reconcile] switch-off catch-up skipped this run: ${(e as { name?: string })?.name ?? "error"}`);
+      }
+      return mergeReconcileCandidates(regular, catchUp);
     },
     crashedInFlight: async (now) => {
       const { data, error } = await client.from("store_reward_deferrals").select("id, claim_token")

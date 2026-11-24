@@ -84,6 +84,12 @@ class RevenueTab extends StatelessWidget {
                     value: '${revenue.playActive}',
                     unit: 'not in MRR',
                   ),
+                  if (revenue.playSandboxActive > 0)
+                    WardStatTile(
+                      label: 'Play testers',
+                      value: '${revenue.playSandboxActive}',
+                      unit: 'not paid',
+                    ),
                   if (revenue.otherActive > 0)
                     WardStatTile(
                       label: 'Other plan',

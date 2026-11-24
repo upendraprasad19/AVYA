@@ -25,6 +25,9 @@
 -- Slot: minute 52. `referral_conversions_hourly` runs at :41 (its job queues the defers this run drains, so a reward
 -- credited at :41 is sent 11 minutes later); nothing else scheduled at :52 (CRON_REGISTRY.md).
 --
+-- Timeout: 120 s (pg_net's default is 5 s; one run can use its 60 s budget plus a 10 s RevenueCat call), so the
+-- request is not abandoned while the run works and `net._http_response` records the real answer (hermes seat 2).
+--
 -- Idempotency: `cron.schedule(jobname, ...)` upserts by job name (pg_cron 1.6.4), so a re-apply rewrites the same job.
 
 SELECT cron.schedule(
@@ -37,7 +40,8 @@ SELECT cron.schedule(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer ' || private.cron_get_secret()
     ),
-    body := '{}'::jsonb
+    body := '{}'::jsonb,
+    timeout_milliseconds := 120000
   );
   $job$
 );

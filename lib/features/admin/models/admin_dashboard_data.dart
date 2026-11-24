@@ -197,6 +197,10 @@ class AdminRevenueMetrics {
   /// [monthlyActive] / [yearlyActive] and not in [derivedMrrInr] (web-only:
   /// Google's price and fee differ). 0 from a server older than +51.
   final int playActive;
+
+  /// OI-519: active Google Play SANDBOX rows (license testers). Never paid, so
+  /// never in [playActive]. 0 from an older server.
+  final int playSandboxActive;
   final double derivedMrrInr;
   final int currentMonthlyPriceInr;
   final int currentYearlyPriceInr;
@@ -207,6 +211,7 @@ class AdminRevenueMetrics {
     required this.trialActive,
     required this.otherActive,
     this.playActive = 0,
+    this.playSandboxActive = 0,
     required this.derivedMrrInr,
     required this.currentMonthlyPriceInr,
     required this.currentYearlyPriceInr,
@@ -219,6 +224,7 @@ class AdminRevenueMetrics {
       trialActive: _int(json['trial_active']),
       otherActive: _int(json['other_active']),
       playActive: _int(json['play_active']),
+      playSandboxActive: _int(json['play_sandbox_active']),
       derivedMrrInr: _double(json['derived_mrr_inr']),
       currentMonthlyPriceInr: _int(json['current_monthly_price_inr']),
       currentYearlyPriceInr: _int(json['current_yearly_price_inr']),

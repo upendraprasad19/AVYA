@@ -169,6 +169,7 @@ const Map<String, Set<String>> _allowed = {
     r'source', // alert source constant from this codebase
     r'pgErrorCode(error)', // helper (B-pass F2: the alert insert's own error)
     r'pgErrorCode(readErr)', // helper (B-pass round 2 F1: the alert dedup read's own error)
+    r'pgErrorCode(e)', // helper (hermes H1-1: the entry-missing check's own error)
   },
   'supabase/functions/revenuecat-webhook/logic.ts': {
     r'rid', // generated request id

@@ -268,11 +268,39 @@ enum PlaySyncAnswer {
   /// The body says `is_pro: true`.
   pro,
 
-  /// Not PRO (yet), or a failure worth one more try.
+  /// Not PRO (yet): the server read the store and found no PRO.
   notPro,
+
+  /// The check itself failed (408, 5xx such as 503 `store_unavailable`, a
+  /// network error): worth one more try, and never proof of "no PRO".
+  unavailable,
 
   /// Rate limited (429) or a client error another ask cannot fix: stop asking.
   stop,
+}
+
+/// What the confirm step could establish (hermes seat 2, 2026-11-24).
+enum PlayConfirmResult {
+  /// The server says PRO (Hive written by `verifyFromServer`).
+  pro,
+
+  /// The store was read and holds no PRO for this account.
+  notPro,
+
+  /// No PRO confirmed AND the last store check failed or was refused (503,
+  /// 429, network): the app must not tell a payer "no PRO found".
+  couldNotCheck,
+}
+
+/// PURE. A 2xx `revenuecat-sync` body as an answer. `store_checked: false`
+/// means the mirror switch is off and the store was NOT read, so its "not PRO"
+/// proves nothing (B-pass on the hermes fixes, seat B).
+PlaySyncAnswer playSyncAnswerForBody(Object? data) {
+  if (data is Map && data['is_pro'] == true) return PlaySyncAnswer.pro;
+  if (data is Map && data['store_checked'] == false) {
+    return PlaySyncAnswer.unavailable;
+  }
+  return PlaySyncAnswer.notPro;
 }
 
 /// PURE. A `revenuecat-sync` error status as an answer: 429 and every other
@@ -281,24 +309,34 @@ enum PlaySyncAnswer {
 PlaySyncAnswer playSyncAnswerForStatus(int status) =>
     (status >= 400 && status < 500 && status != 408)
         ? PlaySyncAnswer.stop
-        : PlaySyncAnswer.notPro;
+        : PlaySyncAnswer.unavailable;
 
 /// PURE loop. Asks `revenuecat-sync` up to [attempts] times until it answers
 /// [PlaySyncAnswer.pro] (or [PlaySyncAnswer.stop]), then ALWAYS ends with
 /// [verify] (`verifyFromServer(force: true)`), which writes Hive: the sync
-/// answer alone never makes the app PRO.
-Future<bool> confirmPlayPro({
+/// answer alone never makes the app PRO. Not PRO after a LAST answer that was
+/// a failed or refused check is [PlayConfirmResult.couldNotCheck], never
+/// [PlayConfirmResult.notPro].
+Future<PlayConfirmResult> confirmPlayPro({
   required Future<PlaySyncAnswer> Function() syncOnce,
   required Future<bool> Function() verify,
   required int attempts,
   required Future<void> Function(int attempt) wait,
 }) async {
+  PlaySyncAnswer? last;
   for (var i = 0; i < attempts; i++) {
-    final answer = await syncOnce();
-    if (answer != PlaySyncAnswer.notPro) break;
+    last = await syncOnce();
+    if (last == PlaySyncAnswer.pro || last == PlaySyncAnswer.stop) break;
     if (i < attempts - 1) await wait(i);
   }
-  return verify();
+  if (await verify()) return PlayConfirmResult.pro;
+  // notPro ONLY when the store was read and said so. A failed / refused check,
+  // or a store "PRO" the verify call could not confirm (verifyFromServer falls
+  // back to local state on a failed call), is couldNotCheck (B-pass on the
+  // hermes fixes, seat B).
+  return last == PlaySyncAnswer.notPro
+      ? PlayConfirmResult.notPro
+      : PlayConfirmResult.couldNotCheck;
 }
 
 /// One `revenuecat-sync` call. Never throws: every failure is logged with
@@ -307,10 +345,7 @@ Future<PlaySyncAnswer> revenueCatSyncOnce() async {
   try {
     final res = await SupabaseService.instance
         .callFunction('revenuecat-sync', spendsQuotaPerCall: true);
-    final data = res.data;
-    return data is Map && data['is_pro'] == true
-        ? PlaySyncAnswer.pro
-        : PlaySyncAnswer.notPro;
+    return playSyncAnswerForBody(res.data);
   } on FunctionException catch (e) {
     final details = e.details;
     final code = details is Map ? details['error_code'] : null;
@@ -320,7 +355,7 @@ Future<PlaySyncAnswer> revenueCatSyncOnce() async {
   } catch (e) {
     unawaited(ErrorTelemetry.logEvent('revenuecat_sync_failed',
         message: 'type=${e.runtimeType}'));
-    return PlaySyncAnswer.notPro;
+    return PlaySyncAnswer.unavailable;
   }
 }
 
@@ -329,7 +364,8 @@ Future<PlaySyncAnswer> revenueCatSyncOnce() async {
 /// one of the user's 20 hourly `revenuecat-sync` units.
 const int kPlayConfirmAttemptsAfterPurchase = 4;
 
-typedef PlayProConfirmer = Future<bool> Function({required bool afterPurchase});
+typedef PlayProConfirmer = Future<PlayConfirmResult> Function(
+    {required bool afterPurchase});
 
 /// The confirm step the paywall uses. Overridden in tests.
 final playProConfirmerProvider = Provider<PlayProConfirmer>((ref) {

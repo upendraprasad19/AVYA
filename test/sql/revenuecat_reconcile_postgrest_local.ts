@@ -83,9 +83,13 @@ check("a second fallBack returns noop", fb2 === "noop", String(fb2));
 
 // 6. reconcileUids: the .or(...) candidate filter.
 const uids = await step("reconcileUids", () => db.reconcileUids(now));
-const want = ["00000000-0000-4000-8000-00000000d001", "00000000-0000-4000-8000-00000000d002", "00000000-0000-4000-8000-00000000d003"];
-check("reconcileUids = ends within [now-3d, now+1d] OR active and read > 24 h ago, Play rows only",
+const want = ["00000000-0000-4000-8000-00000000d001", "00000000-0000-4000-8000-00000000d002", "00000000-0000-4000-8000-00000000d003",
+  "00000000-0000-4000-8000-00000000d007", "00000000-0000-4000-8000-00000000d009"];
+check("reconcileUids = ends within [now-3d, now+1d] OR active and read > 24 h ago (Play rows), PLUS a switch_off webhook in 7 days newer than the user's last Play read",
   JSON.stringify([...(uids ?? [])].sort()) === JSON.stringify(want), JSON.stringify(uids));
+check("the switch_off catch-up users come AFTER the regular candidates (newest event first; a noisy tester hides nobody)",
+  JSON.stringify((uids ?? []).slice(-2)) === JSON.stringify(["00000000-0000-4000-8000-00000000d009", "00000000-0000-4000-8000-00000000d007"]),
+  JSON.stringify(uids));
 
 // 7. stallCounts.
 const st = await step("stallCounts", () => db.stallCounts(now));

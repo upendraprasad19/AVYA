@@ -31,7 +31,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { purgeUserStorage } from "../_shared/purge_user_storage.ts";
 import { USER_OWNED_BUCKETS } from "../_shared/user_owned_buckets.ts";
-import { cancelAndDeletePlayCustomer, PLAY_DELETE_ALERT_SOURCE } from "./revenuecat_leg.ts";
+import { cancelPlayRows, deletePlayCustomer, PLAY_DELETE_ALERT_SOURCE, type PlayDeleteDeps } from "./revenuecat_leg.ts";
 
 // ── CORS headers (inline — no cors.ts in _shared for this project) ────────────
 const corsHeaders = {
@@ -308,8 +308,10 @@ serve(async (req: Request) => {
     // Same rule as the Razorpay leg: cancel first, never block the erasure. It
     // does not read the mirror switch. A failure is a critical `alerts` row (the
     // durable record: account_deletion_log has no Play column) naming the user
-    // whose Google subscription must be cancelled by hand.
-    const play = await cancelAndDeletePlayCustomer(userId, {
+    // whose Google subscription must be cancelled by hand. Only the CANCELS run
+    // here; the RevenueCat customer is deleted after the auth delete (section 6b):
+    // a cancel's webhook must not re-create it while the users row still exists.
+    const playDeps: PlayDeleteDeps = {
       secret: Deno.env.get("REVENUECAT_SECRET_KEY") ?? null,
       readPlayTxns: async () => {
         const { data, error } = await admin
@@ -340,7 +342,8 @@ serve(async (req: Request) => {
           );
         }
       },
-    });
+    };
+    const play = await cancelPlayRows(userId, playDeps);
     console.log(`[delete-account] request_id=${requestId} play=${play.status}`);
 
     // ── 4. ONESIGNAL UNSUBSCRIBE — best-effort, non-fatal ────────────────────
@@ -426,6 +429,19 @@ serve(async (req: Request) => {
     console.log(
       `[delete-account] request_id=${requestId} user=${userId} auth.users deleted`,
     );
+
+    // ── 6b. REVENUECAT CUSTOMER DELETE (OI-519) — best-effort, NON-FATAL ─────
+    // After the auth delete: the mirror now refuses this uid (no users row), so
+    // no webhook can re-create the customer this DELETE erases. Never rethrows
+    // (point of no return); a failure is a critical alert from the leg.
+    if (play.deleteCustomer) {
+      try {
+        const customer = await deletePlayCustomer(userId, playDeps);
+        console.log(`[delete-account] request_id=${requestId} play_customer=${customer.status}`);
+      } catch (_) {
+        console.error(`[delete-account] request_id=${requestId} play_customer=exception`);
+      }
+    }
 
     // ── 7. AUDIT LOG ─────────────────────────────────────────────────────────
     // Inserted AFTER auth delete — table has no FK, so the row survives. It MUST

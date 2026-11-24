@@ -1581,19 +1581,16 @@ class AiSnapshotBuilder {
   }
 
   Map<String, dynamic> _getSubscriptionState() {
-    final isPro = SubscriptionService.instance.isPro();
-    final config = _hive.configBox;
-    final expiresAtRaw = config.get('expiresAt');
-    String? expiresAtIso;
-    if (expiresAtRaw is String) {
-      expiresAtIso = expiresAtRaw;
-    } else if (expiresAtRaw is DateTime) {
-      expiresAtIso = expiresAtRaw.toIso8601String();
-    }
+    final sub = SubscriptionService.instance;
+    final isPro = sub.isPro();
+    // OI-519 (hermes seat 1): all three fields through the service's
+    // MigratedKey readers (the per-user box first). The raw configBox read of
+    // `expiresAt` / `plan` came back null once a session was open, next to a
+    // real `auto_renew`.
     return {
       'tier': isPro ? 'pro' : 'free',
-      'expires_at': expiresAtIso,
-      'plan': config.get('plan') as String?,
+      'expires_at': sub.expiresAt?.toIso8601String(),
+      'plan': sub.currentPlan,
       // OI-519: the old read of config key `auto_renew` had no writer (always
       // false). The real value is the Play row's auto-renew flag.
       'auto_renew': SubscriptionService.instance.proAutoRenews,

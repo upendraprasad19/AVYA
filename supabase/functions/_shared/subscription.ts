@@ -321,6 +321,18 @@ export async function fetchRenewingPlayUserIds(
   return new Set(rows.map((r) => r.user_id));
 }
 
+/**
+ * PURE (OI-519, hermes seat 1). Drops the users who hold a renewing Play subscription from a latest-end list: their
+ * end_date moves every period, so an "expiring in 7 / 30 days" list or count must not show them (the same rule as
+ * expiry-reminder). Used by admin-dashboard-data, the founder digest and the admin bot.
+ */
+export function withoutRenewingPlay<T extends readonly [string, ...unknown[]]>(
+  entries: readonly T[],
+  renewingPlay: ReadonlySet<string>,
+): T[] {
+  return entries.filter(([uid]) => !renewingPlay.has(uid));
+}
+
 /** The answer of `readProState`: PRO, free, or could not tell. */
 export type ProState = "pro" | "free" | "unknown";
 

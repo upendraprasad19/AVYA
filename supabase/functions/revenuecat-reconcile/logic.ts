@@ -30,6 +30,55 @@ export const RECONCILE_STARVED_ALERT_SOURCE = "revenuecat_reconcile_starved";
 export type DeferralRow = { id: string; user_id: string; days: number };
 export type MarkStatus = "applied" | "needs_check" | "pending";
 
+/** How far back a webhook answered while the switch was OFF is caught up (hermes seat 4, 2026-11-24). */
+export const SWITCH_OFF_CATCH_UP_DAYS = 7;
+
+/**
+ * PURE. Users whose latest `switch_off` webhook (the switch was OFF, so nothing was mirrored and RevenueCat was told 200,
+ * so it never retries) is NEWER than their latest Play read: their purchase or change was never mirrored. A user with no
+ * Play row at all is included. Order: most recent event first.
+ */
+export function switchOffCatchUpUids(
+  events: { user_id: string | null; received_at: string }[],
+  reads: { user_id: string; store_read_at: string | null }[],
+): string[] {
+  const lastEvent = new Map<string, number>();
+  for (const e of events) {
+    if (!e.user_id) continue;
+    const t = Date.parse(e.received_at);
+    if (Number.isFinite(t) && t > (lastEvent.get(e.user_id) ?? -Infinity)) lastEvent.set(e.user_id, t);
+  }
+  const lastRead = new Map<string, number>();
+  for (const r of reads) {
+    const t = r.store_read_at ? Date.parse(r.store_read_at) : NaN;
+    if (Number.isFinite(t) && t > (lastRead.get(r.user_id) ?? -Infinity)) lastRead.set(r.user_id, t);
+  }
+  return [...lastEvent.entries()]
+    .filter(([uid, t]) => !(lastRead.has(uid) && lastRead.get(uid)! >= t))
+    .sort((a, b) => b[1] - a[1])
+    .map(([uid]) => uid);
+}
+
+/** At most this many catch-up users per run, read AFTER the regular candidates (B-pass on the hermes fixes, seat A: a
+ *  user whose read writes nothing stays a catch-up candidate for the whole window and must not crowd out the rest). */
+export const SWITCH_OFF_CATCH_UP_MAX = 50;
+
+/** PURE. The run's re-read list: the regular candidates first (deduplicated, in order), then at most
+ *  [SWITCH_OFF_CATCH_UP_MAX] catch-up users not already listed. */
+export function mergeReconcileCandidates(regular: readonly string[], catchUp: readonly string[]): string[] {
+  const out = [...new Set(regular)];
+  const seen = new Set(out);
+  let added = 0;
+  for (const uid of catchUp) {
+    if (added >= SWITCH_OFF_CATCH_UP_MAX) break;
+    if (seen.has(uid)) continue;
+    seen.add(uid);
+    out.push(uid);
+    added++;
+  }
+  return out;
+}
+
 export type ReconcileDb = {
   stallCounts: (nowMs: number) => Promise<{ pendingOld: number; inFlightOld: number; needsCheck: number }>;
   reconcileUids: (nowMs: number) => Promise<string[]>;
@@ -211,8 +260,9 @@ export async function handler(req: Request, deps: ReconcileDeps): Promise<Respon
     console.log(`[${FN_NAME}] ${Object.entries(summary).map(([k, v]) => `${k}=${v}`).join(" ")}`);
     // A run in which no reconcile read reached RevenueCat successfully while some failed (RevenueCat down, the secret key
     // unset) or a drain row errored is a FAILED run, so the cron-failure alert sees it. `other` (refused uid, unknown user)
-    // returns before any RevenueCat call, so it proves nothing about RevenueCat (B-pass round 2, F2).
-    const bad = (failed > 0 && mirrored === 0) || drain.errors > 0;
+    // returns before any RevenueCat call, so it proves nothing about RevenueCat (B-pass round 2, F2). More failed reads than
+    // good ones is failed too: one lucky read in 200 must not record an outage as a success (hermes seat 2, 2026-11-24).
+    const bad = (failed > 0 && failed > mirrored) || drain.errors > 0;
     if (notReached > 0 && mirrored + other + failed === 0) {
       await deps.alert(RECONCILE_STARVED_ALERT_SOURCE, "The referral drain used the whole run budget; no Play re-read ran this hour", {
         reconcile_not_reached: notReached,

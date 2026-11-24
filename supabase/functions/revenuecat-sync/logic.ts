@@ -85,6 +85,8 @@ export async function handler(req: Request, deps: SyncDeps): Promise<Response> {
   }
   if (used === -1) {
     const retry = Math.max(1, Math.ceil((bucketStartMs + SYNC_WINDOW_MS - now()) / 1000));
+    // Telemetry on the over-limit path (hermes seat 2): the request id only, never the user.
+    console.warn(`[revenuecat-sync] request_id=${rid} rate_limited`);
     return json(429, { error: "Too many checks. Try again in an hour.", error_code: "rate_limited", retry_after_seconds: retry }, {
       "Retry-After": String(retry),
     });
@@ -101,6 +103,8 @@ export async function handler(req: Request, deps: SyncDeps): Promise<Response> {
     }
   } else {
     console.log(`[revenuecat-sync] request_id=${rid} outcome=switch_off`);
+    // The store was NOT read: say so, so the app never reads this as "no PRO found" (B-pass on the hermes fixes, seat B).
+    return json(200, { ...shape(await deps.readCurrent(uid), now()), store_checked: false });
   }
 
   return json(200, shape(await deps.readCurrent(uid), now()));

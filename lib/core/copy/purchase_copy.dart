@@ -148,6 +148,11 @@ class PurchaseCopy {
       'Google took your order. PRO is still being confirmed: tap '
       'RESTORE in a minute.';
 
+  /// RESTORE when the store check itself failed (503, rate limit, network):
+  /// never "no PRO found" for a payer.
+  static const String playCheckFailed =
+      "Couldn't check your PRO right now. Try again in a few minutes.";
+
   static const String playRestored = 'PRO restored.';
   static const String playWelcome = 'You are PRO. Every feature is unlocked.';
   static const String playNothingToRestore =

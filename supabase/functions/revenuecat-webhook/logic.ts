@@ -14,6 +14,34 @@ import { isUuid, type MirrorOutcome, RevenueCatReadError } from "../_shared/reve
 
 export const WEBHOOK_AUTH_ENV = "REVENUECAT_WEBHOOK_AUTH";
 export const MAX_BODY_BYTES = 64 * 1024;
+
+/** At most this many customers are re-read for one event (a TRANSFER names a list; hermes seat 2). */
+export const MAX_UIDS_PER_EVENT = 5;
+
+/** The body as text, or null once it exceeds [max] bytes (the rest is never read). */
+export async function readBounded(req: Request, max: number): Promise<string | null> {
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder().decode(all);
+}
 export const TRANSFER_ALERT_SOURCE = "revenuecat_transfer";
 export const PAID_NO_ROW_ALERT_SOURCE = "revenuecat_paid_no_row";
 const PAID_EVENT_TYPES = new Set(["INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION", "PRODUCT_CHANGE"]);
@@ -76,8 +104,9 @@ export async function handler(req: Request, deps: WebhookDeps): Promise<Response
 
   const declared = Number(req.headers.get("Content-Length") ?? "0");
   if (declared > MAX_BODY_BYTES) return json(413, { error: "Payload too large" });
-  const raw = await req.text();
-  if (new TextEncoder().encode(raw).length > MAX_BODY_BYTES) return json(413, { error: "Payload too large" });
+  // Read at most MAX_BODY_BYTES + 1 bytes, never the whole stream (a chunked body has no Content-Length; hermes seat 2).
+  const raw = await readBounded(req, MAX_BODY_BYTES);
+  if (raw === null) return json(413, { error: "Payload too large" });
 
   let event: Record<string, unknown>;
   try {
@@ -139,9 +168,15 @@ export async function handler(req: Request, deps: WebhookDeps): Promise<Response
     if (isUuid(original)) uids.add(original);
   }
 
+  if (uids.size > MAX_UIDS_PER_EVENT) {
+    await deps.alert(TRANSFER_ALERT_SOURCE, "A RevenueCat event named more customers than the webhook re-reads", {
+      count: uids.size,
+      read: MAX_UIDS_PER_EVENT,
+    });
+  }
   let outcome = uids.size === 0 ? "no_known_user" : "mirrored";
   let failed = false;
-  for (const uid of uids) {
+  for (const uid of [...uids].slice(0, MAX_UIDS_PER_EVENT)) {
     try {
       const out = await deps.mirror(uid);
       if (out.outcome !== "mirrored") {
