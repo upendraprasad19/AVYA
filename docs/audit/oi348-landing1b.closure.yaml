@@ -1,0 +1,152 @@
+# Closure ledger - oi348-landing1b (OI-348 device walk: B3/B7 past-phase history, B5 dictation).
+# Gate 40. One terminal_state per unit, plan-review finding class or mutation survivor; no `deferred:` key.
+# Plan: docs/plans/oi348-walk-fixes-landing1b.md (v3 FINAL). `oi348-landing1b@branch` is the in-branch commit form (the commit that carries this file).
+
+batch: oi348-landing1b
+plan_review_record: docs/plan-reviews/oi348-landing1b.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-23-past-phase-display-runs-5c8e2a.md
+  - docs/diagnoses/2026-11-23-speech-segment-accumulate-6d9f3b.md
+total_findings: 24
+closed_count: 24
+
+findings:
+  - id: B3-DISPLAY-BUCKETS
+    title: "Past-phase display groups by the DATE sequence of the stamps (bucketPastRowsForDisplay), both branches of pastPhaseBlocksForDisplay"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "test/contracts/past_phase_display_runs_behavioral_test.dart 23 green (T1 = the walk account's live rows verbatim); mutants M1-M5b all red (diagnose 5c8e2a mutation_proof)"
+
+  - id: B7-WEEK-CHIPS
+    title: "A past group draws one chip per week its rows span (min 4)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "T3/T4 (5 chips on a held phase), walk Phase I = 8 chips; mutant M7 (weekCount fixed at 4) red 2"
+
+  - id: B3-RECEIPT-LABEL
+    title: "phaseForDate labels a past date with the chip number; the current-window short-circuit runs first"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "Hive agreement test (every listed row reads its group's number), T11; mutants M6 red 3, M9 red 1"
+
+  - id: B3-KILL-SWITCH
+    title: "configBox disable_past_phase_display_runs restores the stamp grouping, 4 chips and the strict index verbatim"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "kill-switch tests on both branches green; mutant M8 red 3. Removal tracked as OI-524."
+
+  - id: B3-STRICT-COUNT-RESIDUAL
+    title: "The strict pastPhaseBlocks() (monotonic reconciler input) keeps stamp grouping; a stale lower stamp adds a block only when no real row carries that number"
+    terminal_state: verified_clean
+    evidence: "Stated residual in diagnose 5c8e2a with its condition; on the walk account the strict count (4) is a no-op against current_phase 5 (live read of user_progress.plan_json, 2026-11-23). Deliberately unchanged: a wider set there could over-advance a counter that never goes back."
+
+  - id: B5-SEGMENT-BOUNDARY
+    title: "The wrapper carries isSegmentEnd from the raw ResultType.intermediate int"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "Controller group 'segment accumulation (native)' drives isSegmentEnd through the fake engine. The real mapping line cannot run in a host test (stated in diagnose 6d9f3b); the speech_segments event confirms it on the next device walk (OI-524)."
+
+  - id: B5-ACCUMULATOR
+    title: "Pure SpeechSegmentAccumulator: repeat check, one mode decision (>=3 committed, strictly more words, >=0.7 positional match), whole-utterance final, repeat final, empty partials ignored"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "test/core/speech_segment_accumulator_test.dart 17 green; mutants V1-V5b, V9, V10 red"
+
+  - id: B5-CONTROLLER-WEB-SWITCH-TELEMETRY
+    title: "Controller wiring: native only, reset per session and retry, kill switch disable_speech_segment_accumulate, one speech_segments event per process (counts only)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "controller S7/S7b/S7c/S9/S10/S12 + speech_segment_kill_switch_test.dart green; mutants V6, V7, V8, V11 red. Removal of the switch tracked as OI-524."
+
+  - id: MUT-V10-SURVIVOR
+    title: "First B5 mutation run: V10 (empty partial not ignored) survived; S13 only fed an empty partial in segmented mode"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "S13b (empty partial after a segment end must not decide the mode) and S13c (empty partial in cumulative mode keeps the words) added; V10 re-run red 2, restored cmp-clean"
+
+  - id: R1-B3-P1-CARRY-FORWARD-AND-SHORT-RUNS
+    title: "Round 1 B3 P1s: carry-forward let a stray stamp swallow unstamped rows; consecutive short runs defeated the absorb rule"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "v2 design (runs over stamped rows only, noise dropped before merging, rows assigned by date); T6, T7, T10 green"
+
+  - id: R1-B5-P1-WIPE-RESCORE-FOLD
+    title: "Round 1 B5 P1s: prefix re-emission wiped committed words; a rescored whole final duplicated; the word-overlap fallback fold duplicated on numerals and contractions"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "v2 design (commit only on the plugin's segment end, one mode decision, whole-utterance final rule, fallback removed); S4, S6, S3 green"
+
+  - id: R1-P2-SET
+    title: "Round 1 P2s (B3: circular T8, switch read point, spurious W5, strict over-count statement, property (b); B5: \\p{M}, switch seam, telemetry flood, rule order / empty final)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "Resolutions table in the plan (v2); each has its test (T5, T8, agreement test, S11, S12, kill-switch tests)"
+
+  - id: R2-P2-SET
+    title: "Round 2 P2s (B3 6, B5 4): noise tied to rest rows, edge rule bounded by the previous segment's last stamped day, phaseForDate short-circuit first, per-row agreement test, raw resultType int, empty-partial guard, telemetry seam/reset"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "Applied in v3; pinned by M3, M5b, M9, T11, T8b, T10, S1b, S13/S13b/S13c and the telemetry tests"
+
+  - id: BPASS-A1-DST-WEEK-ASSIGNMENT
+    title: "B-pass seat A P3: chip count used calendar days, row-to-chip assignment used 7 x 24 h windows (disagree across DST)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "One helper pastPhaseWeekOf for both; DST-shaped helper test + every-row-on-one-chip test; mutants X1/X2/X3 (docs/reviews/oi348-landing1b-bpass.md)"
+
+  - id: BPASS-A2-STALE-REGISTRY-CITES
+    title: "B-pass seat A P3: three week_selector.dart registry cites pointed at comments (pre-existing: 38-45, 35-45, 137)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "Repointed to 123-126 (isPro), 123-128 (getPlanStartDate), 144-149 (pastPhaseBlocksForDisplay call); check_sot_registry_parity green"
+
+  - id: BPASS-A3-NOISE-RUN-RESIDUAL
+    title: "B-pass seat A P3: 3+ consecutive stale rest rows form a spurious segment; a 1-2 rest-row phase is absorbed"
+    terminal_state: verified_clean
+    evidence: "Consequence of the recorded noise rule (rejected alternative: a '<7-day run absorbed' rule, review round 1). Stated as a residual in diagnose 5c8e2a; the walk account's stale rows are single Sundays."
+
+  - id: BPASS-B1-SHORT-FIRST-SEGMENT-DUPLICATE
+    title: "B-pass seat B P2: a cumulative recognizer with a <3-word first segment and two segment ends kept the duplicate past the final"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "Strictly-longer whole final for a one-word committed text + a one-time replace of the committed text at such a segment end while undecided (first shape decided CUMULATIVE; changed after BPASS-D1); S14/S14b/S14c/S14d; mutants W1/W5/W6"
+
+  - id: BPASS-D1-LOCKED-MODE-WORD-LOSS
+    title: "B-pass delta seat P2: the first fix decided CUMULATIVE at a segment end, which locks a SEGMENTED session after a re-said short phrase and loses later segments"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "Replace once, mode left open; S14d ('yes', 'yes I will', 'book it' keeps every segment); mutant W6 (lock shape) red 2"
+
+  - id: BPASS-D2-ONE-WORD-FINAL-TRADE
+    title: "B-pass delta seat P3: one-word strictly-longer final keeps one copy of a re-said word ('stop' then 'stop it')"
+    terminal_state: verified_clean
+    evidence: "Same trade as BPASS-D1's replace (no word said once is dropped); stated in diagnose 6d9f3b residue; S5c still pinned by mutant W5"
+
+  - id: BPASS-D3-REGISTRY-LABEL
+    title: "B-pass delta seat P3: registry label for week_selector.dart 340-438 did not name pastPhaseWeekOf"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "Label updated; check_sot_registry_parity green"
+
+  - id: BPASS-B2-CUMULATIVE-SEGMENT-END-UNTESTED
+    title: "B-pass seat B P2: a segment end in CUMULATIVE mode had no test (mutant survived 111 tests)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "S15; mutant W2"
+
+  - id: BPASS-B3-MAPPING-UNTESTED
+    title: "B-pass seat B P2: the plugin result to isSegmentEnd mapping had no test"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "Extracted to the pure engineResultFromPlugin, tested with real SpeechRecognitionResult values incl. an unknown type int; mutant W3"
+
+  - id: BPASS-B4-DOC-AND-BOUNDARY
+    title: "B-pass seat B P3: diagnose doc named a wrong class; equal-length cumulative boundary untested; telemetry sample-of-one"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing1b@branch"
+    verification: "Doc writer entry corrected (engineResultFromPlugin / PluginSpeechEngine); S16 + mutant W4; sample-of-one stated in the residue"
+
+  - id: DEVICE-RECHECK
+    title: "Device re-check of OI-348 A5 part 1 and A19 step 8, and the speech_segments mode"
+    terminal_state: blocked_on_user
+    reason: "Needs the founder's next device walk on a build carrying this landing (OI-348 fix-status line; OI-524 then removes both kill switches)."

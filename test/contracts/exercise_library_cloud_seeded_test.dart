@@ -125,11 +125,12 @@ String _retagRollbackLine() {
 }
 
 /// The batch a seed file names in its Intent line: `(862 exercises, library v20, Batch C2c)`, `(871 exercises, library v23,
-/// Batch S1b-2)`, `(870 exercises, library v24, Batch S1b-3)`, `(870 exercises, library v27, Unit 1B-F2)`. The rollback text is
+/// Batch S1b-2)`, `(870 exercises, library v24, Batch S1b-3)`, `(870 exercises, library v27, Unit 1B-F2)`, `(870 exercises,
+/// library v28, OI-523)`. The rollback text is
 /// shaped by the batch, so the checks are too; a label this test does not know is a violation, never a pass.
 String? _batchLabel(String sql) {
-  final m = RegExp(r'exercises, library v\d+, (?:Batch (C2[a-z]|S1b-[23])|Unit (1B-F2))\)').firstMatch(sql);
-  return m == null ? null : (m.group(1) ?? m.group(2));
+  final m = RegExp(r'exercises, library v\d+, (?:Batch (C2[a-z]|S1b-[23])|Unit (1B-F2)|(OI-523))\)').firstMatch(sql);
+  return m == null ? null : (m.group(1) ?? m.group(2) ?? m.group(3));
 }
 
 /// Library Batch S1b-2: the suitable_for record (E010, E045) and the nine rows the batch inserts (restated from the plan).
@@ -259,6 +260,43 @@ List<String> _rollbackViolationsF2(String sql) {
   return out;
 }
 
+/// OI-523 (seed v28): the name_aliases record, one row (G3470 Forward Lunge loses its alias "Reverse Lunge"; the cloud value is NULL).
+Map<String, dynamic> _v28Record() =>
+    jsonDecode(File('scripts/data/library_v28_lunge_alias.json').readAsStringSync()) as Map<String, dynamic>;
+/// The one id, restated from the plan (docs/plans/2026-11-23-oi523-lunge-alias-v28.md D1), never read from the record.
+const _v28Ids = ['G3470'];
+
+/// The restore line, built in Dart from the record's `before`: the alias comes back as a text[] (name_aliases IS a text[] column).
+String _v28RestoreLine() {
+  final e = (_v28Record()['rows'] as List).cast<Map<String, dynamic>>().single;
+  return 'UPDATE exercise_library SET name_aliases = ${_sqlArray(e['before'] as List)} WHERE id = \'${_cloudId(e['id'] as String)}\';';
+}
+
+/// OI-523: the rollback restores G3470's name_aliases; the unit inserts, removes and merges no row, so there is no IN-list line.
+List<String> _rollbackViolationsV28(String sql) {
+  final out = <String>[];
+  final restore = _v28RestoreLine();
+  final recRows = (_v28Record()['rows'] as List).cast<Map<String, dynamic>>();
+  final ids = [for (final e in recRows) e['id'] as String];
+  if (ids.join(' ') != _v28Ids.join(' ')) out.add('the v28 record names ${ids.join(' ')}, not the planned id G3470');
+  if (jsonEncode(recRows.single['before']) != '["Reverse Lunge"]' || recRows.single['after'] != null) {
+    out.add('the v28 record is not before ["Reverse Lunge"] / after null');
+  }
+  if (!sql.contains('-- Rollback strategy: inline   -- $restore  (')) out.add('the Rollback strategy header does not name the G3470 restore');
+  if (!sql.contains('--   $restore')) out.add('the commented rollback block does not hold the G3470 restore line');
+  if (!sql.contains('(1 carry new values) and INSERTs 0 new row(s)')) out.add('the Destructive header does not count 1 changed row and 0 inserted');
+  if (!sql.contains('no row is added or removed (this batch owns neither)')) out.add('the Intent line does not say the unit owns no row');
+  if (!sql.contains('this batch removes and adds no row, so it has no reactivation or deactivation line')) {
+    out.add('the rollback sentence does not say the unit removes and adds no row');
+  }
+  if (sql.contains('IN ()')) out.add('an empty IN () list (a SQL syntax error)');
+  if (RegExp(r'^--   UPDATE exercise_library SET is_active = (true|false) WHERE id', multiLine: true).hasMatch(sql)) {
+    out.add('OI-523 removes, merges and adds no row, so its rollback has no is_active line');
+  }
+  if (_removalEntries().any((e) => e['removed_in'] == 'v28')) out.add('the removals file has an entry removed_in v28; this unit owns none');
+  return out;
+}
+
 /// Batch C2c: the rollback restores E230's four cloud columns from the record's `before`; the batch owns no removal and no twin,
 /// so there is no reactivation or deactivation line and no empty `IN ()` list.
 List<String> _rollbackViolationsC2c(String sql) {
@@ -279,6 +317,7 @@ List<String> _rollbackViolationsC2c(String sql) {
 /// twins, C2c restores E230. The header counts what it does.
 List<String> _rollbackViolations(String sql, List<Map<String, dynamic>> rows) {
   final label = _batchLabel(sql);
+  if (label == 'OI-523') return _rollbackViolationsV28(sql);
   if (label == '1B-F2') return _rollbackViolationsF2(sql);
   if (label == 'S1b-3') return _rollbackViolationsS1b3(sql);
   if (label == 'S1b-2') return _rollbackViolationsS1b2(sql);
@@ -346,6 +385,29 @@ const _s1b3Batch = r"""const BATCH = {
 };
 """;
 
+/// The generator's BATCH as Unit 1B-F2 shipped it (restated from migration 176's generation, scripts/seed_exercise_library.js
+/// before OI-523): the F2 guard tests run the sandbox generator with this block in place of the current one, with 175 as the
+/// previous seed, exactly as the S1b-3 merge tests do with `_s1b3Batch`.
+const _f2Batch = r"""const BATCH = {
+  label: 'library v27, Unit 1B-F2',
+  diagnose: '2026-11-12-generator-overlay-copy-f2c7a9',
+  newRowSource: 'exercise-gif-set',
+  batchTag: 'f2',
+  removalsFile: path.join(ROOT, 'scripts', 'data', 'library_batch_c2_removals.json'),
+  keptRowRecords: [
+    {
+      file: path.join(ROOT, 'scripts', 'data', 'library_f2_movement_pattern.json'),
+      column: 'movement_pattern',
+      note: "movement_pattern first element: the picker's slot pattern (12 rows; E064 keeps cardio)",
+    },
+  ],
+  newRowIds: [],
+  newRowNote: 'none',
+  mergesFile: path.join(ROOT, 'scripts', 'data', 'library_s1b3_merges.json'),
+  previousMigration: '175',
+};
+""";
+
 const _sandboxName = '999_guard_seed_exercise_library.sql';
 File _sandboxOut(Directory root) => File('${root.path}/out/$_sandboxName');
 Future<ProcessResult> _runSandbox(Directory root, String why) =>
@@ -362,7 +424,7 @@ Future<void> _refused(Directory root, String why, List<String> says) async {
 }
 
 /// A temp copy of the generator and every input it reads (never the real tree): the library, the removals file, the merges
-/// record, both kept-row records (F2 and S1b-3) and the previous seed migration [prev].
+/// record, the kept-row records (v28, F2 and S1b-3) and the previous seed migration [prev].
 Future<void> _withGeneratorSandbox(String prev, Future<void> Function(Directory root, File gen, String genText) body) async {
   final root = Directory.systemTemp.createTempSync('seed_guard_');
   try {
@@ -374,6 +436,7 @@ Future<void> _withGeneratorSandbox(String prev, Future<void> Function(Directory 
       'scripts/data/library_batch_c2_removals.json',
       'scripts/data/library_s1b3_merges.json',
       'scripts/data/library_f2_movement_pattern.json',
+      'scripts/data/library_v28_lunge_alias.json',
       'scripts/data/library_s1b3_name_aliases.json',
       'assets/data/exercise_library.json',
       'supabase/migrations/${prev}_reseed_exercise_library.sql',
@@ -688,8 +751,8 @@ void main() {
 
     test('the generated file carries the C1 header, every row uuid and the pinned rollback', () {
       expect(plain, contains('-- Destructive?: yes'));
-      expect(plain, contains('-- Linked diagnose-doc: 2026-11-12-generator-overlay-copy-f2c7a9'));
-      expect(_batchLabel(plain), '1B-F2', reason: 'the generator names the batch the rollback checks are shaped by');
+      expect(plain, contains('-- Linked diagnose-doc: 2026-11-23-lunge-alias-v28-b4d9e1'));
+      expect(_batchLabel(plain), 'OI-523', reason: 'the generator names the batch the rollback checks are shaped by');
       expect(_removalViolations(plain), isEmpty);
       expect(_removalViolations(split), isEmpty);
       expect(_tupleViolations(plain, rows), isEmpty);
@@ -761,13 +824,13 @@ void main() {
     });
 
     test('an Intent line that names a batch this test has no shape for (or none) is a violation, never a pass', () {
-      final unknown = plain.replaceFirst('Unit 1B-F2)', 'Unit 1B-Z)');
+      final unknown = plain.replaceFirst('OI-523)', 'OI-999)');
       expect(unknown, isNot(plain), reason: 'the mutation must apply');
       expect(_rollbackViolations(unknown, rows), isNotEmpty);
-      final batchWord = plain.replaceFirst('Unit 1B-F2)', 'Batch 1B-F2)');
+      final batchWord = plain.replaceFirst('OI-523)', 'Batch OI-523)');
       expect(batchWord, isNot(plain), reason: 'the mutation must apply');
-      expect(_rollbackViolations(batchWord, rows), isNotEmpty, reason: 'a Unit label spelled as a Batch is no known shape');
-      final none = plain.replaceFirst(RegExp(r'exercises, library v\d+, Unit 1B-F2\)'), 'exercises)');
+      expect(_rollbackViolations(batchWord, rows), isNotEmpty, reason: 'an OI label spelled as a Batch is no known shape');
+      final none = plain.replaceFirst(RegExp(r'exercises, library v\d+, OI-523\)'), 'exercises)');
       expect(none, isNot(plain), reason: 'the mutation must apply');
       expect(_rollbackViolations(none, rows), isNotEmpty);
     });
@@ -844,10 +907,13 @@ void main() {
       expect(tuple, contains(_sqlArray(_e053V23()['common_mistakes'] as List)));
     });
 
-    // Unit 1B-F2 (seed v27, OI-495): the restores are what 175 seeded, the generated file differs from 175 on exactly the 12
-    // tuples, and each of those holds the first element of the record's after.
+    // Unit 1B-F2 (seed v27, OI-495): the restores are what 175 seeded, the applied file 176 (immutable, on disk; since OI-523 the
+    // generator emits the v28 shape) differs from 175 on exactly the 12 tuples, and each of those holds the first element of
+    // the record's after.
     test('Unit 1B-F2: the 12 restores are the movement_pattern values migration 175 seeded, and the generated file differs from 175 on exactly those 12 tuples', () {
       final m175 = File('supabase/migrations/175_reseed_exercise_library.sql').readAsStringSync();
+      final plain = File('supabase/migrations/176_reseed_exercise_library.sql').readAsStringSync();
+      expect(_batchLabel(plain), '1B-F2');
       final byId = {for (final r in rows) r['id'] as String: r};
       for (final e in (_f2Record()['rows'] as List).cast<Map<String, dynamic>>()) {
         final id = e['id'] as String;
@@ -866,7 +932,9 @@ void main() {
       expect(differ, ([for (final i in _f2Ids) _cloudId(i)]..sort()));
     });
 
-    test('MUTATION (Unit 1B-F2): a deleted restore, a changed restore value, an array-literal restore, a wrong changed-row count and a stray is_active line are each a violation', () {
+    test('MUTATION (Unit 1B-F2, migration 176): a deleted restore, a changed restore value, an array-literal restore, a wrong changed-row count and a stray is_active line are each a violation', () {
+      final plain = File('supabase/migrations/176_reseed_exercise_library.sql').readAsStringSync();
+      expect(_batchLabel(plain), '1B-F2');
       expect(_rollbackViolations(plain, rows), isEmpty);
       final restore = _f2RestoreLines().first;
       expect(restore, "UPDATE exercise_library SET movement_pattern = 'vertical_push' WHERE id = '${_cloudId('E015')}';");
@@ -886,10 +954,98 @@ void main() {
           reason: 'stray reactivation');
     });
 
+    // OI-523 (seed v28): the restore is what 176 seeded, and the generated file differs from 176 on exactly the G3470 tuple.
+    test('OI-523: the restore is the name_aliases value migration 176 seeded, and the generated file differs from 176 on exactly the G3470 tuple', () {
+      final m176 = File('supabase/migrations/176_reseed_exercise_library.sql').readAsStringSync();
+      final byId = {for (final r in rows) r['id'] as String: r};
+      final e = (_v28Record()['rows'] as List).cast<Map<String, dynamic>>().single;
+      final id = e['id'] as String;
+      expect(_v28Ids, [id]);
+      expect(_tuplesById(m176)[_cloudId(id)], contains(_sqlArray(e['before'] as List)), reason: 'before is what 176 seeded');
+      expect(_tuplesById(plain)[_cloudId(id)], isNot(contains('Reverse Lunge')), reason: 'the new tuple has no alias');
+      expect(byId[id]!.containsKey('name_aliases'), isFalse, reason: 'after null is the library row: the key is absent');
+      expect(e['after'], isNull);
+      final a = _tuplesById(m176);
+      final b = _tuplesById(plain);
+      expect(b.keys.toSet(), a.keys.toSet(), reason: 'no row added or dropped');
+      final differ = [for (final k in a.keys) if (a[k] != b[k]) k]..sort();
+      expect(differ, [_cloudId(id)]);
+    });
+
+    test('MUTATION (OI-523): a deleted restore, a changed restore value, a wrong changed-row count and a stray is_active line are each a violation', () {
+      expect(_batchLabel(plain), 'OI-523');
+      expect(_rollbackViolations(plain, rows), isEmpty);
+      final restore = _v28RestoreLine();
+      expect(restore, "UPDATE exercise_library SET name_aliases = ARRAY['Reverse Lunge']::text[] WHERE id = '${_cloudId('G3470')}';");
+      final gone = plain.replaceAll('--   $restore', '');
+      expect(gone, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(gone, rows), isNotEmpty, reason: 'restore deleted');
+      final value = plain.replaceAll("SET name_aliases = ARRAY['Reverse Lunge']::text[] WHERE", "SET name_aliases = ARRAY['Reverse Lunges']::text[] WHERE");
+      expect(value, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(value, rows), isNotEmpty, reason: 'restore value changed');
+      final count = plain.replaceAll('(1 carry new values)', '(2 carry new values)');
+      expect(count, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(count, rows), isNotEmpty, reason: 'changed-row count');
+      expect(_rollbackViolations('$plain\n--   UPDATE exercise_library SET is_active = true WHERE id = \'x\';', rows), isNotEmpty,
+          reason: 'stray reactivation');
+    });
+
+    // The generator's guard for the v28 record: the sandbox holds migration 176 as the previous seed and the v28 record.
+    test('the generator refuses (OI-523): a missing or drifted record, a wrong before, a library row that still carries the alias, and a generator that compares after null to undefined; the unmodified files generate the v28 shape', () async {
+      await _withGeneratorSandbox('176', (root, gen, genText) async {
+        expect(genText, contains("label: 'library v28, OI-523'"));
+        final recFile = File('${root.path}/scripts/data/library_v28_lunge_alias.json');
+        final recText = recFile.readAsStringSync();
+        final rec = _v28Record();
+        final row = (rec['rows'] as List).cast<Map<String, dynamic>>().single;
+        final libFile = File('${root.path}/assets/data/exercise_library.json');
+        final libText = libFile.readAsStringSync();
+
+        // MIRROR: the unmodified files generate, and write the v28 shape.
+        final ok = await _runSandbox(root, 'seed generator with the unmodified v28 record');
+        expect(ok.exitCode, 0, reason: '${ok.stdout}${ok.stderr}');
+        expect(_batchLabel(_sandboxOut(root).readAsStringSync()), 'OI-523');
+        expect(_rollbackViolations(_sandboxOut(root).readAsStringSync(), _rows()), isEmpty);
+        _sandboxOut(root).deleteSync();
+
+        recFile.deleteSync();
+        await _refused(root, 'no kept-row record', ['kept-row record not found']);
+        // `after` is the library value: a record that says the alias is still there.
+        recFile.writeAsStringSync(jsonEncode({...rec, 'rows': [{...row, 'after': ['Reverse Lunge']}]}));
+        await _refused(root, 'a record whose after differs', ['G3470', 'name_aliases', 'differs']);
+        // `before` is what the rollback restores: an alias 176 never seeded.
+        recFile.writeAsStringSync(jsonEncode({...rec, 'rows': [{...row, 'before': ['Backward Lunge']}]}));
+        await _refused(root, 'a record whose before is not what 176 seeded', ['G3470', 'previous seed migration (176)']);
+        recFile.writeAsStringSync(recText);
+
+        // A library that still carries the alias (a stale asset): the record says it is gone.
+        final lib = (jsonDecode(libText) as List).cast<Map<String, dynamic>>();
+        libFile.writeAsStringSync(jsonEncode([
+          for (final r in lib) r['id'] == 'G3470' ? (Map<String, dynamic>.from(r)..['name_aliases'] = ['Reverse Lunge']) : r
+        ]));
+        await _refused(root, 'the library row still carries the alias', ['G3470', 'name_aliases', 'differs']);
+        libFile.writeAsStringSync(libText);
+
+        // MUTATION (the OI-523 comparison fix): a generator that compares the key-absent row (undefined) with `after: null`
+        // would refuse the unmodified files.
+        const fixed = 'JSON.stringify(row[rec.column] ?? null)';
+        expect(genText, contains(fixed), reason: 'the mutation must apply');
+        gen.writeAsStringSync(genText.replaceFirst(fixed, 'JSON.stringify(row[rec.column])'));
+        await _refused(root, 'a generator without the null fix', ['G3470', 'name_aliases', 'differs']);
+        gen.writeAsStringSync(genText);
+      });
+    });
+
     // The generator's own guard: it must refuse (exit 2, nothing written) rather than seed one thing and roll back to another.
-    // Unit 1B-F2 (seed v27): the sandbox holds migration 175 as the previous seed and the F2 movement_pattern record.
+    // Unit 1B-F2 (seed v27): the sandbox holds migration 175 as the previous seed, the F2 movement_pattern record and the F2 BATCH.
     test('the generator refuses: a missing or drifted kept-row record, a wrong before, a record naming no row or a new row, a missing previous seed, a missing new row and a missing merges record; the unmodified files still generate the F2 shape, and an emitter without firstOrNull is caught', () async {
-      await _withGeneratorSandbox('175', (root, gen, genText) async {
+      await _withGeneratorSandbox('175', (root, gen, genText0) async {
+        // Since OI-523 the generator's BATCH is v28's: the sandbox is given the F2 BATCH back (restated above) with 175 as the
+        // previous seed, so every F2 refusal keeps its test.
+        final genText = genText0.replaceFirst(RegExp(r'const BATCH = \{[\s\S]*?\n\};\n'), _f2Batch);
+        expect(genText, isNot(genText0), reason: 'the mutation must apply');
+        expect(genText, contains("batchTag: 'f2'"));
+        gen.writeAsStringSync(genText);
         final mergesFile = File('${root.path}/scripts/data/library_s1b3_merges.json');
         final mergesText = mergesFile.readAsStringSync();
         final prevFile = File('${root.path}/supabase/migrations/175_reseed_exercise_library.sql');

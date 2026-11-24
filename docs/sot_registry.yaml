@@ -108,6 +108,8 @@ concepts:
           Computes sessionLabel "SESSION N" when >1 workout_log_id per day.
           PHASE label resolves via WorkoutScheduleReadService.phaseForDate
           (Obs 1 6f1a2c — was hardcoded to 1); see concept phase_blocks_bucketing.
+          Since OI-348 B3 (5c8e2a) a PAST date's label equals the Train chip
+          that lists it (phaseForDateDisplay; concept past_phase_display_buckets).
           Unit 7 / OI-50 (d4e7c2): the set-count MAX and the duration total are
           NO LONGER hand-rolled here — both delegate to WorkoutReadService
           (below), so this reader and the edit sheet cannot disagree again.
@@ -1238,7 +1240,7 @@ concepts:
           dismiss (per-user IST date key) + configBox kill-switch
           'disable_expiry_banner'. Renders via _buildExpiryBanner in home_screen.
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 38-45
+        line_range: 123-126
         method: WeekSelector build
         semantic: display-only
         fields_read: [isPro]
@@ -4368,7 +4370,11 @@ concepts:
         line_range: 1-9999
         method: _PhaseGroup → _WeekChip (hasCompletedDay)
         semantic: flag-check
-        notes: renders Icons.check_circle when hasCompletedDay && !isLocked.
+        notes: |
+          renders Icons.check_circle when hasCompletedDay && !isLocked.
+          A PAST group draws one chip per week its display bucket spans (min 4,
+          `_PastPhase.weekCount`, OI-348 B3 5c8e2a), so a week of a long past
+          group past W4 gets its chip and its ✓ (it had none before).
     regression_test: test/contracts/week_completion_check_test.dart
     class_constraints: |
       Same "any completed day that week" predicate for past AND current
@@ -4479,6 +4485,11 @@ concepts:
         notes: |
           carry-forward: an unstamped row inherits the nearest preceding
           stamped phase (B-pass F-2); fully-unstamped → 28-day fallback.
+          This stamp grouping is the STRICT set only (the reconciler's input).
+          Since OI-348 B3 (5c8e2a) DISPLAY reads bucketPastRowsForDisplay
+          (concept past_phase_display_buckets), and phaseForDate labels a past
+          date with the chip number (phaseForDateDisplay) after its
+          current-window short-circuit.
       - file: lib/core/services/phase_progress_reconciler.dart
         line_range: 1-9999
         method: PhaseProgressReconciler.reconcile (block count, monotonic, +12 clamp)
@@ -4487,6 +4498,7 @@ concepts:
         line_range: 1-9999
         method: past-phase rendering (_PastPhase blocks)
         semantic: historical-series
+        notes: reads pastPhaseBlocksForDisplay (date-ordered display buckets, past_phase_display_buckets); one chip per week a group spans (min 4) since 5c8e2a.
       - file: lib/features/train/widgets/workout_receipt_card.dart
         line_range: 1-9999
         method: WorkoutReceiptData.fromExerciseLogs (PHASE label via phaseForDate)
@@ -6135,7 +6147,7 @@ concepts:
         method: phaseStartAfterGap
         notes: the ONE start-date rule; pure.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 2164-2203
+        line_range: 2327-2366
         method: nextPhaseStartDate
         notes: delegates to phaseStartAfterGap (gapStart false = the original rule, used by the graduation unlock).
       - file: lib/shared/services/pro_phase_advance.dart
@@ -10286,12 +10298,12 @@ concepts:
       getCurrentPlanMap, hasPlan, getCurrentCalendarWeek.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 135-2289
+        line_range: 135-2452
         method: WorkoutScheduleReadService
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 35-45
+        line_range: 123-128
         method: build → getPlanStartDate
         semantic: latest
         fields_read: [plan_start_date]
@@ -10442,12 +10454,12 @@ concepts:
         method: SelectedWeek / SelectedWeekNotifier.build (default, picked false) / select (picked true)
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 1025-1032
+        line_range: 1089-1096
         method: weekChipLit (pure)
         semantic: latest
         fields_read: [SelectedWeek.week, SelectedWeek.picked, HoldStatusData.todayHoldOrdinal]
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 150-160
+        line_range: 151-161
         method: _WeekSelectorState.build — selected + holdingToday for the current group
         semantic: latest
         fields_read: [selectedWeekProvider.picked, holdStatusProvider.todayHoldOrdinal]
@@ -13239,7 +13251,17 @@ concepts:
     behavioral_test_path_v25: test/contracts/library_seed_v25_upgrade_behavioral_test.dart  # Unit 1B-F 2026-11-11 (Ruling 12): real SeedService.seedIfNeeded on a v24 box (the 14 jump rows at their v24 tags, test/fixtures/library_hip_tags_v24.json); it ends at v25 with the 14 rows as bundled and every other row unchanged, a v25 box left alone; the v24 bundle digest pinned
     behavioral_test_path_v24: test/contracts/library_seed_v24_upgrade_behavioral_test.dart  # Library Batch S1b-3 2026-11-10 (OI-147): real SeedService.seedIfNeeded on a v23 box holding E053; it ends at v24 without E053 (merged_ids prune), G1373 written as bundled, a community row named Donkey Calf Raise and every other row unchanged, a box at the current version (v25 since Unit 1B-F) left alone
     behavioral_test_path_v20: test/contracts/library_seed_v20_upgrade_behavioral_test.dart  # Batch C2c 2026-11-06 (OI-474): real SeedService.seedIfNeeded on a v19 box holding the cable E230; it ends at v20 with the bodyweight E230 and its picture keys, every other row unchanged, a fresh install gets the new row, a v20 box is left alone
+    behavioral_test_path_v28: test/contracts/library_seed_v28_upgrade_behavioral_test.dart  # OI-523 2026-11-23: real SeedService.seedIfNeeded on a v27 box; G3470 is written without its alias, every other row unchanged; the v27 bundle digest ef1cea15 is pinned
+    behavioral_test_path_lunge_alias: test/contracts/library_v28_lunge_alias_contract_test.dart  # OI-523: generator, removals file, asset, seed record and ExerciseRepository.getByExactName agree that "Reverse Lunge" is no alias
     description: |
+      Library v28 (OI-523, 2026-11-23): 870 rows, one changed. G3470 Forward Lunge no longer carries name_aliases ["Reverse
+      Lunge"] (a forward lunge is not a reverse lunge, and the coach tool getFormCues answers a name through name_aliases): the
+      removals generator's REPLACEMENT.E144 is alias false, so E144 has no alias_to in scripts/data/library_batch_c2_removals.json
+      and the importer (G3470 is a source row, rebuilt on every run) writes no alias. The G1373 alias [Donkey Calf Raise] is KEPT
+      (founder 2026-11-23). scripts/data/library_v28_lunge_alias.json is the seed generator's kept-row record (before
+      ["Reverse Lunge"], after null = key absent); the v28 seed migration re-writes all 870 rows, one tuple differs from 176,
+      and its inline rollback restores the alias. Saved plans that name "Reverse Lunge" (user_progress.plan_json, 4 stale
+      testing-account plans) no longer resolve that name.
       Library v24 (Library Batch S1b-3, 2026-11-10, OI-147): 870 rows. E053 Donkey Calf Raise merged into G1373 Bodyweight
       Standing Calf Raise, the 8th merged_ids retirement and the first on a SOURCE-built kept row: the importer's merge
       stage (scripts/data/library_s1b3_merges.json) drops E053 and gives G1373 merged_ids [E053] and name_aliases [Donkey
@@ -13300,7 +13322,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 305-350
+        line_range: 309-354
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -13498,6 +13520,12 @@ concepts:
       - file: lib/core/services/seed_service.dart
         method: _exerciseLibraryVersion (26 to 27)
         notes: putAll writes the 27 copied rows into exerciseBox by id (Unit 1B-F2)
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (27 to 28)
+        notes: putAll writes G3470 into exerciseBox by id without its name_aliases entry (OI-523); without the bump an installed device keeps the alias
+      - file: scripts/data/library_v28_lunge_alias.json
+        method: before/after record for G3470 name_aliases (before ["Reverse Lunge"], after null)
+        notes: OI-523 — read ONLY by the cloud seed generator (the asset is written by the importer from the removals file); the generator hard-fails when the library row differs from after and builds the migration rollback from before
     readers:
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
         method: CoreListSelector.rankedPool / typeFor / subFocusMatches
@@ -13961,7 +13989,7 @@ concepts:
       enforced at merge.
     writers:
       - file: docs/blast_radius.yaml
-        line_range: 39-669
+        line_range: 39-681
         method: paths list (declaration order, first match wins)
         notes: |
           THE canonical writer. Exact-path rules must be declared ABOVE the
@@ -14272,7 +14300,7 @@ concepts:
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1955-2006
+        line_range: 1955-2016
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
@@ -14290,7 +14318,7 @@ concepts:
           account).
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 137
+        line_range: 144-149
         method: past-phase strip
         semantic: render
         notes: The ONLY permitted caller of the display wrapper.
@@ -14316,6 +14344,63 @@ concepts:
       - "re-bucketing schedule_* inside week_selector.dart instead of delegating to the shared SoT"
       - "adding a `bool strict` parameter instead of two named methods — it puts the reconciler one boolean away from the dangerous path, invisibly at the call site"
     contract_test_path: test/contracts/week_selector_past_phases_test.dart
+
+  - concept: past_phase_display_buckets
+    domain: workout
+    behavioral_test_path: test/contracts/past_phase_display_runs_behavioral_test.dart
+    description: |
+      OI-348 B3/B7 (diagnose 5c8e2a). The Train strip's past groups, their
+      week chips and a past receipt's PHASE label follow the DATE sequence of
+      the schedule_* rows, not the stamp NUMBER. A write-time `phase` stamp can
+      go stale (the L1 merge keeps a local rest row wholesale), so grouping by
+      number pulled days out of their own month and merged months. Display
+      only: the strict pastPhaseBlocks() that PhaseProgressReconciler counts
+      is unchanged. Rules: runs over stamped rows; a run of at most 2 rows that
+      are all rest rows is noise unless every run is; adjacent equal runs merge;
+      each row joins the last segment starting on or before it, with the
+      Mon-Sun edge rule; a past group draws one chip per week it spans (min 4);
+      phaseForDate labels a past date with that group's chip number. Kill switch
+      configBox `disable_past_phase_display_runs` restores the stamp grouping,
+      4 chips and the strict-index label verbatim.
+    writers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 2094-2196
+        method: bucketPastRowsForDisplay (+ _sameMonSunWeek)
+        semantic: display-buckets
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1955-2016
+        method: pastPhaseBlocksForDisplay
+        semantic: display-buckets
+        notes: both branches (strict non-empty, and the c9e4b7 recovery) bucket through bucketPastRowsForDisplay while the switch is on.
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 2198-2210
+        method: pastPhaseDisplayRunsEnabled (kill switch, unreadable box = on)
+        semantic: flag-check
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/train/widgets/week_selector.dart
+        line_range: 340-438
+        method: _toPastPhases (weekCount) + pastPhaseWeekCount + pastPhaseWeekOf (the one calendar week rule for count and chip assignment) + pastPhaseGroupsForTest
+        semantic: render
+        notes: chip loop `for (var w = 1; w <= past.weekCount; w++)`; extendWeeks read once per build.
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 2212-2295
+        method: phaseForDate -> phaseForDateDisplay
+        semantic: display-only
+        notes: the current-window short-circuit runs BEFORE any block walk (test T11); the chip slice is implemented independently of _toPastPhases and pinned equal by the Hive agreement test.
+    hive:
+      box: workoutBox
+      key: schedule_<yyyy-MM-dd>
+      shape: "Map with `date`, optional int `phase`, `type`/`status` (rest rows)"
+    cloud:
+      table: user_progress
+      columns: [plan_json]
+    sync_methods: []
+    restore_methods: []
+    forbidden_legacy_patterns:
+      - "PhaseProgressReconciler or pro_phase_advance reading the display buckets (a monotonic over-advance is unrecoverable)"
+      - "adopting the incoming stamp in the L1 merge to 'fix' the data (the mirror: the local stamp can be the fresh one)"
+    contract_test_path: test/contracts/past_phase_display_runs_behavioral_test.dart
 
   - concept: signout_teardown_window_and_restore_op_ceiling
     domain: auth_profile
@@ -14969,7 +15054,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 189-189
+        line_range: 193-193
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -15013,7 +15098,7 @@ concepts:
         line_range: 198-219
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 189-189
+        line_range: 193-193
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -15099,7 +15184,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 189-189
+        line_range: 193-193
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart
@@ -20032,6 +20117,8 @@ concepts:
       - test/ai_coach/coach_composer_speech_test.dart
       - test/widgets/food_logger_speech_test.dart
       - test/widgets/food_logger_send_test.dart
+      - test/core/speech_segment_accumulator_test.dart
+      - test/core/speech_segment_kill_switch_test.dart
     description: |
       The `speech_to_text` plugin is a process-wide singleton with ONE result
       listener and no session ids. SpeechInputService is its only owner: it binds
@@ -20052,11 +20139,11 @@ concepts:
       the host's text field until the host sends them.
     writers:
       - file: lib/core/services/speech_input_service.dart
-        line_range: 324-651
+        line_range: 342-692
         method: SpeechInputService (begin / release / _onStatus / _cancelOwnerless)
         semantic: per-session
       - file: lib/core/services/speech_input_controller.dart
-        line_range: 101-596
+        line_range: 102-639
         method: SpeechInputController (_finish latch, start / stop / send / cancel)
         semantic: per-session
       - file: lib/core/services/speech_input_lifecycle.dart
@@ -20083,6 +20170,61 @@ concepts:
       columns: []
     sync_methods: []
     regression_test: test/core/speech_input_controller_behavioral_test.dart
+
+  - concept: speech_segment_accumulation
+    domain: cross_domain
+    behavioral_test_path: test/core/speech_input_controller_behavioral_test.dart
+    additional_tests:
+      - test/core/speech_segment_accumulator_test.dart
+      - test/core/speech_segment_kill_switch_test.dart
+    description: |
+      OI-348 B5 (diagnose 6d9f3b). On Android the speech_to_text plugin reports
+      a finished segment as ResultType.intermediate and adds no accumulation;
+      the wrapper used to drop the type and the controller replaced its text
+      with every result, so a long sentence kept only its last segment. The
+      wrapper now carries `isSegmentEnd` (raw int compare, never
+      resultTypeValue) and a pure SpeechSegmentAccumulator decides the
+      recognizer's shape once per session (segmented = append, cumulative =
+      replace) and the final transcript (whole-utterance final replaces, a
+      repeat of the last segment adds nothing). Native only; web untouched.
+      One `speech_segments` event per process (counts + mode, never words).
+      Kill switch configBox `disable_speech_segment_accumulate`, read once per
+      session in `_start`.
+    writers:
+      - file: lib/core/services/speech_input_service.dart
+        line_range: 208-218
+        method: engineResultFromPlugin (isSegmentEnd from the raw int; called by PluginSpeechEngine.listen)
+        semantic: per-session
+      - file: lib/core/services/speech_segment_accumulator.dart
+        line_range: 31-189
+        method: SpeechSegmentAccumulator (onResult / onFinal)
+        semantic: per-session
+      - file: lib/core/services/speech_input_service.dart
+        line_range: 357-376
+        method: segmentAccumulateEnabled (kill switch, unreadable box = on)
+        semantic: flag-check
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/speech_input_controller.dart
+        line_range: 404-428
+        method: engineResult (liveText from the accumulator; final through onFinal)
+        semantic: per-session
+      - file: lib/core/services/speech_input_controller.dart
+        line_range: 559-572
+        method: _maybeLogSegments (speech_segments, once per process)
+        semantic: telemetry
+    hive:
+      box: in_memory_only  # session-only; only the configBox switch is read
+      key_prefix: ""
+    cloud:
+      table: client_errors
+      columns: [message]
+    sync_methods: []
+    restore_methods: []
+    forbidden_legacy_patterns:
+      - "a transcript word in the speech_segments message"
+      - "ResultType.fromValue / resultTypeValue in the result mapping (throws on an unknown int inside the plugin's chain)"
+    regression_test: test/core/speech_segment_accumulator_test.dart
 
   - concept: purchase_mode_surface_decision
     domain: subscription

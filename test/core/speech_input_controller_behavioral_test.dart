@@ -35,7 +35,8 @@ class _Host {
 }
 
 class _Rig {
-  _Rig(FakeAsync async, {this.web = false}) : engine = FakeSpeechEngine() {
+  _Rig(FakeAsync async, {this.web = false, bool accumulate = true})
+      : engine = FakeSpeechEngine() {
     // Web: `listening` arrives after the permission prompt, so the test emits
     // it; native: Android emits it inside `listen` (plan G5).
     engine.emitListeningInsideListen = !web;
@@ -45,6 +46,9 @@ class _Rig {
       platform: TargetPlatform.android,
       // The settle measures elapsed time: use the fake clock, not the wall.
       monotonic: () => async.elapsed,
+      // OI-348 B5: the kill switch without Hive (the getter's own read is
+      // pinned in the 'segment accumulation' group).
+      segmentAccumulateEnabled: () => accumulate,
     );
     host = _Host(service);
   }
@@ -83,10 +87,11 @@ void _rigTest(
   String name,
   void Function(FakeAsync async, _Rig rig) body, {
   bool web = false,
+  bool accumulate = true,
 }) {
   test(name, () {
     fakeAsync((async) {
-      final rig = _Rig(async, web: web);
+      final rig = _Rig(async, web: web, accumulate: accumulate);
       try {
         body(async, rig);
       } finally {
@@ -1239,6 +1244,148 @@ void main() {
         expect(rig.c.elapsed.value, const Duration(seconds: 3));
       },
     );
+  });
+
+  // OI-348 B5 (diagnose 6d9f3b): a native recognizer that finishes a segment
+  // mid-sentence (`intermediate`) and restarts its partials used to leave only
+  // the last fragment. The walk sentence, end to end through the controller.
+  group('segment accumulation (native)', () {
+    void walk(_Rig rig) {
+      rig.engine.emitResult('I want a plan');
+      rig.engine.emitResult('I want a plan for next week');
+      rig.engine.emitResult('I want a plan for next week', isSegmentEnd: true);
+      rig.engine.emitResult('or the coming');
+      rig.engine.emitResult('or the coming week');
+    }
+
+    _rigTest('S1 the walk sentence keeps every word (final)', (async, rig) {
+      _tap(async, rig.c);
+      walk(rig);
+      expect(rig.c.liveText, 'I want a plan for next week or the coming week');
+      rig.engine.emitNativeNaturalEnd('or the coming week');
+      expect(rig.ends, hasLength(1));
+      expect(rig.host.last.transcript,
+          'I want a plan for next week or the coming week');
+    });
+
+    _rigTest('S2 a cumulative recognizer: the utterance once', (async, rig) {
+      _tap(async, rig.c);
+      rig.engine.emitResult('I want a plan', isSegmentEnd: true);
+      rig.engine.emitResult('I want a plan for');
+      rig.engine.emitResult('I want a plan for next week');
+      rig.engine.emitNativeNaturalEnd('I want a plan for next week');
+      expect(rig.host.last.transcript, 'I want a plan for next week');
+    });
+
+    _rigTest('S7 Stop / Send after a segment end keep the joined words', (
+      async,
+      rig,
+    ) {
+      _tap(async, rig.c);
+      walk(rig);
+      rig.c.stop();
+      expect(rig.host.last.reason, SpeechEndReason.userStop);
+      expect(rig.host.last.transcript,
+          'I want a plan for next week or the coming week');
+      async.elapse(SpeechInputTiming.toggleGuard);
+      _tap(async, rig.c);
+      expect(rig.c.liveText, '', reason: 'a new session starts empty (S8)');
+      walk(rig);
+      rig.c.send();
+      expect(rig.host.last.reason, SpeechEndReason.userSend);
+      expect(rig.host.last.transcript,
+          'I want a plan for next week or the coming week');
+    });
+
+    _rigTest('S7b done right after a segment end ends with the committed words',
+        (async, rig) {
+      _tap(async, rig.c);
+      rig.engine.emitResult('book chest day', isSegmentEnd: true);
+      rig.engine.emitStatus('done'); // delivered: the latest result is NOT a partial
+      expect(rig.ends, hasLength(1));
+      expect(rig.host.last.transcript, 'book chest day');
+    });
+
+    _rigTest('S7c the end grace after a segment end uses the joined words', (
+      async,
+      rig,
+    ) {
+      _tap(async, rig.c);
+      walk(rig);
+      rig.engine.emitStatus('notListening');
+      async.elapse(SpeechInputTiming.endGrace);
+      expect(rig.host.last.transcript,
+          'I want a plan for next week or the coming week');
+    });
+
+    _rigTest('S13 an empty partial keeps the words on screen', (async, rig) {
+      _tap(async, rig.c);
+      rig.engine.emitResult('three idlis', isSegmentEnd: true);
+      rig.engine.emitResult('');
+      expect(rig.c.liveText, 'three idlis');
+    });
+
+    _rigTest('S9 web: a segment end flag changes nothing (gated off)', (
+      async,
+      rig,
+    ) {
+      _tap(async, rig.c);
+      rig.engine.emitStatus('listening');
+      rig.engine.emitResult('I want a plan', isSegmentEnd: true);
+      rig.engine.emitResult('or the coming week');
+      expect(rig.c.liveText, 'or the coming week',
+          reason: 'web results are already cumulative; replace as before');
+    }, web: true);
+
+    _rigTest('S10 kill switch: the walk input yields the last fragment (old)', (
+      async,
+      rig,
+    ) {
+      _tap(async, rig.c);
+      walk(rig);
+      expect(rig.c.liveText, 'or the coming week');
+      rig.engine.emitNativeNaturalEnd('or the coming week');
+      expect(rig.host.last.transcript, 'or the coming week');
+    }, accumulate: false);
+
+    group('S12 telemetry', () {
+      final events = <String>[];
+      setUp(() {
+        events.clear();
+        SpeechInputController.debugResetSegmentTelemetry();
+        ErrorTelemetry.debugOnLogEventForTests = (op, {message}) =>
+            events.add('$op|${message ?? ''}');
+      });
+      tearDown(() {
+        ErrorTelemetry.debugOnLogEventForTests = null;
+        SpeechInputController.debugResetSegmentTelemetry();
+      });
+
+      _rigTest('one event per process after >= 10 results, no words', (
+        async,
+        rig,
+      ) {
+        _tap(async, rig.c);
+        rig.engine.emitResult('three');
+        rig.engine.emitNativeNaturalEnd('three idlis');
+        expect(events, isEmpty, reason: 'fewer than 10 results');
+        async.elapse(SpeechInputTiming.toggleGuard);
+        for (var round = 0; round < 2; round++) {
+          _tap(async, rig.c);
+          walk(rig);
+          walk(rig);
+          rig.engine.emitNativeNaturalEnd('or the coming week');
+          async.elapse(SpeechInputTiming.toggleGuard);
+        }
+        final ours = events.where((e) => e.startsWith('speech_segments|'));
+        expect(ours, hasLength(1), reason: 'once per process');
+        final message = ours.single;
+        expect(message, contains('segment_ends=2'));
+        for (final w in ['plan', 'week', 'coming', 'idlis']) {
+          expect(message.contains(w), isFalse, reason: 'no words leave');
+        }
+      });
+    });
   });
 
   group('speechEndWantsFocus (pure)', () {
