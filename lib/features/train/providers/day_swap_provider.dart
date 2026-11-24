@@ -98,6 +98,12 @@ final daySwapControllerProvider =
 /// The Mon–Sun swap states of the week starting [weekStart] (IST Monday).
 final daySwapWeekProvider =
     Provider.family<List<DaySwapDayState>, String>((ref, weekStart) {
+  final token = ref.watch(authUserIdTokenProvider);
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // weekStates reads the schedule rows straight from the user box, which
+  // throws there; serve the empty week (its consumers look a day up by date),
+  // and the token flipping back re-runs this with the real data.
+  if (token == '<anon>') return const <DaySwapDayState>[];
   // Rebuild with every flow that refreshes the Train week: completion,
   // template assignment and regeneration all invalidate currentPlanProvider.
   ref.watch(currentPlanProvider);
@@ -114,7 +120,15 @@ final daySwapAllowanceProvider =
   // c4055a — rebuild on auth change. The count lives in the per-user userBox,
   // but nothing else here changes on an account switch between two users of
   // the same tier, so without this B was shown A's spent week (Hermes L16).
-  ref.watch(authUserIdTokenProvider);
+  final token = ref.watch(authUserIdTokenProvider);
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // `current` reads the user box, which throws there; serve the value a fresh
+  // week reads (nothing used, the free limit), and the token flipping back
+  // re-runs this with the real count.
+  if (token == '<anon>') {
+    return DayAllowance(
+        weekStart: weekStart, used: 0, limit: DaySwapAllowance.freeLimit);
+  }
   final isPro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
   final revision = DaySwapAllowance.instance.revision;
   void onChange() => ref.invalidateSelf();

@@ -17,7 +17,11 @@ import '../services/diet_serving_label.dart';
 
 /// The user's current Portions / Grams choice.
 final dietServingViewProvider = Provider<DietServingView>((ref) {
-  ref.watch(authUserIdTokenProvider);
+  final token = ref.watch(authUserIdTokenProvider);
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // A raw box read throws there; serve the empty value, and the token
+  // flipping back re-runs this with the real data.
+  if (token == '<anon>') return DietServingView.fromStorage(null);
   ref.watch(restoreCompletedTickProvider);
   ref.watch(userProfileProvider
       .select((p) => p['diet_serving_view'])); // trigger only

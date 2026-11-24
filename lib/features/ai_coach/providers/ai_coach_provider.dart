@@ -174,7 +174,11 @@ class _CoachEntry {
 class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
   @override
   List<ChatMessage> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return <ChatMessage>[];
     final coachBox = HiveService.instance.coachBox;
     final messages = <ChatMessage>[];
 
@@ -545,7 +549,11 @@ class MessageLimitNotifier extends Notifier<int> {
 
   @override
   int build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return 0;
     final today = istDateStr(DateTime.now());
     final box = HiveService.instance.userBox;
     final cached = box.get('$_keyPrefix$today') as int?;
@@ -1567,6 +1575,10 @@ final predictionProvider =
 // ── Contextual Quick Prompts ────────────────────────────────────
 
 final contextualPromptsProvider = Provider<List<String>>((ref) {
+  final token = ref.watch(authUserIdTokenProvider);
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // It reads a box straight, and its watched chatHistoryProvider serves [] there.
+  if (token == '<anon>') return const <String>[];
   // Watch chatHistory so prompts refresh after user sends a message (C5)
   ref.watch(chatHistoryProvider);
   return AiCoachRepository.instance.getContextualPrompts();
@@ -1575,7 +1587,11 @@ final contextualPromptsProvider = Provider<List<String>>((ref) {
 // ── Coach Insight ───────────────────────────────────────────────
 
 final coachInsightProvider = Provider<String>((ref) {
-  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+  final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // A raw box read throws there; serve the empty value, and the token
+  // flipping back re-runs this with the real data.
+  if (token == '<anon>') return '';
   final insight = AiCoachRepository.instance.getLatestInsight();
   if (insight.isNotEmpty) return insight;
   return 'Start chatting with your AI coach to get personalised fitness insights and tips!';
