@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -9,6 +8,22 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'coach_call_budget.dart';
 import 'error_telemetry.dart';
+
+/// Reads the `issue_referral_code` RPC answer (migration 186): a `List` with
+/// one row `{out_code, out_expires_at}`. Anything else (null, an empty list, a
+/// row missing either field or with an unreadable date) is null: the caller
+/// shows an error with Retry, never a made-up code.
+({String code, DateTime expiresAt})? parseIssuedReferralCode(dynamic raw) {
+  if (raw is! List || raw.isEmpty) return null;
+  final row = raw.first;
+  if (row is! Map) return null;
+  final code = row['out_code'];
+  final expires = row['out_expires_at'];
+  if (code is! String || code.isEmpty || expires is! String) return null;
+  final expiresAt = DateTime.tryParse(expires);
+  if (expiresAt == null) return null;
+  return (code: code, expiresAt: expiresAt);
+}
 
 /// Singleton wrapper around the Supabase client.
 ///
@@ -108,76 +123,71 @@ class SupabaseService {
     return currentUser != null;
   }
 
-  /// Returns the user's current non-expired referral code, or generates a
-  /// new one. Returns null if not authenticated or on failure.
-  Future<({String code, DateTime expiresAt})?> getOrCreateReferralCode() async {
-    final userId = currentUser?.id;
-    if (userId == null) return null;
+  /// Test seam: replaces the `issue_referral_code` RPC. Always null in
+  /// production.
+  @visibleForTesting
+  static Future<dynamic> Function()? issueReferralCodeRpcForTest;
 
-    // Try to find an existing non-expired code
+  /// Returns the user's live referral code, or a fresh 7-day one when there is
+  /// none or it expired. Null when not signed in or on any failure.
+  ///
+  /// OI-348 B2 (diagnose c2e8a4): the SERVER mints codes
+  /// (`public.issue_referral_code()`, migration 186). The client used to upsert
+  /// `referral_codes` itself; for an existing row that was an UPDATE the table's
+  /// policies refuse (42501), so every REGENERATE after the first code did
+  /// nothing. No client code writes `referral_codes` any more.
+  Future<({String code, DateTime expiresAt})?> getOrCreateReferralCode() =>
+      _issueReferralCode();
+
+  /// REGENERATE after the previous code expired: the same server call (a live
+  /// code would come back unchanged). Null when not signed in or on failure.
+  Future<({String code, DateTime expiresAt})?> regenerateReferralCode() =>
+      _issueReferralCode();
+
+  Future<({String code, DateTime expiresAt})?> _issueReferralCode() {
+    final seam = issueReferralCodeRpcForTest;
+    if (seam != null) {
+      return issueReferralCodeVia(
+          isSignedIn: () => true, refreshToken: () async {}, rpc: seam);
+    }
+    return issueReferralCodeVia(
+      isSignedIn: () => currentUser != null,
+      refreshToken: ensureFreshToken,
+      rpc: () => client.rpc('issue_referral_code'),
+    );
+  }
+
+  /// The whole issue path, with its dependencies passed in so a test drives
+  /// the real order: signed-out -> null with no call; refresh the token; the
+  /// RPC bounded by [timeout]; parse; telemetry on an empty answer or any
+  /// failure. Never throws.
+  @visibleForTesting
+  static Future<({String code, DateTime expiresAt})?> issueReferralCodeVia({
+    required bool Function() isSignedIn,
+    required Future<void> Function() refreshToken,
+    required Future<dynamic> Function() rpc,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
     try {
-      final existing = await client
-          .from('referral_codes')
-          .select('code, expires_at')
-          .eq('user_id', userId)
-          .gt('expires_at', DateTime.now().toIso8601String())
-          .maybeSingle();
-
-      if (existing != null) {
-        return (
-          code: existing['code'] as String,
-          expiresAt: DateTime.parse(existing['expires_at'] as String),
-        );
+      // Signed out: nothing to issue and nothing to report (the sheet is
+      // reachable only signed in; a null here is the same error + Retry).
+      if (!isSignedIn()) return null;
+      await refreshToken();
+      final raw = await rpc().timeout(timeout);
+      final issued = parseIssuedReferralCode(raw);
+      if (issued == null) {
+        unawaited(ErrorTelemetry.logEvent('referral_code_issue_empty',
+            message: 'issue_referral_code returned no usable row'));
       }
+      return issued;
     } catch (e, st) {
-      // audit-2026-05-11 H-42 — telemetry pair.
-      debugPrint('[SupabaseService.getOrCreateReferralCode] read: $e');
+      // Every failure is reported: a refused or missing function is exactly
+      // the failure B2 fixed, never an expected absence.
+      debugPrint('[SupabaseService._issueReferralCode] $e');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
-          reason: 'supabase_service_get_or_create_referral_code_read'));
+          reason: 'supabase_service_issue_referral_code'));
+      return null;
     }
-
-    return _generateNewCode(userId);
-  }
-
-  /// Forces generation of a fresh 7-day code (used by REGENERATE button
-  /// after the previous code expired). Returns null if not authenticated.
-  Future<({String code, DateTime expiresAt})?> regenerateReferralCode() async {
-    final userId = currentUser?.id;
-    if (userId == null) return null;
-    return _generateNewCode(userId);
-  }
-
-  Future<({String code, DateTime expiresAt})?> _generateNewCode(
-      String userId) async {
-    for (var i = 0; i < 5; i++) {
-      final code = _buildReferralCode();
-      final expiresAt = DateTime.now().add(const Duration(days: 7));
-      try {
-        await client.from('referral_codes').upsert({
-          'user_id': userId,
-          'code': code,
-          'expires_at': expiresAt.toIso8601String(),
-        }, onConflict: 'user_id');
-        return (code: code, expiresAt: expiresAt);
-      } catch (e, st) {
-        if (i == 4) {
-          // audit-2026-05-11 H-42 — telemetry pair.
-          debugPrint('[SupabaseService._generateNewCode] $e');
-          unawaited(ErrorTelemetry.recordNonFatal(e, st,
-              reason: 'supabase_service_generate_new_referral_code'));
-          return null;
-        }
-      }
-    }
-    return null;
-  }
-
-  String _buildReferralCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final rand = Random.secure();
-    final body =
-        List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
-    return 'AVYA-$body';
   }
 
   /// The in-flight refresh, so a second caller JOINS instead of racing.

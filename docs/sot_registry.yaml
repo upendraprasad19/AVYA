@@ -14847,24 +14847,24 @@ concepts:
       Precedent it mirrors: AuthNotifier._inFlightSignOut and SyncCoalescer.
     writers:
       - file: lib/core/services/supabase_service.dart
-        line_range: 205
+        line_range: 215
         method: _inFlightRefresh
         semantic: the-shared-in-flight-future
       - file: lib/core/services/supabase_service.dart
-        line_range: 244
+        line_range: 254
         method: coalescedRefresh
         semantic: join-never-race-injectable-test-seam
       - file: lib/core/services/supabase_service.dart
-        line_range: 325
+        line_range: 335
         method: ensureFreshToken
         semantic: expiry-branch-delegates-to-the-join
       - file: lib/core/services/supabase_service.dart
-        line_range: 353
+        line_range: 363
         method: _refreshToken
         semantic: the-refresh-itself-single-call-site
     readers:
       - file: lib/core/services/supabase_service.dart
-        line_range: 249
+        line_range: 259
         method: disableRefreshJoin
         semantic: kill-switch-read
     hive:
@@ -18649,6 +18649,73 @@ concepts:
       - "announcing the first-seen lifetime total as new (the first evaluation on a device is silent)"
       - "writing referral_credit_seen_days without a session owner, or after the account changed"
       - "naming converted_at / referrer_reward_days / referrer_credited_at / referrer_rewarded / referee_rewarded in a client file (migration 160 hides them; the figures come from referrer_summary())"
+  - concept: referral_code_issue
+    domain: profile
+    behavioral_test_path: test/contracts/referral_code_issue_writer_to_reader_test.dart
+    description: |
+      OI-348 B2 (2026-11-24, diagnose c2e8a4, docs/plans/oi348-walk-fixes-landing2.md Unit B2). The
+      SERVER mints referral codes: public.issue_referral_code() (migration 186, SECURITY DEFINER,
+      search_path '', EXECUTE for authenticated only) returns the caller's live code unchanged, or
+      writes a fresh 'AVYA-' + 8 [A-Z0-9] code expiring now() + 7 days (expiry exactly now() is
+      expired), serialised per user by a transaction advisory lock, retrying a code collision up to 5
+      times. Before: the client upserted referral_codes onConflict user_id, an UPDATE the table's
+      policies refuse (SELECT + INSERT own only, migration 035), so every REGENERATE after the first
+      code failed with 42501 and the sheet showed nothing. No client code in this build writes
+      referral_codes. TRANSITIONAL writers until migration M2 (PR C, after the web build is live):
+      builds before this change (cached web tabs, AAB +50) still INSERT a first code through the
+      INSERT-own policy (migration 035/100; any code text and expiry). Their UPDATE half stays refused,
+      so they never overwrite a function-issued code, and the function's DO UPDATE ... WHERE
+      expires_at <= now() never overwrites a live code they inserted. Expiry edge: the function, the
+      restore EF and the client restore treat expires_at = now() as expired (strict >); redeem-referral
+      refuses only when expires_at < now (accepts at exact equality, a sub-millisecond window).
+    cloud:
+      table: referral_codes
+      columns: [user_id, code, expires_at, created_at]
+    writers:
+      - file: supabase/migrations/186_issue_referral_code.sql
+        line_range: 35-120
+        method: public.issue_referral_code() (the only writer the client reaches)
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/supabase_service.dart
+        line_range: 16-26
+        method: parseIssuedReferralCode (the RPC's List of {out_code, out_expires_at}; anything else is null)
+        semantic: decision
+        fields_read: [out_code, out_expires_at]
+      - file: lib/core/services/supabase_service.dart
+        line_range: 126-191
+        method: getOrCreateReferralCode + regenerateReferralCode -> _issueReferralCode -> issueReferralCodeVia (signed out -> no call; token refresh, then one RPC with a 15 s timeout; every failure reported as supabase_service_issue_referral_code; an unusable answer as referral_code_issue_empty)
+        semantic: decision
+        fields_read: [out_code, out_expires_at]
+      - file: lib/features/profile/screens/invite_friends_sheet.dart
+        line_range: 88-120
+        method: _load + _regenerate (no code -> ReferralCopy.codeIssueFailed with a Retry; the button comes back)
+        semantic: render
+        fields_read: [code, expiresAt]
+      - file: supabase/functions/redeem-referral/index.ts
+        line_range: 86-100
+        method: the code lookup (service role; refuses an expired code)
+        semantic: decision
+        fields_read: [user_id, expires_at]
+      - file: lib/core/services/sync/sync_restore_completeness.dart
+        line_range: 646-680
+        method: _restoreReferralCodes (read only)
+        semantic: restore
+        fields_read: [code, expires_at]
+      - file: supabase/functions/restore-user-snapshot/restore_reads.ts
+        line_range: 131-134
+        method: the single-call restore read of the own LIVE code (gt expires_at now), injected into _restoreReferralCodes(preFetched:)
+        semantic: restore
+        fields_read: [code, expires_at, created_at]
+    additional_tests:
+      - test/contracts/issue_referral_code_function_pin_test.dart
+      - test/profile/invite_friends_sheet_issue_failure_test.dart
+      - test/sql/referral_code_issue_live_verify.sql
+    forbidden_legacy_patterns:
+      - "a client upsert / insert / update / delete on referral_codes (the 42501 no-op of walk A10)"
+      - "a client-built code or expiry"
+      - "REGENERATE that ignores a null result (no error, no retry)"
+      - "CREATE OR REPLACE of issue_referral_code without SECURITY DEFINER and SET search_path = '' restated, or a signature change without re-revoking anon"
   - concept: unit_preference_sync
     domain: auth_profile
     behavioral_test_path: test/contracts/unit_preference_sync_writer_to_reader_test.dart

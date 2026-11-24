@@ -37,6 +37,12 @@ class ReferralCopy {
   static const String codeApplyFailed =
       'Could not apply that code. Please try again.';
 
+  /// The invite sheet could not get a code from the server (OI-348 B2,
+  /// diagnose c2e8a4): shown with a Retry, never a silent no-op.
+  static const String codeIssueFailed =
+      'Could not get your code. Check your connection and try again.';
+  static const String codeIssueRetry = 'TRY AGAIN';
+
   static const String codeApplied = 'Code applied — +7 days PRO added!';
   static const String codeAlreadyApplied = 'Code already applied.';
 

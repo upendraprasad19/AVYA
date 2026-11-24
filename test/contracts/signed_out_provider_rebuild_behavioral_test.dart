@@ -660,7 +660,8 @@ void main() {
         if (t.startsWith('import ') || t.startsWith('//')) continue;
         n += re.allMatches(line).length;
       }
-      if (n > 0) counts[e.path] = n;
+      // Windows listSync returns lib\...; the map is keyed with '/'.
+      if (n > 0) counts[e.path.replaceAll(r'\', '/')] = n;
     }
     expect(counts, _kTokenWatchSites,
         reason: 'a mention of authUserIdTokenProvider was added or removed: '
