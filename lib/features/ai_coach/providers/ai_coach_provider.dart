@@ -1575,6 +1575,10 @@ final predictionProvider =
 // ── Contextual Quick Prompts ────────────────────────────────────
 
 final contextualPromptsProvider = Provider<List<String>>((ref) {
+  final token = ref.watch(authUserIdTokenProvider);
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // It reads a box straight, and its watched chatHistoryProvider serves [] there.
+  if (token == '<anon>') return const <String>[];
   // Watch chatHistory so prompts refresh after user sends a message (C5)
   ref.watch(chatHistoryProvider);
   return AiCoachRepository.instance.getContextualPrompts();
@@ -1583,7 +1587,11 @@ final contextualPromptsProvider = Provider<List<String>>((ref) {
 // ── Coach Insight ───────────────────────────────────────────────
 
 final coachInsightProvider = Provider<String>((ref) {
-  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+  final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // A raw box read throws there; serve the empty value, and the token
+  // flipping back re-runs this with the real data.
+  if (token == '<anon>') return '';
   final insight = AiCoachRepository.instance.getLatestInsight();
   if (insight.isNotEmpty) return insight;
   return 'Start chatting with your AI coach to get personalised fitness insights and tips!';

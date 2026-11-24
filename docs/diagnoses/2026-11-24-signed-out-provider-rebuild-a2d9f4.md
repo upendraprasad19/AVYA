@@ -14,12 +14,14 @@ writers:
   - { file: lib/core/services/hive_user_session.dart, method_or_widget: "closeAll / _closeAllLocked: clears the owner and the owner listenable", line: 412 }
   - { file: lib/features/auth/providers/auth_invalidation_provider.dart, method_or_widget: "authUserIdTokenProvider: returns '<anon>' while the live auth uid or the Hive owner is null, or they disagree", line: 48 }
 readers:
-  - { file: lib/features/profile/providers/profile_provider.dart, method_or_widget: "BiometricNotifier.build: raw HiveService.instance.healthBox (the Crashlytics frame)", line: 624 }
-  - { file: lib/features/home/providers/home_provider.dart, method_or_widget: "TodayWeightLoggedNotifier.build: raw healthBox", line: 1027 }
-  - { file: lib/features/nutrition/providers/nutrition_provider.dart, method_or_widget: "DailyNutritionNotifier / WaterIntakeNotifier / UrineColorNotifier / SavedMealsNotifier / WeeklyNutritionNotifier build: raw nutritionBox / healthBox", line: 420 }
-  - { file: lib/features/ai_coach/providers/ai_coach_provider.dart, method_or_widget: "ChatHistoryNotifier.build (raw coachBox) and MessageLimitNotifier.build (raw userBox)", line: 178 }
-  - { file: lib/features/train/providers/train_provider.dart, method_or_widget: "TemplatesNotifier.build: raw workoutBox", line: 2736 }
-hive_key_prefix: "none changed (reads only: healthBox weight_/water_ml_/urine_color_/step_log, nutritionBox nlog_/meal_, coachBox rows, userBox msg_count_, workoutBox tmpl_)"
+  - { file: lib/features/profile/providers/profile_provider.dart, method_or_widget: "BiometricNotifier.build: raw HiveService.instance.healthBox (the Crashlytics frame); UserProfileNotifier and UserStatsNotifier build read userBox", line: 637 }
+  - { file: lib/features/home/providers/home_provider.dart, method_or_widget: "11 build() bodies that read a raw box or a repository over one: TodayWeightLogged, CalendarWeek, Streak, StreakFreeze, NutritionSummary, WeightHistory, RecentFoodLogs, TodaySteps, AllExercisePRs, TodayWorkout, StreakWarningEligibility", line: 1073 }
+  - { file: lib/features/nutrition/providers/nutrition_provider.dart, method_or_widget: "DailyNutrition / WaterIntake / UrineColor / SavedMeals / WeeklyNutrition / MacroTargets build and waterTargetProvider: raw nutritionBox / healthBox / userBox", line: 426 }
+  - { file: lib/features/ai_coach/providers/ai_coach_provider.dart, method_or_widget: "ChatHistoryNotifier.build (raw coachBox), MessageLimitNotifier.build (raw userBox), coachInsightProvider, contextualPromptsProvider (a repository box read)", line: 183 }
+  - { file: lib/features/train/providers/train_provider.dart, method_or_widget: "TemplatesNotifier, CurrentPlanNotifier, workoutStatsProvider, graduationStatsProvider build: raw workoutBox / userBox", line: 2749 }
+  - { file: lib/features/profile/providers/weekly_report_data_provider.dart, method_or_widget: "WeeklyReportDataNotifier.build: raw healthBox / workoutBox reads", line: 46 }
+  - { file: lib/features/nutrition/providers/diet_plan_provider.dart, method_or_widget: "DietPlanNotifier.build, with diet_serving_view_provider.dart and diet_supplements_active_provider.dart: raw userBox reads", line: 126 }
+hive_key_prefix: "none changed (reads only: healthBox, nutritionBox, coachBox, userBox and workoutBox keys)"
 hive_key_formula: "n/a (no key changes)"
 sync_methods: []
 restore_methods: []
@@ -37,23 +39,29 @@ forbidden_patterns_checked:
   - { pattern: "removing or loosening the StateError at guarded_box.dart:335 or the rawBox throw on GuardedBox.empty (write safety for the other ~200 raw-getter call sites)", absent: true }
   - { pattern: "a Hive read in a guarded provider before the token check", absent: true }
 proposed_fix: |
-  1. Each of the ten Notifier.build bodies that read a raw user-scoped box now takes the token value (`final token = ref.watch(authUserIdTokenProvider)`) and returns its empty value when `token == '<anon>'`, before any box read. This is the pattern body_measurements_provider.dart:55 and measurement_prompt_provider.dart:34 already use. Empty values: BiometricData(), false, DailyNutritionData(), 0, -1, [], WeeklyNutritionData(), [], 0, [].
-  2. Window A (Hive torn down, auth user still set) and window B (both gone) both yield '<anon>' (owner null), and so does an owner/auth disagreement, which are exactly the states where the raw getter throws (rawBox on the empty stub, or guarded_box.dart:335).
-  3. Test seam: `setUpHiveForTests` (and the six test files that open a session by hand) now set `debugAuthUidResolverForTests = () => HiveUserSession.currentOwnerFullId`, so a pure-VM test that opens a session is "signed in" to the token provider. It follows the owner, so it never creates a disagreement; the signed-out tests replace it.
-  Not done, on purpose: previewPlanProvider (a FutureProvider: a throw lands in an AsyncError the screen handles, it is never an uncaught build error); the other 216 raw-getter reads in lib/ (226 in total, 10 are the guarded build() bodies; the rest are methods that run on a user action, plus previewPlanProvider above).
+  1. Every Notifier / Provider build() that reads a raw user-scoped box (directly or through a repository) takes the token value (`final token = ref.watch(authUserIdTokenProvider)`) and returns its empty value when `token == '<anon>'`, before any box read: 33 guarded bodies in 9 provider files, 32 providers plus the todayWorkout provider's nullable state counted in the same set. This is the pattern body_measurements_provider.dart:55 and measurement_prompt_provider.dart:34 already use. The empty value is the one each provider already serves for "no data" (0, false, [], a const data class, null for the nullable-state todayWorkout, '' for the coach insight, the cold-start default for the streak-warning eligibility).
+  2. Three sign-out windows, one guard: A (Hive torn down, auth user still set: the empty stub's rawBox throws), B (both gone: guarded_box.dart:335) and C (the auth user and the Hive owner disagree, an account swap: the empty stub again). Each yields '<anon>' from the token provider.
+  3. Test seam: `setUpHiveForTests` (and the six test files that open a session by hand) set `debugAuthUidResolverForTests = () => HiveUserSession.currentOwnerFullId`, so a pure-VM test that opens a session is "signed in" to the token provider. It follows the owner, so it never creates a disagreement; the signed-out tests replace it.
+  Not done, on purpose:
+  - The loud StateError at guarded_box.dart:335 and the rawBox throw on GuardedBox.empty stay (they protect every raw-getter call site, ~200 outside a build()).
+  - FutureProvider / `.family` providers (previewPlanProvider, daySwapAllowanceProvider, adminDashboardProvider, videoRender): a throw lands in an AsyncError their screens handle; it is never an uncaught build() error.
+  - The CLOSING GAP is a separate defect, OI-526: `HiveUserSession._closeAllLocked` (hive_user_session.dart:412-425) awaits each box close BEFORE it clears the owner and the listenable, so a rebuild inside that gap still sees the old owner and reads a closed box (`HiveError: Box not found`). The test clears its error list after the sign-out switch for that reason and says so.
+  - The kill switch `disable_live_auth_token_read` (the token provider then reads the stored owner only) can leave the token at '<anon>' if the stored owner is null; the guarded providers then serve empty, which is the same state the token already reports to every other consumer.
 regression_test_planned: |
-  test/contracts/signed_out_provider_rebuild_behavioral_test.dart: real Hive, the real token provider and the real notifiers, for each of the 10 providers x 2 windows (A: Hive closed with the auth user still set; B: both gone): seed real data, build signed in (the real value), sign out in the app's own order (Hive first, auth last), assert NO error reached the listener and the empty value is served, sign back in as the same user and assert the real value returns. Plus a seam test (a signed-in session has a real token). 21 tests.
+  test/contracts/signed_out_provider_rebuild_behavioral_test.dart: real Hive, the real token provider and the real notifiers. A case table of 66 providers (33 guarded, with seeded real data where cheap, plus downstream providers, controls and four nullable-state providers read through typed closures) x 3 windows (A, B, C): seed, build signed in (the real value), sign out in the app's own order (Hive first, auth last), assert NO error reached the listener after the switch and the empty value is served, sign back in as the same user and assert the real value returns. A completeness tripwire compares the per-file count of `ref.watch(authUserIdTokenProvider)` under lib/ with `_kTokenWatchSites`, so a new token-watching provider fails the test until it is added to the case table or named as a control. 197 tests.
 mutation_proof: |
-  Rule 21, run once against the final test (every mutant confirmed APPLIED by grep -c before running):
-  - M1 neuter every guard (`if (token == '<anon>' && false) return ...`): 10 of 10 sites applied -> 20 red, 1 green (the seam test).
-  - M2 invert every guard (`token != '<anon>'`): 10 of 10 applied -> 20 red, 1 green.
-  - M3 wrong empty values (water and message limit 0 -> 1, urine -1 -> 0, weight false -> true, biometric isSyncEnabled true): 5 providers applied -> 10 red, 11 green.
-  Probe before the fix (same scenario, no guard): all 10 providers threw in both windows and delivered the error to the listener (measured, not assumed).
-  Files restored from a backup by cp and diffed (0 differences) after each mutant.
+  Rule 21, against the final test (every mutant confirmed APPLIED by grep -c before running):
+  - M1 neuter every guard (`if (token == '<anon>' && false) return ...`): 30 of 30 sites applied (first batch) -> 102 red.
+  - M2 invert every guard (`token != '<anon>'`): applied -> 102 red.
+  - M3 wrong empty values across the guarded set: 30 red.
+  - M4 guard moved BELOW the box read: 3 red.
+  - M5 (the last two guards) `'<anon>'` replaced by `'<never>'` in streakWarningEligibility and contextualPrompts: 2 of 2 applied -> 6 red (3 windows each), 191 green.
+  Probe before the fix (same scenario, no guard): the first ten providers threw in both windows (A, B); the class sweep after the B-pass found 22 more that throw in A, B and C.
+  Files restored from a backup by cp and checked with sha256sum after each mutant.
 impact_analysis: |
-  Client only. While a session is closed or switching, ten providers now serve their empty value instead of throwing; when the token returns to the new uid they rebuild with that account's data (the same liveness path the tabs' isSessionTearingDown skeleton uses). No schema, Edge Function, Hive key or cloud change. Existing tests: 35 files that name these providers were run locally; 6 of them (19 tests) went red because they open a Hive session without an auth seam (the token stayed '<anon>'), and were fixed by adding the same owner-following seam. The other 166 files that use setUpHiveForTests, and every test that pumps a screen watching these providers, are left to the full CI suite.
+  Client only. While a session is closed or switching, the 33 guarded builds serve their empty value instead of throwing; when the token returns to the new uid they rebuild with that account's data (the same liveness path the tabs' isSessionTearingDown skeleton uses). Side effects of an empty serve, read per consumer: `currentPlanProvider` serves an empty plan (its auto-generate path runs only on a real session, not on the guarded return); the streak, freeze and eligibility providers write nothing from build(); the coach providers serve [] / 0 / ''. No schema, Edge Function, Hive key or cloud change. Existing tests: files that name these providers and open a Hive session were run locally; 6 files (19 tests) went red on the first guard because they open a session without an auth seam (the token stayed '<anon>') and were fixed with the same owner-following seam. The other `setUpHiveForTests` users and every test that pumps a screen are left to the full CI suite.
 touched_layers_checked:
-  - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "10 build() guards in 5 provider files; flutter analyze --no-fatal-infos on the whole project: 0 warnings, 0 errors (460 existing infos)." }
+  - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "33 build() guards in 9 provider files; flutter analyze --no-fatal-infos (see the batch commit for the whole-project run)." }
   - { tier: 2, name: "Hive (local state)", status: verified, evidence: "Behavioral test uses real Hive boxes via setUpHiveForTests, closeAll and openForUser; seeded data returns after the re-open." }
   - { tier: 3, name: "Postgres schema", status: not_applicable, evidence: "No schema involved." }
   - { tier: 4, name: "Postgres data", status: not_applicable, evidence: "No data involved." }
@@ -75,12 +83,13 @@ related_bugs: [b8e3f1, a7f2e1, c4055a, a7c3f8, b3f9e7]
 A tester signed out of one account and into another on build 50. Signing out tears Hive down first and the auth user last (`auth_provider.dart` signOut). Every provider that watches `authUserIdTokenProvider` is rebuilt when that token flips. `BiometricNotifier.build` then read `HiveService.instance.healthBox`, which is `GuardedBox.rawBox`: it throws on the empty stub (Hive closed, auth user still set) and at `guarded_box.dart:335` (both gone). Riverpod reported the throw as a FlutterError, which `main.dart` records as fatal: 61 times for one user.
 
 ## What the measurement added
-The Crashlytics issue named one provider, but a probe on real Hive showed ten providers with the same shape (a `build()` that reads a raw user-scoped box and ignores the token it watches) all throw in both windows. Only Biometric reached Crashlytics in the trending list; whether the others are in the dashboard is not known. They are fixed in the same batch (no deferrals, CLAUDE.md 4.2).
+The Crashlytics issue named one provider, but a probe on real Hive showed ten with the same shape (a `build()` that reads a raw user-scoped box and ignores the token it watches) throw in the sign-out windows. The B-pass (Seat A) then showed the class was much larger: my first sweep grepped `*provider*.dart` for the literal `HiveService.instance.<box>` and missed repository reads, `hive.<box>` aliases and providers that read only through another provider. A probe over every provider in the tree found 33 build() bodies that throw in window A, B or C. All 33 are fixed in this batch (no deferrals, CLAUDE.md 4.2); the founder chose "fix all in this PR". Only Biometric reached the Crashlytics trending list.
 
 ## The fix
-Each of the ten returns its empty value on the `'<anon>'` token and rebuilds with data when the token flips back. See `proposed_fix` for the reasons the loud throw and the raw getters are left as they are.
+Each guarded build returns its empty value on the `'<anon>'` token and rebuilds with data when the token flips back. See `proposed_fix` for what is left alone and why.
 
 ## Not established
 - Which rebuild trigger fired the 61 events. The founder's account-switch fits window A or B; the day-rollover invalidation and the Profile retry also reach the same build(). The fix does not depend on it.
 - Why only `BiometricNotifier` shows in Crashlytics. The Home, Nutrition, Train and Coach tabs gate on `isSessionTearingDown`, which may drop their listeners before the rebuild, while the Profile tab's watcher stays mounted; not measured.
-- The 166 other `setUpHiveForTests` users and screen-pumping tests were not run locally; the full suite on CI decides.
+- The `setUpHiveForTests` users and screen-pumping tests that were not run locally; the full suite on CI decides.
+- The closing gap (OI-526): reproduced once as a flaky `HiveError` in the test, cause read from `_closeAllLocked`, not fixed here.

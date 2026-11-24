@@ -493,7 +493,21 @@ final dailyNutritionProvider =
 class MacroTargetsNotifier extends Notifier<Map<String, double>> {
   @override
   Map<String, double> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') {
+      // The no-profile values (the hard-coded defaults of _resolveNutritionTargets).
+      return const <String, double>{
+        'bmr': 0,
+        'tdee': 0,
+        'calories': 2400,
+        'protein': 184,
+        'carbs': 280,
+        'fat': 80,
+      };
+    }
     final profile = UserRepository.instance.getProfile();
     final strategyInputs = _watchDietStrategyInputs(ref);
     final targets = _resolveNutritionTargets(profile,
@@ -1892,6 +1906,10 @@ final deleteNutritionLogProvider =
 // Call `ref.invalidate(waterTargetProvider)` after any
 // [WaterTargetService.setUserOverride] call to propagate the change.
 final waterTargetProvider = Provider<int>((ref) {
-  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+  final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // A raw box read throws there; serve the empty value, and the token
+  // flipping back re-runs this with the real data.
+  if (token == '<anon>') return WaterTargetService.floorMl;
   return WaterTargetService.instance.currentTargetMl();
 });

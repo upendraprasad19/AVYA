@@ -81,7 +81,11 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
 
   @override
   Map<String, dynamic> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return <String, dynamic>{};
     return UserRepository.instance.getProfile() ?? {};
   }
 
@@ -450,7 +454,11 @@ class UserStatsData {
 class UserStatsNotifier extends Notifier<UserStatsData> {
   @override
   UserStatsData build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return const UserStatsData();
     final profile = UserRepository.instance.getProfile() ?? {};
     final progress = UserRepository.instance.getProgress() ?? {};
     // B-pass P1 (fob1-week-identity): this MUST be `ref.watch`, not the

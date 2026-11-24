@@ -86,7 +86,11 @@ class CalendarWeekNotifier extends Notifier<List<CalendarDayData>> {
 
   @override
   List<CalendarDayData> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return const <CalendarDayData>[];
     final now = nowWall();
     final todayDate = istMidnight(now);
     final weekStart = mondayOfIst(now);
@@ -278,7 +282,11 @@ final restoreCompletedTickProvider = Provider<int>((ref) {
 class StreakNotifier extends Notifier<int> {
   @override
   int build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return 0;
     ref.watch(restoreCompletedTickProvider); // freeze-refill-sync: restore tick
     // APK Test #12.7 — single source of truth for streak count.
     // Previously read cached `current_streak_days` from `user_progress`,
@@ -317,7 +325,11 @@ class StreakFreezeNotifier extends Notifier<int> {
     // `StreakProgressService.refillIfNewWeek()` and invoked from
     // `DayRolloverObserver._doRolloverWithRef` (every rollover; idempotent
     // for non-Monday calls) + splash post-restore (first launch).
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return 0;
     ref.watch(restoreCompletedTickProvider); // freeze-refill-sync: restore tick
     final progress = UserRepository.instance.getProgress();
     final stored = (progress?['streak_freezes_available'] as int?) ?? 1;
@@ -402,7 +414,18 @@ class StreakWarningEligibilityNotifier
     extends Notifier<StreakWarningEligibility> {
   @override
   StreakWarningEligibility build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') {
+      return const StreakWarningEligibility(
+        shouldShow: false,
+        medianWorkoutHour: 19, // the cold-start default
+        isWorkoutDayToday: false,
+        isTodayCompleted: false,
+      );
+    }
     final streakDays = ref.watch(streakProvider);
     final todaySchedule = ref.watch(todayWorkoutProvider);
 
@@ -560,7 +583,11 @@ final subscriptionExpiryBannerProvider = NotifierProvider<
 class TodayWorkoutNotifier extends Notifier<Map<String, dynamic>?> {
   @override
   Map<String, dynamic>? build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return null;
     // Read today's schedule from WorkoutScheduleService (single source of truth)
     // A7 / B5 D9-D10 — canonical provider path.
     return ref
@@ -600,7 +627,11 @@ class NutritionSummaryData {
 class NutritionSummaryNotifier extends Notifier<NutritionSummaryData> {
   @override
   NutritionSummaryData build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return const NutritionSummaryData();
     // F7 · Single source of truth — Home + Nutrition screens sum
     // identically via NutritionRepository.dailyMacros.
     final today = DateTime.now();
@@ -685,7 +716,11 @@ final nutritionSummaryProvider =
 class WeightHistoryNotifier extends Notifier<List<WeightEntryData>> {
   @override
   List<WeightEntryData> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return <WeightEntryData>[];
     final hive = HiveService.instance;
     final healthBox = hive.healthBox;
 
@@ -782,7 +817,11 @@ class RecentFoodLogEntry {
 class RecentFoodLogsNotifier extends Notifier<List<RecentFoodLogEntry>> {
   @override
   List<RecentFoodLogEntry> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return <RecentFoodLogEntry>[];
     final hive = HiveService.instance;
     final nutritionBox = hive.nutritionBox;
     final today = DateTime.now();
@@ -888,7 +927,11 @@ final dailyQuoteProvider =
 class TodayStepsNotifier extends Notifier<int> {
   @override
   int build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return 0;
     final hive = HiveService.instance;
     final healthBox = hive.healthBox;
     final todayStr = istTodayStr();
@@ -1053,7 +1096,11 @@ final todayWeightLoggedProvider =
 class AllExercisePRsNotifier extends Notifier<List<ExercisePR>> {
   @override
   List<ExercisePR> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return <ExercisePR>[];
     return WorkoutRepository.instance.loadAllExercisePRs();
   }
 }
