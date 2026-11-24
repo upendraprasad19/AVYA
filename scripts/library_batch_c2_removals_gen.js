@@ -46,8 +46,10 @@ const C2A_REMOVED = new Set([
 ]);
 // replacement: the shipped row that serves the removed row's purpose TODAY. alias_to: the replacement that receives
 // the removed NAME as an alias (founder alias policy 2026-11-04; only when the name differs from every row name).
+// OI-523 exception: E144 has NO alias (founder 2026-11-23): a forward lunge is not a reverse lunge, so the name answers nothing
+// instead of the wrong movement's cues (the coach tool getFormCues reads name_aliases).
 const REPLACEMENT = {
-  E144: { to: 'G3470', alias: true, why: 'Reverse Lunge: the hip/knee lunge twin (Forward Lunge); the name stays reachable as an alias.' },
+  E144: { to: 'G3470', alias: false, why: 'Reverse Lunge: the hip/knee lunge twin (Forward Lunge); NOT an alias (OI-523): a forward lunge is not a reverse lunge, so the name is retired with no alias target.' },
   E075: { to: 'E008', alias: true, why: 'Dip (Parallel Bars) duplicates Chest Dip.' },
   E265: { to: 'E280', alias: false, why: 'Prone Lat Pull; E280 is the home Beginner vertical pull.' },
   E210: { to: 'G1428', alias: true, why: 'Wrist Rotations shares animation 1428 with G1428 Wrist Circles.' },

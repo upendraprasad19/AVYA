@@ -21,6 +21,7 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 
 import '../helpers/hive_test_setup.dart';
 import '../helpers/library_g0355_v25.dart';
+import '../helpers/library_lunge_alias_v28.dart';
 import '../helpers/library_overlay_v26.dart';
 
 List<Map<String, dynamic>> _bundled() =>
@@ -49,7 +50,7 @@ List<Map<String, dynamic>> _v23Bundle() {
   final rows = [
     // Unit 1B-R (seed v26) gave G0355 `beginner`; the v23 bundle keeps its v25 levels.
     // Unit 1B-F2 (seed v27) copied the overlays; the v23 bundle keeps them.
-    for (final r in _bundled().map((r) => withOverlaysV26(withG0355V25(_withV24Tags(r, tags)))))
+    for (final r in _bundled().map((r) => withLungeAliasV27(withOverlaysV26(withG0355V25(_withV24Tags(r, tags))))))
       r['id'] == 'G1373' ? (Map<String, dynamic>.from(r)..remove('name_aliases')..remove('merged_ids')) : r,
   ];
   rows.insert((fx['_meta'] as Map<String, dynamic>)['v23_index'] as int, fx['row'] as Map<String, dynamic>);
@@ -96,7 +97,7 @@ void main() {
         'd858d26b59e0a7574f779c59f3910647200eb206a4805126122bbc936f8daeff');
   });
 
-  test('a v23 box ends at the current version (v27): E053 is gone, G1373 is written as bundled, the community row and every other row are unchanged', () async {
+  test('a v23 box ends at the current version (v28): E053 is gone, G1373 is written as bundled, the community row and every other row are unchanged', () async {
     final hive = HiveService.instance;
     await _putV23Box(hive);
     await _markSeeded(hive, 23);
@@ -106,7 +107,7 @@ void main() {
       // the current version.
       for (final id in hive.exerciseBox.keys
           .where((k) => k != 'E053' && k != 'G1373' && k != g0355Id && !_hipTagsV24().containsKey(k) &&
-              !overlayRowIdsV27.contains(k)))
+              !overlayRowIdsV27.contains(k) && k != lungeAliasRowIdV28))
         id as String: jsonEncode(_asJson(hive.exerciseBox.get(id)))
     };
 
@@ -118,18 +119,21 @@ void main() {
     for (final e in others.entries) {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
+    // OI-523 (seed v28): the rebuilt older box held G3470 with its alias; the upgrade writes the row as bundled, without it.
+    expect(_asJson(hive.exerciseBox.get(lungeAliasRowIdV28)).containsKey('name_aliases'), isFalse,
+        reason: 'G3470 is written as bundled, without the alias');
     expect(_asJson(hive.exerciseBox.get(_communityId))['name'], 'Donkey Calf Raise', reason: 'the prune deletes ids, never a name');
     expect(hive.exerciseBox.length, _bundled().length + 1);
-    expect(hive.configBox.get('exercise_library_version') as int, 27);
+    expect(hive.configBox.get('exercise_library_version') as int, 28);
   });
 
-  test('MIRROR: a box already at the current version (v27, Unit 1B-F2) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v28, OI-523) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV23Box(hive);
-    await _markSeeded(hive, 27);
+    await _markSeeded(hive, 28);
     await SeedService.instance.seedIfNeeded();
     expect(hive.exerciseBox.containsKey('E053'), isTrue);
     expect(_asJson(hive.exerciseBox.get('G1373')).containsKey('merged_ids'), isFalse);
-    expect(hive.configBox.get('exercise_library_version') as int, 27);
+    expect(hive.configBox.get('exercise_library_version') as int, 28);
   });
 }

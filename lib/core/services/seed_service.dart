@@ -186,7 +186,11 @@ class SeedService {
   //   19; 27 rows) and both overlay keys are removed, so the picker, queryV4 (the thin-day top-up) and the muscle label
   //   read one set of labels. The cloud movement_pattern of 12 rows changes in its reseed migration. Without this bump
   //   an existing install keeps the overlays (library_seed_v27_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 27;
+  //   v28 (OI-523, docs/plans/2026-11-23-oi523-lunge-alias-v28.md): G3470 Forward Lunge loses its name_aliases entry
+  //   "Reverse Lunge" (a forward lunge is not a reverse lunge; the coach tool getFormCues reads name_aliases). The cloud
+  //   name_aliases of the row is NULL in its reseed migration. putAll rewrites the row by id. Without this bump an existing
+  //   install keeps the alias (library_seed_v28_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 28;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes
