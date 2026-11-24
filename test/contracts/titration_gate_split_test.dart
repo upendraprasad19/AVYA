@@ -31,6 +31,17 @@ String? pinsProblem(Map<String, Map<String, int>> pins, Map<String, int> totals,
   return null;
 }
 
+/// What a per-goal gate file is, line for line, once its `//` comment lines and blank lines are dropped. The WHOLE
+/// file is pinned, not the presence of the call: a call that is commented out, behind an `if (false)`, or beside a
+/// second `main` would satisfy a search for it and run nothing (B-pass finding 3, 2026-11-24).
+List<String> gateFileCode(String goal) => [
+      '@Timeout(Duration(minutes: 40))',
+      'library;',
+      "import 'package:flutter_test/flutter_test.dart';",
+      "import '../helpers/titration_plateau_gate_lib.dart';",
+      "void main() => defineTitrationPlateauGate('$goal');",
+    ];
+
 /// `null` when [files] (name -> source) are exactly one gate file per goal, each calling the lib for its own goal.
 String? filesProblem(Map<String, String> files, Iterable<String> goals) {
   final want = {for (final g in goals) '$_prefix$g$_suffix': g};
@@ -40,8 +51,15 @@ String? filesProblem(Map<String, String> files, Iterable<String> goals) {
   for (final e in want.entries) {
     final src = files[e.key];
     if (src == null) return '${e.key}: missing';
-    final calls = RegExp(r"defineTitrationPlateauGate\('([^']*)'\)").allMatches(src).map((m) => m.group(1)).toList();
-    if (calls.length != 1 || calls.single != e.value) return '${e.key}: calls the gate for $calls';
+    final code = [
+      for (final l in src.split('\n'))
+        if (l.trim().isNotEmpty && !l.trimLeft().startsWith('//')) l.trimRight(),
+    ];
+    final want = gateFileCode(e.value);
+    if (code.length != want.length) return '${e.key}: ${code.length} code lines, a gate file has ${want.length}';
+    for (var i = 0; i < want.length; i++) {
+      if (code[i] != want[i]) return '${e.key}: line "${code[i]}" is not "${want[i]}"';
+    }
   }
   return null;
 }
@@ -68,7 +86,11 @@ void main() {
       'x': {'a': 1, 'b': 5},
       'y': {'a': 2, 'b': 0},
     };
-    String src(String g) => "void main() => defineTitrationPlateauGate('$g');";
+    String src(String g) => '// a comment\n\n${gateFileCode(g).join('\n')}\n';
+    String with_(String g, String from, String to) {
+      expect(src(g), contains(from));
+      return src(g).replaceFirst(from, to);
+    }
 
     test('pins', () {
       expect(pinsProblem(good, totals, keys), isNull);
@@ -83,8 +105,19 @@ void main() {
       final ok = {'${_prefix}x$_suffix': src('x'), '${_prefix}y$_suffix': src('y')};
       expect(filesProblem(ok, ['x', 'y']), isNull);
       expect(filesProblem({...ok}..remove('${_prefix}y$_suffix'), ['x', 'y']), contains('y_test.dart: missing'));
-      expect(filesProblem({...ok, '${_prefix}y$_suffix': src('x')}, ['x', 'y']), contains('calls the gate for [x]'));
-      expect(filesProblem({...ok, '${_prefix}y$_suffix': src('y') + src('x')}, ['x', 'y']), contains('calls the gate'));
+      final y = '${_prefix}y$_suffix';
+      expect(filesProblem({...ok, y: src('x')}, ['x', 'y']), contains("is not \"void main() => defineTitrationPlateauGate('y');\""));
+      expect(filesProblem({...ok, y: src('y') + src('x')}, ['x', 'y']), contains('10 code lines'));
+      // A call that is present in the text and runs nothing.
+      const call = "void main() => defineTitrationPlateauGate('y');";
+      expect(filesProblem({...ok, y: with_('y', call, '// $call\nvoid main() {}')}, ['x', 'y']), contains('is not'));
+      expect(filesProblem({...ok, y: with_('y', call, "void main() { if (false) defineTitrationPlateauGate('y'); }")}, ['x', 'y']),
+          contains('is not'));
+      expect(filesProblem({...ok, y: with_('y', call, "void main() => defineTitrationPlateauGate('y'); // x")}, ['x', 'y']),
+          contains('is not'));
+      expect(filesProblem({...ok, y: with_('y', call, '/*\n$call\n*/\nvoid main() {}')}, ['x', 'y']), contains('code lines'));
+      expect(filesProblem({...ok, y: with_('y', call, '$call\n@Skip()\nvoid other() {}')}, ['x', 'y']), contains('code lines'));
+      expect(filesProblem({...ok, y: with_('y', '@Timeout(Duration(minutes: 40))', "@Skip('x')")}, ['x', 'y']), contains('is not'));
       expect(filesProblem({...ok, '${_prefix}z$_suffix': src('z')}, ['x', 'y']), contains('no pins'));
     });
   });

@@ -12,7 +12,7 @@
 // HOW THE ANSWER IS DERIVED, NOT LISTED. The inputs of the sweeps are computed from
 // the sweep files themselves on every run:
 //   1. the transitive import / export / part closure of every
-//      test/plan_generator/**/*_test.dart file (235 of the 669 lib/ files on the day
+//      test/plan_generator/**/*_test.dart file (237 of the 671 lib/ files on the day
 //      this was written: the engine reaches the repositories and through them most of
 //      lib/core/services);
 //   2. [declaredInputs]: files the closure READS without importing them (the
@@ -130,8 +130,20 @@ String stripDartComments(String source) {
       continue;
     }
     if (c == '/' && next == '*') {
-      final end = source.indexOf('*/', i + 2);
-      i = end < 0 ? source.length : end + 2;
+      // Dart block comments NEST: `/* a /* b */ c */` is one comment.
+      var depth = 1;
+      i += 2;
+      while (i < source.length && depth > 0) {
+        if (source.startsWith('/*', i)) {
+          depth++;
+          i += 2;
+        } else if (source.startsWith('*/', i)) {
+          depth--;
+          i += 2;
+        } else {
+          i++;
+        }
+      }
       b.write(' ');
       continue;
     }
@@ -142,12 +154,15 @@ String stripDartComments(String source) {
   return b.toString();
 }
 
-final RegExp _directive = RegExp(r'^[ \t]*(import|export|part)\s+([^;]*);', multiLine: true);
+// NOT anchored to the start of a line: `import 'a.dart'; import 'b.dart';`, `library x; import 'a.dart';` and
+// `@pragma('x') import 'a.dart';` are all legal, and an edge this misses is an input the decision cannot see
+// (B-pass finding 2, 2026-11-24). Matching the keyword anywhere it starts a word can only ADD edges.
+final RegExp _directive = RegExp(r'''(?<![\w$.'"])(import|export|part)\s+([^;]*);''');
 final RegExp _stringLiteral = RegExp(r'''(['"])([^'"\n]*)\1''');
 
 /// The URIs of every `import` / `export` / `part` directive in [source], read
 /// STATEMENT by statement (up to the `;`), so a directive spread over several lines
-/// is one directive. A conditional import (`import 'a.dart' if (x) 'b.dart';`)
+/// is one directive, and several directives on one line are several. A conditional import (`import 'a.dart' if (x) 'b.dart';`)
 /// contributes EVERY branch: a superset, so it can only add inputs. `part of` is
 /// skipped (a part is reached through its library's `part` directive). Only string
 /// literals ending in `.dart` count, so a condition such as `== 'true'` is not a URI.
@@ -240,6 +255,14 @@ bool isDeclaredInput(String p) {
 /// True when [p] is a declared NON-input.
 bool isDeclaredNonInput(String p) => declaredNonInputs.any((e) => e.$1 == p);
 
+final RegExp _plainPath = RegExp(r'^[\x20\x21\x23-\x5B\x5D-\x7E]+$');
+
+/// True when [p] can be compared with a path of the tree byte for byte: printable
+/// ASCII with no `"` and no `\`. `git diff --name-only` prints a path holding any
+/// other byte QUOTED and octal-escaped (`"lib/caf\303\251.dart"`, core.quotePath), and
+/// that string is in no closure, so such a path must mean "run" (B-pass finding 1).
+bool isPlainPath(String p) => _plainPath.hasMatch(p);
+
 /// The decision. [changed] are the pull request's changed paths (old AND new names
 /// of a rename, as `git diff --no-renames` prints them); [closure] the walk over the
 /// CURRENT tree; [exists] whether a path is a file in it. `run` is false ONLY when
@@ -249,14 +272,18 @@ bool isDeclaredNonInput(String p) => declaredNonInputs.any((e) => e.$1 == p);
   required SweepClosure closure,
   required bool Function(String path) exists,
 }) {
-  final paths = {
+  final given = [
     for (final c in changed)
-      if (c.trim().isNotEmpty) _norm(c),
-  };
+      if (c.trim().isNotEmpty) c.trim(),
+  ];
+  final paths = {for (final c in given) _norm(c)};
   if (paths.isEmpty) {
     return (run: true, reasons: ['no changed paths were given: cannot prove the sweeps are unaffected']);
   }
   final reasons = <String>[];
+  for (final c in given) {
+    if (!isPlainPath(c)) reasons.add('$c: not a plain path (quoted or escaped by git?), it cannot be compared');
+  }
   if (closure.files.isEmpty) reasons.add('the closure is empty (no sweep files found?)');
   for (final u in closure.unresolved) {
     reasons.add('unresolved import, the closure is incomplete: $u');

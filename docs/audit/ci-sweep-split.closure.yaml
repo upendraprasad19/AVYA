@@ -1,0 +1,62 @@
+# Closure ledger - CI sweep split, branch ci-sweep-split, PR 338. Gate 40.
+# One terminal_state per unit; no deferral key. Detail: docs/plans/2026-11-24-ci-sweep-split.md.
+
+batch: 2026-11-24-ci-sweep-split
+plan_review_record: docs/plan-reviews/ci-sweep-split.md
+bpass_review: docs/reviews/ci-sweep-split-bpass.md
+total_findings: 9
+closed_count: 9
+
+findings:
+  - id: U1-SCOPE
+    title: "Scope decision: scripts/ci_sweep_scope.dart + ci_sweep_scope_lib.dart (derived import closure, declared inputs, fail-safe run)"
+    terminal_state: closed_in_commit
+    commit: "7fd618f6"
+    verification: "test/scripts/ci_sweep_scope_test.dart (exhaustive over the real closure); 26 mutants, plan section 6c"
+
+  - id: U2-PARTITION
+    title: "Partition --set core|sweep, sweep legs packed by the duration table"
+    terminal_state: closed_in_commit
+    commit: "03bd1c35"
+    verification: "test/scripts/ci_test_partition_test.dart; every test file in exactly one of 9 legs"
+
+  - id: U3-WORKFLOW
+    title: "Workflow: 4 core legs + 5 sweep legs, the Unit Tests gate needs both, the scope step, land_pr's sweeps line"
+    terminal_state: closed_in_commit
+    commit: "03bd1c35 and 7fd618f6"
+    verification: "test/contracts/ci_unit_test_matrix_shape_test.dart (the step run under sh and bash); CI runs 45361275474 and 45399115784 green"
+
+  - id: U4-TITRATION-SPLIT
+    title: "Titration gate split into three per-goal files (founder go 2026-11-24)"
+    terminal_state: closed_in_commit
+    commit: "9eec3416"
+    verification: "per-goal pins sum to the old totals on all 13 counters (plan section 6e); test/contracts/titration_gate_split_test.dart, 11 mutants red; slowest leg 13.8 -> 11.7 min"
+
+  - id: U5-TESTS-REPOINTS
+    title: "Tests and repoints (safe_pr_merge job names, ci_local_indexes steps, SoT registry, skills)"
+    terminal_state: closed_in_commit
+    commit: "03bd1c35, 7fd618f6 and 9eec3416"
+    verification: "full suite green in CI on cff3fb44"
+
+  - id: DOCS
+    title: "CLAUDE.md sections 0 / 4.3 / 4.4 rule 20 / 4.12.8, hooks.md, process-invariants-detail.md, ADR 0013, code-review skill"
+    terminal_state: closed_in_commit
+    commit: "7fd618f6"
+    verification: "pre-commit gate loop green, context-artifact budget included"
+
+  - id: BPASS-FIXES
+    title: "B-pass: 1 P1, 3 P2, 2 P3 (quoted paths, unanchored directives, whole-file gate pin, counts, table rows, self-judging)"
+    terminal_state: closed_in_commit
+    commit: "the commit that adds this ledger"
+    verification: "docs/reviews/ci-sweep-split-bpass.md; 21 mutants red (plan section 6f)"
+
+  - id: ABORT-CONDITION-4
+    title: "Sweep-leg skew above 1.6x: 2.1x and 2.25x on the two runs, caused by runner speed (measured, plan section 6e)"
+    terminal_state: blocked_on_user
+    reason: "A pre-committed revert condition that no packing can meet. The founder decides: keep it as written (revert) or replace it with the absolute limit of condition 2 (16.8 min), which both runs pass (13.8 and 11.7 min)."
+
+  - id: ABORT-CONDITIONS-MEDIANS
+    title: "Abort conditions 1, 2 and 5 are medians over 3 to 5 runs; two runs exist, both of the kind that runs the sweeps"
+    terminal_state: upstream_blocked
+    blocker: "A run that SKIPS the sweeps needs a pull request whose diff is outside the closure; this one changes the workflow and always runs them."
+    reopen_when: "three later pull requests of each kind have run; read their times against plan section 5"

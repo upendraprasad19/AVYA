@@ -363,6 +363,8 @@ void main() {
         int diffRc = 0,
         String answer = 'run=false',
         int dartRc = 0,
+        String diff = 'docs/x.md',
+        int grepRc = -1,
       }) {
         File('${tmp.path}/answer').writeAsStringSync(answer);
         for (final stale in ['out', 'calls.log', 'summary', 'stdin.log']) {
@@ -374,10 +376,11 @@ void main() {
           r'  echo "git $*" >> calls.log',
           r'  case "$1" in',
           "    rev-list) printf '%s\\n' '$parents'; return $revListRc;;",
-          "    diff) printf '%s\\n' 'docs/x.md'; return $diffRc;;",
+          "    diff) printf '%b\\n' '$diff'; return $diffRc;;",
           '  esac',
           '}',
           r'dart() { echo "dart $*" >> calls.log; cat > stdin.log; cat answer; return ' '$dartRc; }',
+          if (grepRc >= 0) 'grep() { cat > /dev/null; return $grepRc; }',
           '',
         ].join('\n');
         final r = runSpawn(shell, ['-e', '-c', '$prelude$scope'],
@@ -447,6 +450,39 @@ void main() {
         ]) {
           expect(r.code, 0, reason: 'a broken decision must run the sweeps, not turn the leg red: ${r.out}');
           expect(r.output, 'run=true\n');
+        }
+      });
+
+      // B-pass finding 6 (2026-11-24): a pull request must not be judged by its own copy of the judge.
+      for (final own in [
+        'scripts/ci_sweep_scope.dart',
+        'scripts/ci_sweep_scope_lib.dart',
+        'scripts/ci_test_partition_lib.dart',
+        '.github/workflows/test.yml',
+        '.github/actions/x/action.yml',
+        r'docs/x.md\nscripts/ci_sweep_scope_lib.dart\ndocs/y.md',
+      ]) {
+        test('RUN, and the script is NOT asked: the pull request changes the decision itself ($own)', () {
+          final r = runStep(diff: own);
+          expect(r.code, 0, reason: r.out);
+          expect(r.output, 'run=true\n');
+          expect(r.calls, contains('git diff'));
+          expect(r.calls, isNot(contains('dart ')));
+        });
+      }
+
+      test('the script IS asked for look-alike paths that are not the decision itself', () {
+        final r = runStep(diff: r'docs/scripts/ci_sweep_scope.md\nlib/.github/x.dart\nscripts/ci_sweeper.dart\nagithub/x');
+        expect(r.output, 'run=false\n');
+        expect(r.calls, contains('dart scripts/ci_sweep_scope.dart'));
+      });
+
+      test('RUN, and the step still SUCCEEDS: a failing `grep` (no count at all is not a count of 0)', () {
+        for (final rc in [2, 127]) {
+          final r = runStep(grepRc: rc);
+          expect(r.code, 0, reason: r.out);
+          expect(r.output, 'run=true\n');
+          expect(r.calls, isNot(contains('dart ')));
         }
       });
 

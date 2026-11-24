@@ -175,7 +175,20 @@ All 13 sums equal what the single file pinned. The pins are now stricter: a chan
 
 **What guards the split.** `test/contracts/titration_gate_split_test.dart` (core set, runs on every PR): the per-goal pins sum to the old totals (kept in the lib as `titrationGateTotals`), and exactly one gate file exists per pinned goal, calling the lib for its own goal. On a generator change that moves a pin, the totals are re-measured with the pins, as before.
 
-**Duration table.** The one 367 s row became three rows, 130 / 119 / 117 s (367 s shared out by this machine's measured ratio; to be replaced by CI's own numbers). By the table the five legs are 612 to 672 s, and the longest single file is now `day_floor_gate_pairs_p1_test.dart` (450 s in the table, 522 s on run 45361275474), so that file sets the slowest sweep leg from here on. It already has one `test()` per equipment tier, so a split by tier would need no new pins; it was not asked for.
+**Duration table.** The one 367 s row became three rows, 130 / 119 / 117 s (367 s shared out by this machine's measured ratio; to be replaced by CI's own numbers). By the table (42 rows, one per sweep file, after the B-pass added the two missing ones) the five legs are 646 to 653 s, and the longest single file is now `day_floor_gate_pairs_p1_test.dart` (450 s in the table, 522 s on run 45361275474), so that file sets the slowest sweep leg from here on. It already has one `test()` per equipment tier, so a split by tier would need no new pins; it was not asked for.
+
+**Second CI run, with the split (PR #338, run 45399115784, head `cff3fb44`, sweeps ran, all green).** Sweep legs 6.3 / 11.7 / 6.1 / 5.2 / 9.5 min, core legs 7.1 / 9.1 / 9.8 / 6.6 min; the slowest leg went from 13.8 to 11.7 min. The three titration files took 266 / 188 / 115 s (first to last log line), against 595 s for the single file, and none of them set its leg's time. Skew is 11.7 / 5.2 = 2.25x. Its cause is measured and is not packing: sweep leg 2's runner took 557 s for `day_floor_gate_pairs_p4_test.dart` (263 s in the table) while leg 1's took 324 s for `day_floor_gate_pairs_p1_test.dart` (450 s in the table), so runner speed alone moves a leg by about 2x. Abort condition 4 (skew above 1.6x) cannot be met by any table and is with the founder: keep it as written (a revert) or replace it with the absolute limit of condition 2, which both runs pass.
+
+## 6f. B-pass (2026-11-24, fresh Sonnet, on `cff3fb44`): 0 P0, 1 P1, 3 P2, 2 P3, all fixed in this batch
+
+Review file `docs/reviews/ci-sweep-split-bpass.md`. Each finding was reproduced before its fix; each fix has a test that was mutated (21 mutants, 21 red).
+
+1. P1: `git diff --name-only` quotes a path holding a non-ASCII byte, a quote or a backslash, and the quoted string is in no closure, so such a closure file could be skipped. Fix: `isPlainPath` in the scope lib; any changed path that is not printable ASCII without `"` and `\` is a reason to run.
+2. P2: the directive regex was anchored to the start of a line, so a second directive on one line, one after `library x;` or after an annotation, and one after a nested block comment were not edges. Fix: the regex matches the keyword wherever it starts a word, and block comments nest. The real closure is unchanged at 292 files with no unresolved edge.
+3. P2: the split's contract test searched a gate file for the call, so a commented-out or dead call passed. Fix: the whole file is pinned, line for line, comments aside.
+4. P2: stale counts (235 of 669 `lib/` files; it is 237 of 671). Fixed in the lib header; §1.6 above is the measurement of its day.
+5. P3: two sweep files had no row in the duration table. Added (1 s each, measured on run 45399115784).
+6. P3: a pull request was judged by its own copy of the scope script. Fix: the workflow step counts changed paths under `scripts/ci_sweep_scope*`, `scripts/ci_test_partition*` and `.github/` and asks the script only on a count of exactly `0`.
 
 ## 7. Closure
 

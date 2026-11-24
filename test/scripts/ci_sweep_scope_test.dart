@@ -61,6 +61,24 @@ void main() {
       expect(directiveUris("/*\nimport 'no.dart';\n*/\nimport 'yes.dart';\n"), ['yes.dart']);
     });
 
+    // B-pass finding 2 (2026-11-24): each of these was read as NO edge, or as the first edge only.
+    test('a directive that does not start its line is still an edge', () {
+      expect(directiveUris("import 'a.dart'; import 'b.dart';\n"), ['a.dart', 'b.dart']);
+      expect(directiveUris("library x; import 'a.dart';\n"), ['a.dart']);
+      expect(directiveUris("import 'dart:io'; export 'e.dart' hide X;\n"), ['e.dart']);
+      expect(directiveUris("@pragma('x') import 'a.dart';\n"), ['a.dart']);
+      expect(directiveUris("/* c */ import 'a.dart'; part 'p.dart';\n"), ['a.dart', 'p.dart']);
+    });
+
+    test('block comments NEST: an import after a nested comment is an edge, one inside it is not', () {
+      expect(directiveUris("/* a /* b */ import 'no.dart'; */ import 'yes.dart';\n"), ['yes.dart']);
+      expect(directiveUris("/* never closed /* b */ import 'no.dart';\n"), isEmpty);
+    });
+
+    test('a word that only ENDS in a keyword is not a directive', () {
+      expect(directiveUris("reimport 'no.dart'; x.part 'no2.dart'; \$export 'no3.dart';\n"), isEmpty);
+    });
+
     test('double quotes and a `//` inside a URI string survive comment stripping', () {
       expect(directiveUris('import "a.dart";\nimport \'b//c.dart\';\n'), ['a.dart', 'b//c.dart']);
     });
@@ -149,6 +167,30 @@ void main() {
         expect(d.reasons.join('\n'), contains(path.replaceAll('\\', '/').replaceFirst('./', '')));
       });
     }
+
+    // B-pass finding 1 (2026-11-24): `git diff --name-only` QUOTES a path holding a non-ASCII byte, a quote or a
+    // backslash, and the quoted string is in no closure. `lib/caf\303\251.dart` is a closure file here.
+    for (final (why, path) in [
+      ('quoted and octal-escaped by git', r'"lib/caf\303\251.dart"'),
+      ('non-ASCII, unquoted (core.quotePath=false)', 'lib/caf\u00e9.dart'),
+      ('a backslash', r'lib\e2.dart'),
+      ('a control character', 'docs/a\tb.md'),
+      ('a quote inside', 'docs/a"b.md'),
+    ]) {
+      test('RUN: a changed path that is not plain ASCII cannot be compared ($why)', () {
+        final c = (files: {...closure.files, 'lib/caf\u00e9.dart'}, unresolved: <String>[]);
+        final d = decide(['docs/x.md', path], c: c);
+        expect(d.run, isTrue);
+        expect(d.reasons.join('\n'), contains('not a plain path'));
+      });
+    }
+
+    test('plain paths, spaces and punctuation included, are still compared and can skip', () {
+      for (final p in ['docs/a b.md', 'docs/a+b-c_d.e@f(1)[2]~#%.md', "docs/it's.md"]) {
+        expect(isPlainPath(p), isTrue, reason: p);
+        expect(decide([p]).run, isFalse, reason: p);
+      }
+    });
 
     test('RUN: no changed paths at all (an empty or blank list proves nothing)', () {
       expect(decide([]).run, isTrue);

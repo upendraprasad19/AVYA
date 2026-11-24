@@ -213,7 +213,7 @@ jobs:
   # 9.84). So `unit-test` above now runs only the CORE set (`--set core`: every test
   # file NOT under test/plan_generator/), and this matrix runs the SWEEP set, packed
   # longest-first by the measured table scripts/data/ci_sweep_durations.json (five legs
-  # of 612-672 s by that table). The steps are the same as a core shard's on purpose:
+  # of 646-653 s by that table). The steps are the same as a core shard's on purpose:
   # the same empty-list and stray-line guards, `flutter test` last and unpiped.
   # A leg's wall clock is set by its LONGEST FILE (files in a leg run side by side):
   # on the first run (45361275474) the leg holding the then single 3-goal file
@@ -260,7 +260,8 @@ jobs:
       # test/plan_generator/**, a declared fixture or asset, or an always-run path
       # (scripts/ci_sweep_scope_lib.dart; the rule is derived from the sweep files on
       # every run, not listed). Replayed with the real script over the last 80 merges on
-      # main (2026-11-24): 28 would have skipped the sweeps, 52 would have run them.
+      # main (2026-11-24): 28 would have skipped the sweeps, 52 would have run them (27 / 53
+      # when the B-pass replayed it later the same day on a moved main).
       #
       # THE ONLY WAY TO SKIP is the script printing exactly `run=false` on a pull_request
       # whose HEAD is a two-parent merge commit. RUN starts `true` and everything else
@@ -269,7 +270,11 @@ jobs:
       # step either: each sits in an `if` condition or in a non-final position of one &&
       # list, where `-e` does not apply (the shape test runs the block under sh AND bash;
       # a `{ ...; } || RUN=true` wrapper was tried and was an unkillable mutant, so it is
-      # not there). The decision is a STEP, not a job-level
+      # not there). A pull request that changes the scope script itself, the partition
+      # script or anything under .github/ is NOT allowed to answer for itself: the shell
+      # counts those paths (SELF) and asks the script only on exactly `0`, so a broken copy
+      # of the script cannot print run=false for the change that broke it (B-pass finding 6;
+      # a failing grep leaves SELF empty, which is not `0`). The decision is a STEP, not a job-level
       # `if:`: a skipped JOB reports `skipped`, which safe_pr_merge_lib.dart does not accept
       # for `Unit Tests`; a leg whose test step is skipped ends `success`, and
       # scripts/land_pr.dart prints `sweeps: skipped (out of scope)` from that step's
@@ -285,6 +290,8 @@ jobs:
           RUN=true
           if [ "$EVENT_NAME" = "pull_request" ] && [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ]; then
             CHANGED="$(git diff --no-renames --name-only HEAD^1 HEAD)" &&
+              SELF="$(printf '%s\n' "$CHANGED" | grep -c -E '^(scripts/ci_sweep_scope|scripts/ci_test_partition|\.github/)' || true)" &&
+              [ "$SELF" = "0" ] &&
               ANSWER="$(printf '%s\n' "$CHANGED" | dart scripts/ci_sweep_scope.dart)" &&
               [ "$ANSWER" = "run=false" ] && RUN=false
           fi
