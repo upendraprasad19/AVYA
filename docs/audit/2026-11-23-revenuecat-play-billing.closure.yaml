@@ -71,18 +71,21 @@ findings:
 
   - id: L2-DEPLOY-AND-DRAFTS
     title: "Deploy the 10 functions from merged main (switch OFF); apply the reconcile cron draft and the start_date draft"
-    terminal_state: blocked_on_user
-    reason: "live prod deploy and two live SQL applies each need the founder's own go (CLAUDE.md 4.3); runbook plan section 10"
+    terminal_state: closed_in_commit
+    commit: "4afa580d"
+    verification: "founder go 2026-11-24; 10 functions deployed from main 4afa580d (versions and verify_jwt read back, boot-verified); migrations 187 and 188 applied (live body md5 38bffd1f = file; cron jobid 49, first tick 200); plan section 29"
 
   - id: L3-TEST-EVENT
     title: "RevenueCat 'Send test event' + a real sandbox customer read"
-    terminal_state: blocked_on_user
-    reason: "needs L2 and the founder's go; the founder sends the test event from the RevenueCat dashboard"
+    terminal_state: closed_in_commit
+    commit: "4afa580d"
+    verification: "subscription_events id 1 TEST outcome switch_off (webhook URL, auth, ledger write); the real customer read (REVENUECAT_SECRET_KEY) moves to the first RESTORE or purchase on +51 (L6-L7); plan section 29"
 
   - id: L4-SWITCH-ON
     title: "Turn ENABLE_PLAY_BILLING_MIRROR on"
-    terminal_state: blocked_on_user
-    reason: "live switch; founder go after L3"
+    terminal_state: closed_in_commit
+    commit: "4afa580d"
+    verification: "ENABLE_PLAY_BILLING_MIRROR=true (digest read back); second test event id 2 outcome test; plan section 29"
 
   - id: L5-BUILD
     title: "Version bump to +51 and /build-apk --bundle --purchase-mode play_billing"
@@ -92,7 +95,7 @@ findings:
   - id: L6-L7-PLAY-TESTING
     title: "Upload to Play internal testing; license-tester purchase and the defer test"
     terminal_state: blocked_on_user
-    reason: "founder actions in Play Console and on a device"
+    reason: "founder actions in Play Console and on a device; the first RESTORE or purchase is also the REVENUECAT_SECRET_KEY read (plan section 29)"
 
   - id: F1-YEARLY-PRICE
     title: "Play Console yearly price to 3,499 INR"

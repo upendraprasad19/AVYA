@@ -996,3 +996,31 @@ self-healing residue. Gates on the final tree: whole-project analyze with no war
 reconcile 23, delete-account 17, admin 26, bot 54, verify-subscription 3, redeem-referral 12, founder-digest 69,
 `_shared` 1013; both local docker harnesses ALL PASSED; targeted Flutter 251 green (the log-safety contract classifies
 the new `pgErrorCode(e)` line in the mirror).
+
+## 29. L2-L4 record (2026-11-24): deploys, 187 + 188, test events, switch ON
+
+- Founder go 2026-11-24 ("ok merge and go approved for L2, L3 and L4"; the +51 build later). PR #334 merged as
+  `4afa580d` through `land_pr.sh` (CI green on `523735b3`, plan-review-record gate PASS).
+- **Deploys** from a fresh clone of `main` at `4afa580d` (`git diff --name-only HEAD origin/main -- supabase/functions`
+  empty, tree clean), switch OFF: revenuecat-webhook v1 (verify_jwt false), revenuecat-sync v1 (true),
+  revenuecat-reconcile v1 (false), verify-subscription v20->v21, expiry-reminder v29->v30, redeem-referral v24->v25,
+  delete-account v19->v20, admin-dashboard-data v13->v14, telegram-admin-bot v14->v15, founder-digest v17->v18; the
+  read-back `verify_jwt` equals the list. The delete-account payload contains `revenuecat_delete_failed`. Boot: each
+  verify_jwt=true function answered an anon-key POST with its own body (sync and verify-subscription "Invalid or expired
+  token", redeem-referral "Authentication required", delete-account "unauthenticated", admin-dashboard-data "Admin
+  only"); webhook and reconcile answered the unauthenticated smoke with their own `Unauthorized`. Rollback payloads for
+  the seven existing functions were built from `0759f7e5` (`--rollback ... --dry-run`) before the deploy.
+- **187** `play_upsert_start_date` (the hermes H1-3 draft, `git mv` byte-identical): pre-apply live md5(prosrc)
+  3bea3a71 = the 182 body; applied as version 20261124114325; post-apply 38bffd1f = the file's body, ACL unchanged
+  (postgres + service_role), the DO self-check passed. `test/sql/play_upsert_start_date_local.sh` now reads the
+  migration path.
+- **188** `revenuecat_reconcile_cron` (the U6 draft, `git mv` byte-identical): version 20261124114341; jobid 49,
+  `52 * * * *`, active, 120000 ms timeout. First tick 11:52 UTC: `cron_call_log` success / 200 / `switch_off`.
+  CRON_REGISTRY row now 188 / jobid 49.
+- **L3** RevenueCat "Send test event" with the switch OFF: `subscription_events` id 1, TEST, SANDBOX, outcome
+  `switch_off` (proves the webhook URL, the auth header and the ledger write).
+- **L4** `ENABLE_PLAY_BILLING_MIRROR` set to `true` through the Management API (read back: the stored digest equals
+  sha256("true")). A second test event: id 2, outcome `test` (the switch-ON branch).
+- **Not yet proven:** `REVENUECAT_SECRET_KEY` (no Play customer exists to read: 0 Play rows, and both test events carry
+  no app user id). The first RESTORE or purchase on the +51 build is that gate (section 10); a wrong key raises a
+  `revenuecat_*` alert and the sync answers 503.
