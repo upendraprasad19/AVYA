@@ -416,7 +416,11 @@ class DailyNutritionData {
 class DailyNutritionNotifier extends Notifier<DailyNutritionData> {
   @override
   DailyNutritionData build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return const DailyNutritionData();
     final selectedDate = ref.watch(selectedDateProvider);
     final dateStr = istDateStr(selectedDate);
 
@@ -517,7 +521,11 @@ final macroTargetsProvider =
 class WaterIntakeNotifier extends Notifier<int> {
   @override
   int build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return 0;
     final healthBox = HiveService.instance.healthBox;
     // audit-2026-05-16 task E.7 — read with IST date to match the
     // canonical writer in HealthWriteService.setWaterMl.
@@ -580,7 +588,11 @@ class UrineColorNotifier extends Notifier<int> {
 
   @override
   int build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return -1;
     // audit-2026-05-16 task E.7 — IST-anchored read to match the
     // HealthWriteService.logUrine writer.
     final todayStr = istDateStr(DateTime.now());
@@ -1288,7 +1300,11 @@ final foodLogProvider =
 class SavedMealsNotifier extends Notifier<List<Map<String, dynamic>>> {
   @override
   List<Map<String, dynamic>> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return <Map<String, dynamic>>[];
     final nutritionBox = HiveService.instance.nutritionBox;
     final results = <Map<String, dynamic>>[];
 
@@ -1777,7 +1793,11 @@ class WeeklyNutritionData {
 class WeeklyNutritionNotifier extends Notifier<WeeklyNutritionData> {
   @override
   WeeklyNutritionData build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return const WeeklyNutritionData();
     final nutritionBox = HiveService.instance.nutritionBox;
     final profile = UserRepository.instance.getProfile();
     final targets = _resolveNutritionTargets(profile);

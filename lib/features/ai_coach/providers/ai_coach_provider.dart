@@ -174,7 +174,11 @@ class _CoachEntry {
 class ChatHistoryNotifier extends Notifier<List<ChatMessage>> {
   @override
   List<ChatMessage> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return <ChatMessage>[];
     final coachBox = HiveService.instance.coachBox;
     final messages = <ChatMessage>[];
 
@@ -545,7 +549,11 @@ class MessageLimitNotifier extends Notifier<int> {
 
   @override
   int build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return 0;
     final today = istDateStr(DateTime.now());
     final box = HiveService.instance.userBox;
     final cached = box.get('$_keyPrefix$today') as int?;

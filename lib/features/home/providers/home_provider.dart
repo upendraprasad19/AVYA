@@ -1023,7 +1023,11 @@ final weightLogNotifierProvider =
 class TodayWeightLoggedNotifier extends Notifier<bool> {
   @override
   bool build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return false;
     final healthBox = HiveService.instance.healthBox;
     // Bug w7r4c3 (APK Test #16.2) — read the IST date string to match the
     // writer's key formula at health_write_service.dart:122. Pre-fix this

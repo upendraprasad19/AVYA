@@ -2732,7 +2732,11 @@ final restTimerProvider =
 class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
   @override
   List<Map<String, dynamic>> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return <Map<String, dynamic>>[];
     final box = HiveService.instance.workoutBox;
     final templates = <Map<String, dynamic>>[];
 

@@ -620,7 +620,11 @@ class BiometricData {
 class BiometricNotifier extends Notifier<BiometricData> {
   @override
   BiometricData build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return const BiometricData();
     final configBox = HiveService.instance.configBox;
     final healthBox = HiveService.instance.healthBox;
     final syncEnabled =
