@@ -275,6 +275,48 @@ Deno.test("cmdRevenue reports active subscription counts by plan and MRR", async
   assertStringIncludes(text, "monthly: 2");
   assertStringIncludes(text, "yearly: 1");
   assertStringIncludes(text, "MRR: ₹948");
+  assertStringIncludes(text, "Google Play: 0 (not in MRR)");
+});
+
+Deno.test("cmdRevenue (OI-519 U4): Google Play rows are counted on their own line, never priced into MRR", async () => {
+  let rangeCalls = 0;
+  let selected = "";
+  const fake = {
+    from: (_table: string) => ({
+      select: (cols: string) => {
+        selected = cols;
+        return {
+          eq: () => ({
+            order: () => ({
+              range: () => {
+                rangeCalls++;
+                return Promise.resolve(
+                  rangeCalls === 1
+                    ? {
+                      data: [
+                        { plan: "monthly", store: null },
+                        { plan: "monthly", store: "play", store_environment: "PRODUCTION" },
+                        { plan: "yearly", store: "play", store_environment: "PRODUCTION" },
+                        { plan: "yearly", store: "play", store_environment: "SANDBOX" },
+                      ],
+                      error: null,
+                    }
+                    : { data: [], error: null },
+                );
+              },
+            }),
+          }),
+        };
+      },
+    }),
+  };
+  const text = await cmdRevenue(fake);
+  assertEquals(selected, "plan, store, store_environment");
+  assertStringIncludes(text, "MRR: ₹349 (web)");
+  assertStringIncludes(text, "monthly: 1");
+  assertStringIncludes(text, "Google Play: 2 (not in MRR)");
+  assertStringIncludes(text, "Google Play testers: 1 (not paid)");
+  assertEquals(text.includes("yearly:"), false, "the Play yearly row is not a web yearly row");
 });
 
 Deno.test("cmdRevenue's fetchAllPages call is bounded at maxPages:200 (R2-14) — an unbounded read risks exceeding Telegram's webhook timeout", async () => {
@@ -387,27 +429,73 @@ Deno.test("cmdSubs renders an explicit cap marker when the read hits SUBS_QUERY_
  * red test rather than a silent zero.
  */
 function expiringFake(
-  rows: Array<{ user_id: string; end_date: string }> | "error",
+  rows: Array<{ user_id: string; end_date: string; store?: string; auto_renew?: boolean }> | "error",
   seen: { table?: string; filters: Array<[string, string, unknown]> } = { filters: [] },
 ) {
   return {
     from: (table: string) => {
       seen.table = table;
       const builder: Record<string, unknown> = {};
+      // OI-519: the renewing-Play read filters on store + auto_renew; honour those two (a row without them is web).
+      const own: Array<[string, unknown]> = [];
       builder.select = () => builder;
-      builder.eq = (c: string, v: unknown) => (seen.filters.push(["eq", c, v]), builder);
+      builder.eq = (c: string, v: unknown) => {
+        seen.filters.push(["eq", c, v]);
+        if (c === "store" || c === "auto_renew") own.push([c, v]);
+        return builder;
+      };
       builder.gte = (c: string, v: unknown) => (seen.filters.push(["gte", c, v]), builder);
       builder.order = () => builder;
       builder.range = (from: number, to: number) =>
         Promise.resolve(
           rows === "error"
             ? { data: null, error: { message: "boom" } }
-            : { data: rows.slice(from, to + 1), error: null },
+            : {
+              data: rows.filter((r) => own.every(([c, v]) => (r as Record<string, unknown>)[c] === v)).slice(from, to + 1),
+              error: null,
+            },
         );
       return builder;
     },
   };
 }
+
+Deno.test("cmdExpiring (hermes seat 1): an auto-renewing Play subscriber is not expiring", async () => {
+  const text = await cmdExpiring(expiringFake([
+    { user_id: "u-web", end_date: inDays(3) },
+    { user_id: "u-play-renews", end_date: inDays(3), store: "play", auto_renew: true },
+    { user_id: "u-play-ends", end_date: inDays(3), store: "play", auto_renew: false },
+  ]));
+  assertStringIncludes(text, "7d: 2");
+});
+
+Deno.test("cmdSubs (hermes seat 1): a Google Play row is its own bucket, never monthly / yearly", async () => {
+  const now = new Date();
+  const fake = {
+    from: () => ({
+      select: (cols: string) => {
+        assertEquals(cols, "plan, created_at, store");
+        return {
+          eq: () => ({
+            gte: () => ({
+              limit: () =>
+                Promise.resolve({
+                  data: [
+                    { plan: "monthly", created_at: now.toISOString(), store: null },
+                    { plan: "monthly", created_at: now.toISOString(), store: "play" },
+                  ],
+                  error: null,
+                }),
+            }),
+          }),
+        };
+      },
+    }),
+  };
+  const text = await cmdSubs(fake);
+  assertStringIncludes(text, "monthly: 1");
+  assertStringIncludes(text, "google_play: 1");
+});
 
 const inDays = (d: number) => new Date(Date.now() + d * 24 * 60 * 60 * 1000).toISOString();
 
@@ -1246,6 +1334,8 @@ function makeEmptyDigestFake() {
       gte: (_col: string, _val?: unknown) => builder,
       lt: (_col: string, _val?: unknown) => builder,
       not: (_col: string, _op?: string, _val?: unknown) => builder,
+      // OI-519: the manual-cancellation count excludes Play rows with `.or(...)`.
+      or: (_filter: string) => builder,
       order: (_col: string, _opts?: Record<string, unknown>) => builder,
       // Terminal methods that return Promises
       //

@@ -26,11 +26,15 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show SignOutScope, FunctionException;
 
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
+import 'package:icanbefitter/core/copy/purchase_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
+import 'package:icanbefitter/shared/widgets/paywall_play_body.dart'
+    show playManageOpenerProvider;
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 class DeleteAccountScreen extends ConsumerStatefulWidget {
@@ -291,6 +295,46 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
 
           const SizedBox(height: 16),
 
+          // OI-519: Google bills a Play subscription until it is cancelled in
+          // Google Play. The server tries to cancel it on delete, best effort;
+          // the user is told to cancel it first, with the link.
+          if (PurchaseMode.current.showsPlayBilling &&
+              ref.watch(subscriptionInfoProvider).isPlayStore) ...[
+            Container(
+              key: const ValueKey('delete-account-play-cancel'),
+              padding: const EdgeInsets.all(AppSpacing.cardPadding),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                border: Border.all(color: AppColors.accent.withValues(alpha: 0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    PurchaseCopy.playDeleteCancelFirst,
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textPrimary,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => ref.read(playManageOpenerProvider)(),
+                    child: Text(
+                      PurchaseCopy.playManageButton,
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.accent,
+                        letterSpacing: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // ── What stays ────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(AppSpacing.cardPadding),
@@ -312,7 +356,10 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
                 ),
                 const SizedBox(height: 12),
                 ..._bullets([
-                  'Your Razorpay payment receipts (Razorpay retains these per Indian tax law).',
+                  // OI-519: a Play build never names the web payment provider.
+                  PurchaseMode.current.showsPlayBilling
+                      ? PurchaseCopy.playReceiptsKept
+                      : 'Your Razorpay payment receipts (Razorpay retains these per Indian tax law).',
                   'Anonymous community contributions you\'ve made (custom exercises/foods you submitted to the public library — your name is removed but the entry remains).',
                   'Backups will purge within 30 days.',
                 ], color: AppColors.textDim),

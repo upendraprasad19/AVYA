@@ -177,6 +177,9 @@ The phase variant sheet (`showPaywallSheetPhaseVariant`) gets the same treatment
 | Coach canned replies (client twins) | `ai_coach/copy/coach_replies.dart:24-35,112` | `[Upgrade to PRO →]` | **not changed** (round 2 #1): `test/contracts/coach_replies_test.dart` pins every server key to a byte-identical client twin, and only `chatRateLimitedFromError` is called from `lib/` (`ai_coach_provider.dart:1245`); the text really reaches users from `ai-media-proxy`. Handled with the server surfaces in 5.4 |
 | Coach canned replies (server) | `supabase/functions/_shared/coach_replies.ts:19,62,65` | `[Upgrade to PRO →]` | **ships to every client**: the server copy cannot know the build; see 5.4 |
 | Payment copy | `core/copy/payment_copy.dart:20` | `You can subscribe once they end.` | unreachable in mode `none` (purchase never starts); leave |
+| Play build (OI-519, +51) | `shared/widgets/paywall_play_body.dart`, `core/services/play_billing_service.dart`, the `play*` strings of `core/copy/purchase_copy.dart` | plan cards, `UPGRADE TO PRO`, Play terms, telemetry names | drawn ONLY when `PurchaseMode.showsPlayBilling` and the SDK key is present (`PaywallSheet._playBody`); a `none` build never builds them (`paywall_mode_none_behavioral_test.dart`, `paywall_play_body_behavioral_test.dart`) |
+| Play display keys (OI-519) | `core/services/subscription_service.dart`, `core/services/user_config_migrator.dart` | the Hive key name `pro_auto_renews` | a key name, never drawn |
+| Profile renewal line (OI-519) | `profile/screens/profile/subscription_section.dart` | `RENEWS` only when the row renews by itself, else `EXPIRES` | a PRO user's own plan line; the `trial` literal is gone (count 5 -> 4) |
 
 ### 5.3 Where each suppression lives (single writer rule)
 

@@ -72,18 +72,21 @@ void main() {
       await _pump(tester, ProPillButton(isPro: false, onTap: () {}));
       expect(find.text('GO PRO'), findsOneWidget);
     });
-    for (final mode in [PurchaseMode.none, PurchaseMode.playBilling]) {
-      testWidgets('${mode.wireName}: a free user sees PRO, still tappable',
-          (tester) async {
-        PurchaseMode.debugOverrideForTests = mode;
-        var taps = 0;
-        await _pump(tester, ProPillButton(isPro: false, onTap: () => taps++));
-        expect(find.text('GO PRO'), findsNothing);
-        expect(find.text('PRO'), findsOneWidget);
-        await tester.tap(find.text('PRO'));
-        expect(taps, 1, reason: 'the pill still opens the neutral sheet');
-      });
-    }
+    testWidgets('none: a free user sees PRO, still tappable', (tester) async {
+      PurchaseMode.debugOverrideForTests = PurchaseMode.none;
+      var taps = 0;
+      await _pump(tester, ProPillButton(isPro: false, onTap: () => taps++));
+      expect(find.text('GO PRO'), findsNothing);
+      expect(find.text('PRO'), findsOneWidget);
+      await tester.tap(find.text('PRO'));
+      expect(taps, 1, reason: 'the pill still opens the neutral sheet');
+    });
+    // OI-519: the Play build sells, so the call to action comes back.
+    testWidgets('play_billing: a free user sees GO PRO', (tester) async {
+      PurchaseMode.debugOverrideForTests = PurchaseMode.playBilling;
+      await _pump(tester, ProPillButton(isPro: false, onTap: () {}));
+      expect(find.text('GO PRO'), findsOneWidget);
+    });
   });
 
   group('BEHAVIOURAL: the PRO pill is labelled for a screen reader', () {
@@ -240,7 +243,9 @@ void main() {
         RegExp(r"showsUpgradeAffordance\(\)\s*\? 'UPGRADE TO PRO  →'\s*: PurchaseCopy\.seeWhatProIncludesCta"),
       ],
       'lib/features/profile/screens/profile/profile_content.dart': [
-        RegExp(r"if \(showsUpgradeAffordance\(\)\)\s*ProfileRow\([\s\S]{0,160}?title: 'icanbefitter\.com'"),
+        // OI-519: the website row keys on showsWebLinks (a Play build sells
+        // but never links out).
+        RegExp(r"if \(PurchaseMode\.current\.showsWebLinks\)\s*ProfileRow\([\s\S]{0,160}?title: 'icanbefitter\.com'"),
       ],
       'lib/shared/widgets/pro_locked_overlay.dart': [
         RegExp(r"ctaText \?\?\s*\(showsUpgradeAffordance\(\)\s*\? 'Upgrade to PRO'\s*: PurchaseCopy\.seeWhatProIncludes\)"),

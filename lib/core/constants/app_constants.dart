@@ -188,10 +188,22 @@ class AppConstants {
   /// TODO: Update to Play Store link before launch.
   static const String appUrl = 'https://www.icanbefitter.com';
 
+  /// The app's Google Play listing. A store build's share-card QR points here,
+  /// never at the website (OI-519; Play steering rules, plan section 5).
+  static const String playListingUrl =
+      'https://play.google.com/store/apps/details?id=com.icanbefitter.icanbefitter';
+
   /// Packages required for shareable cards:
   /// - share_plus: native OS share sheet
   /// - qr_flutter: client-side QR code generation (zero server cost)
 
   /// Razorpay key (public, safe for client) — injected at build time.
   static const String razorpayKeyId = String.fromEnvironment('RAZORPAY_KEY_ID');
+
+  /// RevenueCat public Google SDK key (`goog_...`, public by design; OI-519).
+  /// Read only by `PlayBillingService` in a `play_billing` build; `/build-apk`
+  /// refuses `--purchase-mode play_billing` without it. `const`: a release
+  /// (AOT) build has no run-time environment (B-pass 2026-11-20).
+  static const String revenueCatGoogleKey =
+      String.fromEnvironment('REVENUECAT_GOOGLE_API_KEY');
 }

@@ -205,7 +205,8 @@ List<String> verifySubscriptionPredicateViolations(String ts) {
   final n = src.replaceAll(RegExp(r'\s+'), ' ');
   final v = <String>[];
   // the whole query chain, in order: the user filter, the status filter, the latest end date first
-  if (!n.contains('.from("subscriptions") .select("plan, status, end_date") .eq("user_id", userId) '
+  // OI-519 U4: the select also reads the three Play display columns (additive response fields only).
+  if (!n.contains('.from("subscriptions") .select("plan, status, end_date, store, auto_renew, store_expires_at") .eq("user_id", userId) '
       '.eq("status", "active") .order("end_date", { ascending: false }) .limit(1) .maybeSingle();')) {
     v.add('the subscriptions query chain (user filter, status literal, end_date selected and ordered)');
   }
@@ -1125,7 +1126,7 @@ CREATE POLICY "other" ON storage.objects FOR INSERT WITH CHECK (zzz);
 
     test('X1: a changed status literal, a dropped end_date select or a changed comparison in verify-subscription is flagged', () {
       expect(verifySubscriptionPredicateViolations(verifySubscriptionTs.replaceFirst('.eq("status", "active")', '.eq("status", "trialing")')), isNotEmpty);
-      expect(verifySubscriptionPredicateViolations(verifySubscriptionTs.replaceFirst('.select("plan, status, end_date")', '.select("plan, status")')), isNotEmpty);
+      expect(verifySubscriptionPredicateViolations(verifySubscriptionTs.replaceFirst('.select("plan, status, end_date, store, auto_renew, store_expires_at")', '.select("plan, status, store, auto_renew, store_expires_at")')), isNotEmpty);
       expect(verifySubscriptionPredicateViolations(verifySubscriptionTs.replaceFirst('expiresAt.getTime() > Date.now()', 'expiresAt.getTime() >= Date.now()')), isNotEmpty);
       expect(verifySubscriptionPredicateViolations(verifySubscriptionTs.replaceFirst('expiresAt.getTime() > Date.now()', '// expiresAt.getTime() > Date.now()\n    true')), isNotEmpty);
     });

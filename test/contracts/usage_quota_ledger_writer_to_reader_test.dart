@@ -275,6 +275,9 @@ void main() {
         // RPC itself with a fixed 1-hour UTC bucket (limits 30 and 7).
         'supabase/functions/create-razorpay-order/index.ts',
         'supabase/functions/validate-promo/index.ts',
+        // OI-519 (+51): a Play store check (revenuecat-sync) is an HTTP attempt with no row INSERTed when the limit is
+        // decided (the create-razorpay-order shape): 1-hour UTC bucket, limit 20, built in its logic.ts.
+        'supabase/functions/revenuecat-sync/index.ts',
       };
       final offenders = <String>[];
       for (final e in _appSources()) {

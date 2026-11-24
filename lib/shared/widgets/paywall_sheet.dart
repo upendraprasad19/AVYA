@@ -11,8 +11,10 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/play_billing_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/shared/widgets/paywall_play_body.dart';
 import 'package:icanbefitter/shared/widgets/paywall_unavailable_body.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart' show subscriptionInfoProvider;
@@ -122,6 +124,15 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
   /// reach the server). Null = none. Purchase mode keeps its snackbar.
   String? _statusMessage;
 
+  /// OI-519: this sheet draws the Google Play body (a Play build WITH its SDK
+  /// key). Decided once in [initState].
+  late final bool _playBody;
+
+  /// Something can be bought from THIS sheet: the Razorpay body, or the Play
+  /// body. A Play build without its key sells nothing: every line of the
+  /// neutral body applies to it exactly as to `none`.
+  bool get _sells => PurchaseMode.current.showsRazorpay || _playBody;
+
   static const List<String> _proBenefits = [
     'Dedicated AI coaching with higher daily limits',
     'AI food analysis & meal scanning (camera)',
@@ -177,7 +188,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
         return 'Life happens. Move a workout to another day this week without losing your plan.';
       default:
         // A binary that sells nothing never says "upgrade" (ADR-0022).
-        return PurchaseMode.current.showsPurchaseUi
+        return _sells
             ? 'Upgrade to PRO and unlock your full potential.'
             : PurchaseCopy.defaultSubtitle;
     }
@@ -196,9 +207,19 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     // ADR-0022: a sheet that sells nothing is a dead end for the user; count
     // it separately so the rate is measurable. `paywall_shown` above keeps its
     // exact message in every mode (the funnel series do not break).
-    if (!PurchaseMode.current.showsPurchaseUi) {
+    final mode = PurchaseMode.current;
+    _playBody = mode.showsPlayBilling && ref.read(playStoreProvider).hasKey;
+    if (!_sells) {
       unawaited(ErrorTelemetry.logEvent(
         'paywall_unavailable_shown',
+        message: 'feature=${widget.feature}',
+      ));
+    }
+    // OI-519: which body a Play build drew. Without the SDK key it falls back
+    // to the neutral body, and that misbuild is counted on its own.
+    if (mode.showsPlayBilling) {
+      unawaited(ErrorTelemetry.logEvent(
+        _playBody ? 'paywall_play_shown' : 'play_billing_key_missing',
         message: 'feature=${widget.feature}',
       ));
     }
@@ -388,7 +409,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
       unawaited(ErrorTelemetry.logEvent('paywall_restore_purchase_failed',
           message: clipped));
       if (!mounted) return;
-      if (!PurchaseMode.current.showsPurchaseUi) {
+      if (!_sells) {
         // The neutral card's only action failed: say so inside the card (a
         // snackbar would sit behind this modal sheet).
         setState(() {
@@ -416,7 +437,21 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     // ADR-0022 / plan section 4: in a binary with no purchase UI the same sheet
     // renders the neutral body (no price, no promo, no purchase button). The
     // purchase build below is untouched.
-    if (!PurchaseMode.current.showsPurchaseUi) {
+    //
+    // OI-519: a Play build draws the Play body FIRST (every price from Google
+    // Play, no promo box, no website); without its SDK key it sells nothing
+    // and draws the neutral body. The Razorpay body below is never reached.
+    if (_playBody) {
+      return PaywallPlayBody(
+        title: _featureTitle,
+        subtitle: _featureSubtitle,
+        benefits: _proBenefits,
+        feature: widget.feature,
+        onUpgradeTapped: () => _upgradeTapped = true,
+        onClose: () => Navigator.of(context).pop(),
+      );
+    }
+    if (!_sells) {
       return PaywallUnavailableBody(
         title: _featureTitle,
         subtitle: _featureSubtitle,

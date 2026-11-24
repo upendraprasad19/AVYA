@@ -22,19 +22,36 @@ void main() {
     expect(m!.group(1), kReferralTrialPlan);
   });
 
-  test('the live private.grant_referral_days inserts kReferralTrialPlan', () {
-    // The name is interpolated into the helper's regex; the escaped dot keeps
-    // it literal. Last CREATE OR REPLACE wins (CLAUDE.md 4.9).
-    const fn = r'private\.grant_referral_days';
-    final file = latestMigrationDefining(fn);
-    expect(file, isNotNull, reason: 'no migration defines $fn');
-    final block = functionBlock(file!.readAsStringSync(), fn);
-    expect(block, isNotNull);
-    final insert = RegExp(
-      r"INSERT\s+INTO\s+(?:public\.)?subscriptions[\s\S]*?VALUES\s*\(\s*p_user_id\s*,\s*'([a-z_]+)'",
-      caseSensitive: false,
-    ).firstMatch(block!);
-    expect(insert, isNotNull, reason: 'insert not found in ${file.path}');
-    expect(insert!.group(1), kReferralTrialPlan);
+  test('the live referral-days helpers insert kReferralTrialPlan', () {
+    // Since migration 182 (OI-519) private.grant_referral_days is a wrapper (a
+    // Play subscriber's days are queued as a Google defer) and the INSERT
+    // lives in private.grant_referral_days_direct, which the wrapper calls.
+    // Every subscriptions INSERT across the live definitions of both must
+    // carry kReferralTrialPlan, and there must be at least one. The names are
+    // interpolated into the helper's regex; the escaped dot keeps them
+    // literal, and its word boundary keeps the wrapper from matching
+    // _direct. Last CREATE OR REPLACE wins (CLAUDE.md 4.9).
+    final plans = <String>[];
+    for (final fn in const [
+      r'private\.grant_referral_days',
+      r'private\.grant_referral_days_direct',
+    ]) {
+      final file = latestMigrationDefining(fn);
+      expect(file, isNotNull, reason: 'no migration defines $fn');
+      final block = functionBlock(file!.readAsStringSync(), fn);
+      expect(block, isNotNull, reason: fn);
+      for (final m in RegExp(
+        r"INSERT\s+INTO\s+(?:public\.)?subscriptions[\s\S]*?VALUES\s*\(\s*p_user_id\s*,\s*'([a-z_]+)'",
+        caseSensitive: false,
+      ).allMatches(block!)) {
+        plans.add(m.group(1)!);
+      }
+      if (fn.endsWith('grant_referral_days')) {
+        expect(block, contains('PERFORM private.grant_referral_days_direct(p_user_id, p_days)'),
+            reason: 'the wrapper must reach the inserting helper');
+      }
+    }
+    expect(plans, isNotEmpty, reason: 'no referral-days INSERT found');
+    expect(plans.toSet(), {kReferralTrialPlan});
   });
 }

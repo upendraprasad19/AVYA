@@ -1,0 +1,41 @@
+{
+  "_source": "Doc-derived (RevenueCat API v1 'Get or Create Customer' sample + webhook doc 'Matching product_id to the REST API', fetched 2026-11-23), adapted to the avya_pro subscription. Replaced by a real license-tester response at live step L2/L3 (plan section 18).",
+  "request_date": "2026-11-23T10:00:00Z",
+  "request_date_ms": 1795428000000,
+  "subscriber": {
+    "entitlements": {
+      "avya_pro": {
+        "expires_date": "2026-12-23T09:00:00Z",
+        "grace_period_expires_date": null,
+        "product_identifier": "avya_pro",
+        "product_plan_identifier": "monthly",
+        "purchase_date": "2026-11-23T09:00:00Z"
+      }
+    },
+    "first_seen": "2026-11-23T08:55:00Z",
+    "management_url": "https://play.google.com/store/account/subscriptions",
+    "non_subscriptions": {},
+    "original_app_user_id": "00000000-0000-4000-8000-000000000001",
+    "original_application_version": null,
+    "original_purchase_date": "2026-11-23T09:00:00Z",
+    "other_purchases": {},
+    "subscriptions": {
+      "avya_pro": {
+        "auto_resume_date": null,
+        "billing_issues_detected_at": null,
+        "expires_date": "2026-12-23T09:00:00Z",
+        "grace_period_expires_date": null,
+        "is_sandbox": true,
+        "original_purchase_date": "2026-11-23T09:00:00Z",
+        "ownership_type": "PURCHASED",
+        "period_type": "normal",
+        "product_plan_identifier": "monthly",
+        "purchase_date": "2026-11-23T09:00:00Z",
+        "refunded_at": null,
+        "store": "play_store",
+        "store_transaction_id": "GPA.0000-0000-0000-00000",
+        "unsubscribe_detected_at": null
+      }
+    }
+  }
+}

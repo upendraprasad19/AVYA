@@ -96,7 +96,9 @@ void main() {
       expect(end, greaterThan(start));
       final read = efSquashed.substring(start, end);
       expect(read, contains('.in("plan", PAID_PLANS)'));
-      expect(read, contains('.not("razorpay_payment_id", "is", null)'));
+      // OI-519 U4: the SQL's "paid" since migration 182 (a payment id OR a PRODUCTION Play row).
+      expect(read, contains('.or(PAID_ROW_FILTER)'));
+      expect(efSquashed, contains('export const PAID_ROW_FILTER = "razorpay_payment_id.not.is.null,and(store.eq.play,store_environment.eq.PRODUCTION)";'));
       expect(read.contains('"status"'), isFalse, reason: 'a status filter here would let a cancelled paid friend through the pre-check');
     });
 
