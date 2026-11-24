@@ -21,7 +21,7 @@ class GoalTargetsPreview extends StatelessWidget {
   final GoalChange change;
   final String goal;
 
-  /// The user's unit preference (`units_metric`); weights read in lbs when false.
+  /// The user's unit preference (`UserRepository.getUnitsMetric`); weights read in lbs when false.
   final bool metric;
 
   @override

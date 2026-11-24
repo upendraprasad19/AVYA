@@ -115,6 +115,16 @@ extension SyncServiceHealth on SyncService {
     await index.commit(liveKeys: liveKeys);
   }
 
+  /// The ONE `readiness_daily` restore read: `_restoreReadiness`'s own read and
+  /// the single-call restore's prefetch (OI-348 B10, a0d5f7) both call it.
+  Future<List<Map<String, dynamic>>> _fetchReadinessRows(
+          String userId, String since) =>
+      _fetchAllRows(
+        'readiness_daily', userId,
+        dateColumn: 'created_at', since: since, orderBy: 'created_at',
+        tieBreak: const ['date'],
+      );
+
   /// Restores `readiness_daily` → healthBox `readiness_<date>` keys. Additive /
   /// local-wins (never overwrites a locally-logged row). Paginated via
   /// `_fetchAllRows` (variable `.from` → schema-gate-exempt). Runs on every
@@ -123,11 +133,7 @@ extension SyncServiceHealth on SyncService {
       {Object? preFetched = _kNoInject}) async {
     try {
       final rows = identical(preFetched, _kNoInject)
-          ? await _fetchAllRows(
-              'readiness_daily', userId,
-              dateColumn: 'created_at', since: since, orderBy: 'created_at',
-              tieBreak: const ['date'],
-            )
+          ? await _fetchReadinessRows(userId, since)
           : (preFetched as List? ?? const []);
       if (rows.isEmpty) return;
       final healthBox = _hive.healthBox;

@@ -192,15 +192,20 @@ class RankService {
         // Home screen reads + clears this on next mount/resume and pushes
         // PromotionCelebrationScreen (existing widget, pre-fix had zero
         // call sites). NOT synced to cloud — client-side celebration state.
-        try {
-          await UserRepository.instance
-              .setPendingPromotionRankCode(qualified.code);
-          unawaited(ErrorTelemetry.logEvent('rank_promotion_pending_stamped',
-              message: 'rank_code=${qualified.code} prev_code=$currentCode'));
-        } catch (e, st) {
-          debugPrint('[RankService] pending promotion stamp failed: $e\n$st');
-          unawaited(ErrorTelemetry.recordNonFatal(e, st,
-              reason: 'rank_service_pending_promotion_stamp'));
+        // Diagnose 8b1f3d: the floor rung (a new account's null → SD2) is
+        // never celebrated; the rank fields above still move.
+        if (shouldStampPromotionCelebration(qualified.code)) {
+          try {
+            await UserRepository.instance
+                .setPendingPromotionRankCode(qualified.code);
+            unawaited(ErrorTelemetry.logEvent(
+                'rank_promotion_pending_stamped',
+                message: 'rank_code=${qualified.code} prev_code=$currentCode'));
+          } catch (e, st) {
+            debugPrint('[RankService] pending promotion stamp failed: $e\n$st');
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'rank_service_pending_promotion_stamp'));
+          }
         }
       }
     } catch (e, st) {

@@ -93,12 +93,19 @@ void main() {
       expect(args.contains('saved: result.success'), isTrue);
       expect(args.contains('tokenBefore: tokenBefore'), isTrue);
       expect(args.contains('tokenNow: tokenNow'), isTrue);
-      final write = RegExp(r"MigratedKey\.write\(\s*'body_measurement_sheet_unit'")
+      // OI-348 B9 (e9a6c1): the unit is the synced profile field
+      // `measurement_unit`, written under the same gate and, inside it, only
+      // with an owner (`if (owner != null)`), so the write sits two blocks in.
+      expect(body.contains("MigratedKey.write('body_measurement_sheet_unit'"),
+          isFalse, reason: 'the legacy per-user key is no longer written');
+      final write = RegExp(r'ProfileWriteService\.instance\.patchProfileWith\(')
           .firstMatch(body);
       expect(write, isNotNull);
       expect(write!.start, greaterThan(end));
-      expect(_depthAt(body, write.start), 2,
-          reason: 'inside the if-block, not at the top level of save');
+      expect(_depthAt(body, write.start), 3,
+          reason: 'inside the gate and the owner check, not at the top level');
+      expect(body.indexOf('kMeasurementUnitKey', write.start),
+          greaterThan(write.start));
     });
 
     test('the provider is invalidated AFTER the awaited write, through the '

@@ -157,6 +157,13 @@ class ProfileWriteService {
   @visibleForTesting
   static void Function()? debugOnFireSync;
 
+  /// Test seam (OI-348 B9, e9a6c1): holds the profile write lock until
+  /// [release] completes, so a test can observe the UI while a queued write
+  /// has NOT landed yet. Production never calls it.
+  @visibleForTesting
+  Future<void> debugHoldLockUntil(Future<void> release) =>
+      _withLock(() => release);
+
   /// Fire SyncService.syncProfileNow if we have a logged-in user.
   /// Fire-and-forget per docs/architecture/sync.md — Hive write already succeeded
   /// so a cloud push failure must not flip the local mutation's

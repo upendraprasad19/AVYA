@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'goal_targets_preview.dart';
 import 'phase_note.dart';
 import '../../../profile/services/goal_change_patch.dart';
+import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// Diff preview for a `switch_goal` intent (Phase D.5).
 ///
@@ -72,8 +73,9 @@ class _SwitchGoalDiffState extends State<SwitchGoalDiff> {
       // return above (so the legacy-refusal widget needs no Hive) and guarded, so
       // a failure here never breaks the plan preview.
       try {
-        _metric =
-            HiveService.instance.configBox.get('units_metric') != false;
+        // OI-348 B9 (e9a6c1): the per-user, synced unit (UserRepository is
+        // the one reader; the raw device key was shared across accounts).
+        _metric = UserRepository.instance.getUnitsMetric();
         if (rawProfile is Map) {
           _change = goalChange(
             rawProfile,

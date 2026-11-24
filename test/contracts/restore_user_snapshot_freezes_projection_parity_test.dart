@@ -2,7 +2,7 @@
 //
 // Hermes C11 (2026-07-30, cross-device-progress-lock / OI-45 / e6b9c4).
 //
-// restore-user-snapshot/index.ts's single-call "freezes" bundle projection
+// restore-user-snapshot's single-call (restore_reads.ts READS) "freezes" bundle projection
 // and SyncService._restoreFreezes's own direct-network-read `.select(...)`
 // column list are two independent, hand-written strings that MUST name the
 // same columns (the "H-1 shape contract" both sites already comment about) —
@@ -37,18 +37,19 @@ import 'dart:io';
 import 'package:test/test.dart';
 
 /// Extract the comma-separated column list from the "freezes" `.select(...)`
-/// call in `supabase/functions/restore-user-snapshot/index.ts`.
+/// read in `supabase/functions/restore-user-snapshot/restore_reads.ts` (OI-348 B10, a0d5f7:
+/// the reads moved out of index.ts into the READS tuples; anchored on the tuple head).
 Set<String> _parseEfFreezesProjection() {
-  final file = File('supabase/functions/restore-user-snapshot/index.ts');
+  final file = File('supabase/functions/restore-user-snapshot/restore_reads.ts');
   expect(file.existsSync(), isTrue,
-      reason: 'restore-user-snapshot/index.ts must exist at the canonical path');
+      reason: 'restore-user-snapshot/restore_reads.ts must exist at the canonical path');
   final src = file.readAsStringSync();
 
-  final anchor = src.indexOf('tables["freezes"]');
+  final anchor = src.indexOf('["freezes",');
   expect(anchor, greaterThan(0),
-      reason: 'tables["freezes"] assignment not found — did the EF get restructured?');
+      reason: 'the ["freezes", ...] READS tuple not found — did the EF get restructured?');
   final selectStart = src.indexOf('.select(', anchor);
-  expect(selectStart, greaterThan(anchor), reason: '.select( not found after tables["freezes"]');
+  expect(selectStart, greaterThan(anchor), reason: '.select( not found after the freezes tuple head');
   final selectEnd = src.indexOf(')', selectStart);
   expect(selectEnd, greaterThan(selectStart), reason: 'closing ) of .select( not found');
 

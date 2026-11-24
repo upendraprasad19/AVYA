@@ -1,0 +1,119 @@
+# Closure ledger - oi348-landing2 (OI-348 device walk, Landing 2 PR A: B8 rank floor, B9 unit sync, B10 restore time).
+# Gate 40. One terminal_state per unit; no `deferred:` key.
+# Plan: docs/plans/oi348-walk-fixes-landing2.md (v4 CONVERGED). `oi348-landing2@branch` is the in-branch commit form (the commit that carries this file).
+# B2 (referral REGENERATE) is PR B / PR C of the same plan, on its own branch and ledger.
+
+batch: oi348-landing2
+plan_review_record: docs/plan-reviews/oi348-landing2.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-23-rank-floor-never-announced-8b1f3d.md
+  - docs/diagnoses/2026-11-23-unit-preference-not-synced-e9a6c1.md
+  - docs/diagnoses/2026-11-24-restore-snapshot-serial-reads-a0d5f7.md
+total_findings: 18
+closed_count: 18
+
+findings:
+  - id: B8-CLIENT-STAMP
+    title: "The floor rank (SD2) still moves current_rank_code but is never stamped for the celebration; Home clears an old floor stamp without showing it"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "test/contracts/rank_floor_never_announced_test.dart green; mutants M1, M2, M3, M7, M8 red (diagnose 8b1f3d)"
+
+  - id: B8-CRON-AND-EF
+    title: "evaluate-rank-promotions writes no floor ceremony (fallback LADDER[0]); proactive-coach-promotion answers 200 skipped:floor before any read, write or push"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "Deno index_test.ts of both functions green; mutants M4, M4b (after the test tightening), M4c, M5, M5b red"
+
+  - id: B8-TRIGGER-MIGRATION
+    title: "Migration 184 recreates the promotion trigger with WHEN (NEW.rank_code <> 'SD2')"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "rank_floor_trigger_migration_test.dart green (M6, M6b, M6c red); live BEGIN...ROLLBACK run 2026-11-23: floor_queued 1 -> 0 with the DDL, sd1_queued stays 1"
+
+  - id: B8-MIGRATION-184
+    title: "Apply migration 184 (trigger WHEN floor)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "Applied 2026-11-24 after the founder go ('Apply both'), cloud version 20261124012738; pg_get_triggerdef shows WHEN ((new.rank_code <> 'SD2'::text)); ledger entry with the file hash (Gate 39 PASS)."
+
+  - id: B8-DEPLOYS
+    title: "Deploy evaluate-rank-promotions + proactive-coach-promotion"
+    terminal_state: blocked_on_user
+    reason: "Edge Function deploys each need the founder's per-action go (CLAUDE.md 4.3); asked at the PR A landing, recorded in diagnose 8b1f3d when done. Until then the trigger alone stops the floor push; the cron still writes a floor ceremony row."
+
+  - id: B9-PROFILE-FIELDS
+    title: "Units switch and sheet unit become per-user profile fields (units_system, measurement_unit), written through patchProfileWith(stillOwner:), never a stub"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "test/contracts/unit_preference_sync_writer_to_reader_test.dart 27 green; mutants U4-U7 red (diagnose e9a6c1)"
+
+  - id: B9-PUSH-RESTORE
+    title: "The profile push carries the two keys (valid values only); the restore merge brings them back"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "test/sync/unit_preference_push_restore_test.dart 11 green through the real push and the real _restoreUserProfile; mutants U1-U3 red"
+
+  - id: B9-ADOPTER
+    title: "UnitsPrefAdopter moves the legacy device value into the profile once per device, after a settled restore, from both heal paths"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "adopter cases in the contract test; mutants U8-U10, U13, U14 red"
+
+  - id: B9-PROFILE-ROW
+    title: "The Profile Units switch moves at once, is never re-read in build, and is re-seeded by the restore tick"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "test/profile/profile_units_row_test.dart (real ProfileScreen) green; mutants U11, U12 red"
+
+  - id: B9-UNLISTED-READER
+    title: "switch_goal_diff.dart read the raw device key (a reader the plan reviews did not list)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "now getUnitsMetric(); recorded in diagnose e9a6c1 readers; forbidden-pattern scan (no raw configBox.get('units_metric') outside the repository and the adopter)"
+
+  - id: B9-MIGRATION-185
+    title: "Apply migration 185 (two nullable CHECK-constrained user_profile columns) and regenerate backups/live_schema_columns.json"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "Applied 2026-11-24 after the founder go ('Apply both'), cloud version 20261124012742; information_schema shows both text / nullable, both CHECK constraints present; ledger entry with the file hash (Gate 39 PASS); live_schema_columns.json regenerated for user_profile (schema-col-refs 0 drift)."
+
+  - id: B10-EF-CONCURRENCY
+    title: "restore-user-snapshot reads run through runLimited (at most RESTORE_READ_CONCURRENCY, default 3), tables by input index, fail-closed unchanged"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "restore_reads_test.ts 18 green, golden parity with the e28cdab8 serial code at limit 1 and 3; mutants D2, D3, D5, D6, D7, D8, D9 red (diagnose a0d5f7)"
+
+  - id: B10-PAGE-BUDGET
+    title: "The page budget is charged per page inside readPaged's page factory"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "budget-under-concurrency test at limit 1/3/8 green; mutant D1 red (5 tests)"
+
+  - id: B10-SCOPE-PIN
+    title: "Every READS tuple stays scoped to the validated vUid (wiring pin repointed from index.ts to restore_reads.ts, never loosened)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "restore_user_snapshot_paged_reads_wiring_test.dart 9 green; mutant D4 red in Deno (2) and Dart (1)"
+
+  - id: B10-CLIENT-PREFETCH
+    title: "The readiness read starts before the Edge Function call; a failed prefetch is reported then the restore reads on its own (never empty)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2@branch"
+    verification: "test/sync/restore_readiness_prefetch_test.dart 13 green; mutants M1-M4 red"
+
+  - id: B10-DEPLOY
+    title: "Deploy restore-user-snapshot and read before/after execution_time_ms plus restore_timings"
+    terminal_state: blocked_on_user
+    reason: "Edge Function deploy needs the founder's per-action go (CLAUDE.md 4.3); the live timing comparison follows it and is recorded in diagnose a0d5f7."
+
+  - id: B10-REGISTRY-CONCEPT
+    title: "The plan named a new SoT concept restore_snapshot_concurrency; the change is recorded in the existing restore_user_snapshot_paged_reads concept instead"
+    terminal_state: verified_clean
+    evidence: "Same writer files (restore-user-snapshot/*), same reader (_attemptSingleCallRestore), same tests list; a second concept would duplicate both manifests. The concept now carries the READS writer row, the prefetch reader row, class constraint 6 and the two new tests."
+
+  - id: KILL-SWITCHES
+    title: "disable_unit_pref_sync and disable_restore_overlap keep the old paths; their removal is tracked"
+    terminal_state: upstream_blocked
+    blocker: "OI-525: removal waits for the founder's device re-check of OI-348 A3 and A8 after the applies and deploys"
+    reopen_when: "OI-348 A3 and A8 re-checks pass on a build carrying PR A"

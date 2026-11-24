@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/utils/unit_prefs_rule.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
 
@@ -1082,14 +1084,47 @@ class UserRepository {
   // ── Units ─────────────────────────────────────────────────────
 
   /// Whether the user prefers metric units (default: true).
+  ///
+  /// OI-348 B9 (e9a6c1): a per-user profile field (`units_system`, synced),
+  /// not the shared device key. Until `UnitsPrefAdopter` has moved the legacy
+  /// device-wide `configBox['units_metric']` into the profile (it then deletes
+  /// it), a profile without the field falls back to that key, so an imperial
+  /// device still shows imperial offline or after a failed restore.
+  ///
+  /// TOTAL: a throwing profile read (owner mismatch / no session: the userBox
+  /// is guarded) answers metric and logs `units_pref_read_failed`; several
+  /// callers read it in `initState` / `build` with no try of their own.
   bool getUnitsMetric() {
-    return (_hive.configBox.get('units_metric', defaultValue: true) as bool?) ??
-        true;
+    try {
+      final fromProfile = metricFromProfileValue(getProfile()?[kUnitsSystemKey]);
+      if (fromProfile != null) return fromProfile;
+    } catch (_) {
+      unawaited(ErrorTelemetry.logEvent('units_pref_read_failed',
+          message: 'stage=units_system'));
+      return true;
+    }
+    // Only a stored `false` is imperial (a non-bool value must not throw
+    // here: this line is outside the try).
+    return _hive.configBox.get('units_metric') != false;
   }
 
-  /// Saves the user's unit preference.
-  Future<void> setUnitsMetric(bool metric) async {
-    await _hive.configBox.put('units_metric', metric);
+  /// Saves the user's unit preference into their profile (`units_system`),
+  /// which the profile push syncs to every device of the account.
+  ///
+  /// No write without a signed-in owner (captured at call start: `null ==
+  /// null` would otherwise pass the owner check) or without a profile (a
+  /// patch on a missing profile would create a stub that reads as "onboarded"
+  /// and pushes a near-empty row). The owner is re-checked inside the profile
+  /// lock. Returns whether it wrote.
+  Future<bool> setUnitsMetric(bool metric) async {
+    final owner = HiveUserSession.currentOwnerFullId;
+    if (owner == null) return false;
+    return ProfileWriteService.instance.patchProfileWith(
+      (current) => current.isEmpty
+          ? null
+          : {kUnitsSystemKey: unitsSystemValue(metric: metric)},
+      stillOwner: () => HiveUserSession.currentOwnerFullId == owner,
+    );
   }
 
   // ── Computed Targets ─────────────────────────────────────────

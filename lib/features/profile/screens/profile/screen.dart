@@ -124,6 +124,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     ref.invalidate(firstReportViewedProvider);
   }
 
+  /// OI-348 B9 (e9a6c1): a restore can bring this user's `units_system`
+  /// from another device; [_isMetric] is seeded once, so it is re-read here
+  /// (the mixin checked `mounted` before calling).
+  @override
+  void invalidateOnBackgroundRestore(WidgetRef ref) {
+    invalidateOnRetry(ref);
+    final metric = UserRepository.instance.getUnitsMetric();
+    if (metric != _isMetric) setState(() => _isMetric = metric);
+  }
+
+  /// The Units row: the switch moves at once (no snap-back while the
+  /// profile write runs), then the profile provider is refreshed so the
+  /// stats re-render from the stored value.
+  Future<void> _onUnitsChanged(bool metric) async {
+    setState(() => _isMetric = metric);
+    try {
+      await UserRepository.instance.setUnitsMetric(metric);
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'profile_units_write_failed'));
+    }
+    if (!mounted) return;
+    ref.invalidate(userProfileProvider);
+  }
+
   @override
   void dispose() {
     _predictionPollTimer?.cancel();

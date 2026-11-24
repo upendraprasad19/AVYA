@@ -417,6 +417,16 @@ void main() {
   // ── B2: MeasurementWriteNotifier.save ─────────────────────────────────────
 
   group('B2 MeasurementWriteNotifier.save', () {
+    // OI-348 B9 (e9a6c1): the remembered unit is the profile field
+    // `measurement_unit`, written only when a profile exists (no stub).
+    setUp(() async {
+      await HiveService.instance.userBox
+          .put('profile', <String, dynamic>{'full_name': 'T'});
+    });
+
+    Object? storedUnit() =>
+        (HiveService.instance.userBox.get('profile') as Map?)?['measurement_unit'];
+
     ProviderContainer makeContainer({String token = kTestUserId}) {
       final c = ProviderContainer(overrides: [
         authUserIdTokenProvider.overrideWithValue(token),
@@ -438,8 +448,10 @@ void main() {
       expect(res.success, isTrue);
       expect(record()['waist'], 81.0);
       expect(notifier.lastUnitInches(), isTrue);
-      expect(HiveService.instance.userBox.get(_unitKey), 'in',
-          reason: 'stored per user, not in the shared config box');
+      expect(storedUnit(), 'in',
+          reason: 'stored in the synced profile, per user');
+      expect(HiveService.instance.userBox.containsKey(_unitKey), isFalse,
+          reason: 'the legacy per-user key is no longer written');
       expect(HiveService.instance.configBox.containsKey(_unitKey), isFalse);
 
       await notifier.save(
@@ -555,9 +567,25 @@ void main() {
       await Future.wait([first, saved]);
 
       expect(notifier.lastUnitInches(), isNull);
+      expect(storedUnit(), isNull);
       expect(HiveService.instance.userBox.containsKey(_unitKey), isFalse);
       expect(HiveService.instance.configBox.containsKey(_unitKey), isFalse);
       expect(record()['waist'], 81.0, reason: 'the value itself was saved');
+    });
+
+    test('no profile yet: the unit is NOT written and no profile stub is '
+        'created', () async {
+      await HiveService.instance.userBox.delete('profile');
+      final c = makeContainer();
+      final notifier = c.read(measurementWriteProvider.notifier);
+      final res = await notifier.save(
+        sites: {'waist': 81.0},
+        source: WriteSource.manual,
+        inchesUsed: true,
+      );
+      expect(res.success, isTrue);
+      expect(HiveService.instance.userBox.containsKey('profile'), isFalse);
+      expect(notifier.lastUnitInches(), isNull);
     });
 
     test('wiring control: the same sequence WITHOUT the token change '

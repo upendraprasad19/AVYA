@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/utils/unit_prefs_rule.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 /// What the measurements sheet and the prompt know about the stored history
@@ -124,8 +127,18 @@ class MeasurementWriteNotifier extends Notifier<void> {
       tokenBefore: tokenBefore,
       tokenNow: tokenNow,
     )) {
-      await MigratedKey.write(
-          'body_measurement_sheet_unit', inchesUsed ? 'in' : 'cm');
+      // OI-348 B9 (e9a6c1): the remembered unit is a synced profile field
+      // (`measurement_unit`), so the user's other devices open the sheet in
+      // the same unit. No write without an owner or a profile (no stub).
+      final owner = HiveUserSession.currentOwnerFullId;
+      if (owner != null) {
+        await ProfileWriteService.instance.patchProfileWith(
+          (current) => current.isEmpty
+              ? null
+              : {kMeasurementUnitKey: measurementUnitValue(inches: inchesUsed)},
+          stillOwner: () => HiveUserSession.currentOwnerFullId == owner,
+        );
+      }
     }
     ref.invalidate(bodyMeasurementsProvider);
     return result;
@@ -139,8 +152,14 @@ class MeasurementWriteNotifier extends Notifier<void> {
 
   /// The unit of the last successful save: `true` inches, `false` centimetres,
   /// `null` when none was ever remembered (the sheet then follows the device's
-  /// `units_metric` setting).
+  /// units setting, `UserRepository.getUnitsMetric`).
+  ///
+  /// OI-348 B9: the synced profile field `measurement_unit` first; absent ->
+  /// the legacy per-user key an older build wrote (no leak: it is per user).
   bool? lastUnitInches() {
+    final fromProfile = inchesFromProfileValue(
+        UserRepository.instance.getProfile()?[kMeasurementUnitKey]);
+    if (fromProfile != null) return fromProfile;
     final v = MigratedKey.read<dynamic>('body_measurement_sheet_unit');
     if (v == 'in') return true;
     if (v == 'cm') return false;
@@ -148,7 +167,7 @@ class MeasurementWriteNotifier extends Notifier<void> {
   }
 
   /// Whether the sheet and the Progress comparison card show inches: the unit of
-  /// the last successful save, else the device's `units_metric` setting (L2b
+  /// the last successful save, else the user's units setting (`getUnitsMetric`) (L2b
   /// Landing C: the ONE expression both surfaces use, so they cannot disagree).
   ///
   /// TOTAL: a throwing read (a corrupt stored value, an account-swap window)
