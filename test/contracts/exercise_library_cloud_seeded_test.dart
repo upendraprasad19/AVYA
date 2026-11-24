@@ -25,7 +25,7 @@
 // See:
 //   - docs/diagnoses/2026-05-27-exercise-library-cloud-empty-ada3fb.md
 //   - scripts/seed_exercise_library.js (regenerator)
-//   - supabase/functions/_shared/tools/exercise/getFormCues.ts:67,95 (the cloud reader)
+//   - supabase/functions/_shared/tools/exercise/getFormCues.ts (the cloud reader: exact, alias and partial stages)
 @Timeout(Duration(minutes: 3))
 library;
 
@@ -635,24 +635,26 @@ void main() {
       final tool =
           File('supabase/functions/_shared/tools/exercise/getFormCues.ts');
       expect(tool.existsSync(), isTrue);
-      // Comment-stripped, and BOTH reads (stage 1 exact match, stage 2 partial
-      // match): either one alone, or a commented-out one, must not pass.
+      // Comment-stripped, and ALL THREE reads (stage 1 exact match, stage 1b alias
+      // match, stage 2 partial match; OI-507): any one alone, or a commented-out
+      // one, must not pass.
       final reads = RegExp(r'\.from\("exercise_library"\)')
           .allMatches(stripComments(tool.readAsStringSync()))
           .length;
-      // PRESENCE pin only (OI-438/OI-469): both reads skip retired rows. The
+      // PRESENCE pin only (OI-438/OI-469/OI-507): every read skips retired rows. The
       // behavioural protection is getFormCues_test.ts (Deno), which applies the
       // filters to a fake table with the retired row listed first.
       final activeFilters = RegExp(r'\.eq\("is_active", true\)')
           .allMatches(stripComments(tool.readAsStringSync()))
           .length;
-      expect(activeFilters, greaterThanOrEqualTo(2),
-          reason: 'both getFormCues reads (exact + partial) must filter '
-              'is_active = true; found $activeFilters (OI-438/OI-469).');
-      expect(reads, greaterThanOrEqualTo(2),
+      expect(activeFilters, greaterThanOrEqualTo(3),
+          reason: 'all three getFormCues reads (exact + alias + partial) must '
+              'filter is_active = true; found $activeFilters '
+              '(OI-438/OI-469/OI-507).');
+      expect(reads, greaterThanOrEqualTo(3),
           reason:
               'getFormCues is the canonical cloud reader for exercise_library '
-              '(stage 1 exact + stage 2 partial; found $reads live reads). '
+              '(stage 1 exact + stage 1b alias + stage 2 partial; found $reads live reads). '
               'If you removed a read, also update docs/architecture/database.md '
               'and consider deleting migration 074.');
 
