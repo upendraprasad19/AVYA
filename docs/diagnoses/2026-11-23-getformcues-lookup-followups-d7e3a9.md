@@ -103,6 +103,14 @@ live_rest_check: |
   stage is what resolves it. Post-deploy smoke (the founder's go for `ai-proxy`): call `getFormCues` for "Quad Stretch" and
   require `matched_via: "alias"` and `exercise_name: "Standing Quad Stretch"`; a `partial` answer ("Banded Quad Stretch")
   means the fail-open alias stage is dead.
+deploy_record: |
+  2026-11-24, founder go ("go ahead with deploy"): `ai-proxy` v111 -> v112 from main b6940494 through
+  `.claude/emit_payload.js` + `.claude/deploy_via_api.js ... false --yes` (HTTP 201, 69 files, 484163 bytes; smoke HTTP 401 =
+  the function's own auth answered, so it booted). Pre-deploy sync check: main was 6 commits behind origin/main; fast-forwarded;
+  of the bundled files only unit A's five and `_shared/rank_engine.ts` differ from pre-unit-A main d0d53f89, and the
+  rank_engine change is one unused export (`isFloorRank`, used by evaluate-rank-promotions). Functional smoke (merged code,
+  live data, read-only anon key): Quad Stretch -> alias, Donkey Calf Raise -> alias, Reverse Lunge / % / _ / Negative Pull Up
+  -> found:false with the hint, squat -> partial. Rollback payload rebuilt from d0d53f89 (68 files).
 b_pass_triage: |
   B-pass 2026-11-24 (`docs/reviews/oi507-formcues-bpass.md`): 1 P2 and 5 P3. P2 closed by the live REST check above. P3 fixed
   here: secondary `.order("id")` on all three reads (T10), a test where the alias read THROWS (T11), `.max(200)` on
