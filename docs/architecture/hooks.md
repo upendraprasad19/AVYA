@@ -176,6 +176,13 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   `safe_pr_merge.sh` requires green (`requiredSuccessJobs`) — passes only when every shard did. `/build-apk`
   Gate 3.5 and `reconcile_ci.dart` read no job name: they read the run-level conclusion of the whole
   `Test & Analyze` workflow, which any red shard turns red.
+  **Two matrices since 2026-11-24 (plan `docs/plans/2026-11-24-ci-sweep-split.md`):** the partition CLI now
+  REQUIRES `--set core|sweep`. `unit-test` runs the core set (every test file not under `test/plan_generator/`,
+  round-robin as above, 4 legs); the new `sweep-test` matrix (`Unit Tests sweep shard n/N`, 5 legs) runs the
+  plan-generator sweeps, packed longest-first by the measured table `scripts/data/ci_sweep_durations.json`.
+  The sweeps were 66-69% of all per-file test time and left two of four mixed shards near 21 min. The gate
+  `Unit Tests` needs BOTH matrices `success`. A local run without the sweeps:
+  `flutter test $(dart scripts/ci_test_partition.dart 1 1 --set core) --exclude-tags golden`.
   This is NOT `flutter test --total-shards`, which was tried and reverted on 2026-08-10. The shell logic of both
   jobs is executed, and their wiring (`needs`, `if`, `continue-on-error`, the matrix keys, the step's last
   command) is pinned, by `test/contracts/ci_unit_test_matrix_shape_test.dart`.

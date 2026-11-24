@@ -47,6 +47,7 @@ const List<String> skippedOkJobs = <String>[
 /// workflow on purpose (a new job, or a renamed template, reddens that test).
 const List<String> matrixJobNameTemplates = <String>[
   r'Unit Tests shard ${{ matrix.shard }}/${{ strategy.job-total }}',
+  r'Unit Tests sweep shard ${{ matrix.shard }}/${{ strategy.job-total }}',
 ];
 
 /// Only check-runs created by GitHub Actions are judged. A real PR also carries

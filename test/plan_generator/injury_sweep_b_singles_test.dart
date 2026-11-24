@@ -16,7 +16,10 @@ library;
 //                                        3, 4, 5 and 6 days                              432              (block 5)
 // All four day counts the product offers (3, 4, 5, 6) are swept (B-pass F3 of the injury re-check: 4 and 6 were missing).
 //
-// THE LETTER IN EACH NAME IS A CI SORT KEY, NOT A BLOCK NUMBER. .github/workflows/test.yml deals WHOLE test files to four
+// SINCE 2026-11-24 THE NAMES NO LONGER SPREAD ANYTHING: the sweep files have their own CI matrix, packed by measured
+// duration (scripts/data/ci_sweep_durations.json, `ci_test_partition.dart --set sweep`), so the paragraph below is
+// history. The names stay because other files cite them.
+// (History) THE LETTER IN EACH NAME IS A CI SORT KEY, NOT A BLOCK NUMBER. .github/workflows/test.yml deals WHOLE test files to four
 // shards by their index in the sorted list (scripts/ci_test_partition.dart), so these five heavy files (solo seconds:
 // singles 514, pairs 426, pairs46 405, repeat 352, singles46 213) are spread by their NAMES. With a..e the heaviest shard
 // carries about 680 s solo; under the old names it carried about 1,250 s. As dealt on PR #178 (the layout after the

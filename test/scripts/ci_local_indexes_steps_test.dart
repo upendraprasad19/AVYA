@@ -43,7 +43,7 @@ import '../helpers/script_closure_fixture.dart';
 import '../helpers/spawn.dart';
 
 const _command = 'dart run scripts/build_local_indexes.dart';
-const _jobs = ['unit-test', 'audit-gates'];
+const _jobs = ['unit-test', 'sweep-test', 'audit-gates'];
 
 /// Full-line YAML comments removed (a `#` inside a `run:` body or a value survives).
 String _strip(String s) => s.split('\n').where((l) => !RegExp(r'^\s*#').hasMatch(l)).join('\n');
@@ -219,8 +219,9 @@ void main() {
       });
     }
 
-    test('the shard job builds BEFORE the shard run, after pub get', () {
-      final steps = _steps(_job(src, 'unit-test'));
+    for (final shardJob in ['unit-test', 'sweep-test'])
+    test('the $shardJob job builds BEFORE the shard run, after pub get', () {
+      final steps = _steps(_job(src, shardJob));
       final build = _buildStepIndexes(steps).single;
       final pubGet = _indexOfRun(steps, 'flutter pub get');
       final shardRun = _indexOfRun(steps, 'ci_test_partition.dart');

@@ -38,8 +38,18 @@ import 'package:flutter_test/flutter_test.dart';
 import '../helpers/spawn.dart';
 
 const _matrixJobId = 'unit-test';
+const _sweepJobId = 'sweep-test';
 const _gateJobId = 'unit-tests-gate';
 const _shardNameTemplate = r'Unit Tests shard ${{ matrix.shard }}/${{ strategy.job-total }}';
+const _sweepNameTemplate = r'Unit Tests sweep shard ${{ matrix.shard }}/${{ strategy.job-total }}';
+
+/// The two matrices (docs/plans/2026-11-24-ci-sweep-split.md): the CORE set and the
+/// SWEEP set. Every shape rule below holds for BOTH; a rule pinned for one only would
+/// leave the other free to run nothing under a green gate.
+const _matrices = <(String id, String set, String nameTemplate)>[
+  (_matrixJobId, 'core', _shardNameTemplate),
+  (_sweepJobId, 'sweep', _sweepNameTemplate),
+];
 
 /// Full-line YAML comments removed (a `#` inside a `run:` body or a value survives).
 String _strip(String s) => s.split('\n').where((l) => !RegExp(r'^\s*#').hasMatch(l)).join('\n');
@@ -137,20 +147,27 @@ List<String> _keyLines(String job, String key) => [
 void main() {
   late String src;
   late String matrixJob;
+  late String sweepJob;
   late String gateJob;
+  String jobOf(String id) => id == _matrixJobId ? matrixJob : sweepJob;
 
   setUpAll(() {
     final f = File('.github/workflows/test.yml');
     expect(f.existsSync(), isTrue);
     src = _strip(f.readAsStringSync());
     matrixJob = _job(src, _matrixJobId)!;
+    sweepJob = _job(src, _sweepJobId)!;
     gateJob = _job(src, _gateJobId)!;
   });
 
-  group('the shard matrix', () {
-    test('exists under the job id `unit-test`, named by the template', () {
-      expect(_job(src, _matrixJobId), isNotNull);
-      expect(matrixJob, contains('name: $_shardNameTemplate'),
+  for (final (jobId, set, nameTemplate) in _matrices) {
+  group('the $set shard matrix ($jobId)', () {
+    late String matrixJob;
+    setUpAll(() => matrixJob = jobOf(jobId));
+
+    test('exists under its job id, named by its template', () {
+      expect(_job(src, jobId), isNotNull);
+      expect(matrixJob, contains('name: $nameTemplate\n'),
           reason: 'safe_pr_merge_lib.matrixJobNameTemplates names this exact template');
     });
 
@@ -184,6 +201,10 @@ void main() {
           reason: 'a hard-coded "4" next to a matrix of 3 or 5 silently drops or duplicates files');
       expect(invocation, isNot(matches(RegExp(r'"\d+"\s*\)'))),
           reason: 'no numeric literal as the total argument');
+      expect(invocation, contains('--set $set)'),
+          reason: 'the $jobId matrix must ask for the $set set and nothing else: the wrong set runs '
+              'one half of the suite twice and the other half nowhere, under a green gate');
+      expect(RegExp(r'ci_test_partition\.dart').allMatches(matrixJob), hasLength(1));
     });
 
     test('runs ONLY its own files; the whole-directory invocation is gone', () {
@@ -205,11 +226,13 @@ void main() {
           reason: 'IST is pinned at workflow level (several date-boundary contracts read it)');
     });
   });
+  }
 
   group('the gate job is THE `Unit Tests` check', () {
-    test('named exactly `Unit Tests`, needs the matrix, and runs even when a shard failed', () {
+    test('named exactly `Unit Tests`, needs BOTH matrices, and runs even when a shard failed', () {
       expect(gateJob, contains('name: Unit Tests\n'));
-      expect(gateJob, matches(RegExp(r'needs:\s*unit-test\s*\n')));
+      expect(gateJob, matches(RegExp(r'needs:\s*\[unit-test, sweep-test\]\s*\n')),
+          reason: 'a gate that does not need the sweep matrix passes while a sweep leg is red');
       expect(gateJob, contains(r'if: ${{ !cancelled() }}'),
           reason: 'without it a failed shard SKIPS the gate, and a skipped gate is not a failure '
               'the merge wrapper can see as one');
@@ -220,10 +243,12 @@ void main() {
           reason: 'the behaviour test below injects SHARDS_RESULT itself, so the YAML that feeds it '
               'must be pinned here: `job.status` is always `success` while the gate step runs, so a '
               'gate fed by it can never fail');
+      expect(gateJob.split('\n').map((l) => l.trim()), contains(r'SWEEPS_RESULT: ${{ needs.sweep-test.result }}'));
       expect(RegExp(r'^\s*SHARDS_RESULT:', multiLine: true).allMatches(gateJob), hasLength(1),
           reason: 'a second assignment could shadow the pinned one');
-      expect(_expressions(gateJob), {'!cancelled()', 'needs.unit-test.result'},
-          reason: 'the gate has exactly two inputs: the job-level condition and the shard result');
+      expect(RegExp(r'^\s*SWEEPS_RESULT:', multiLine: true).allMatches(gateJob), hasLength(1));
+      expect(_expressions(gateJob), {'!cancelled()', 'needs.unit-test.result', 'needs.sweep-test.result'},
+          reason: 'the gate has exactly three inputs: the job-level condition and the two matrix results');
     });
 
     test('nothing can turn a red shard green: no continue-on-error, no `if:` on the shard job or '
@@ -232,11 +257,13 @@ void main() {
       // fails, a step with `if: false` is skipped (a green step), and a gate step with
       // `if: false` is skipped inside a green job: each leaves every check green with
       // zero tests run. They live in the YAML, where no script test can see them.
-      for (final (name, job) in [('unit-test', matrixJob), ('unit-tests-gate', gateJob)]) {
+      for (final (name, job) in [('unit-test', matrixJob), ('sweep-test', sweepJob), ('unit-tests-gate', gateJob)]) {
         expect(_keyLines(job, 'continue-on-error'), isEmpty, reason: '$name must not set continue-on-error');
       }
       expect(_keyLines(matrixJob, 'if'), isEmpty,
           reason: 'a shard job or step with a condition can be skipped, and a skipped test step is a green one');
+      expect(_keyLines(sweepJob, 'if'), isEmpty,
+          reason: 'a sweep job or step with a condition can be skipped, and a skipped test step is a green one');
       expect(_keyLines(gateJob, 'if'), [r'if: ${{ !cancelled() }}'],
           reason: 'the gate has ONE condition; a second `if:` is on its step');
       expect(gateJob, contains('\n    if: \${{ !cancelled() }}\n'),
@@ -250,28 +277,32 @@ void main() {
       expect(names.toSet().length, names.length, reason: 'duplicate job names: $names');
     });
 
-    test('BEHAVIOUR: the gate script passes ONLY when every shard succeeded', () {
+    test('BEHAVIOUR: the gate script passes ONLY when every shard of BOTH matrices succeeded', () {
       final script = _runBlock(gateJob);
-      ProcessResult run(String result) => runSpawn('sh', ['-e', '-c', script],
-          why: 'unit-tests-gate script with SHARDS_RESULT=$result',
-          extraEnv: {'SHARDS_RESULT': result});
+      ProcessResult run(String core, String sweep) => runSpawn('sh', ['-e', '-c', script],
+          why: 'unit-tests-gate script with SHARDS_RESULT=$core SWEEPS_RESULT=$sweep',
+          extraEnv: {'SHARDS_RESULT': core, 'SWEEPS_RESULT': sweep});
 
-      expect(run('success').exitCode, 0);
+      expect(run('success', 'success').exitCode, 0);
       for (final bad in ['failure', 'cancelled', 'skipped', '']) {
-        final r = run(bad);
-        expect(r.exitCode, isNot(0),
-            reason: 'shards that finished as "$bad" must fail the Unit Tests check');
-        expect(r.stdout as String, contains('::error::'));
+        // Each matrix alone: a gate that reads only one of them passes the other's mirror.
+        for (final (core, sweep) in [(bad, 'success'), ('success', bad), (bad, bad)]) {
+          final r = run(core, sweep);
+          expect(r.exitCode, isNot(0),
+              reason: 'core "$core" + sweep "$sweep" must fail the Unit Tests check');
+          expect(r.stdout as String, contains('::error::'));
+        }
       }
     });
   });
 
-  group('BEHAVIOUR: the shard step cannot run the wrong files', () {
+  for (final (jobId, set, _) in _matrices) {
+  group('BEHAVIOUR: the $set shard step cannot run the wrong files', () {
     late String script;
     late Directory tmp;
 
     setUpAll(() {
-      script = _runBlock(matrixJob, contains: 'ci_test_partition.dart')
+      script = _runBlock(jobOf(jobId), contains: 'ci_test_partition.dart')
           .replaceAll(r'${{ matrix.shard }}', '2')
           .replaceAll(r'${{ strategy.job-total }}', '4');
       expect(script, isNot(contains(r'${{')), reason: 'every expression must be substituted');
@@ -307,8 +338,8 @@ flutter() { echo "flutter \$*" >> calls.log; return $flutterRc; }
     test('hands flutter exactly the partition output, plus the golden exclusion', () {
       final r = runStep(dartStdout: 'test/a_test.dart\ntest/b_test.dart\n', dartRc: 0);
       expect(r.code, 0, reason: r.out);
-      expect(r.calls, contains('dart scripts/ci_test_partition.dart 2 4'),
-          reason: 'shard and total must reach the partition script');
+      expect(r.calls, contains('dart scripts/ci_test_partition.dart 2 4 --set $set\n'),
+          reason: 'shard, total and the set must reach the partition script');
       final flutterCall = r.calls.split('\n').firstWhere((l) => l.startsWith('flutter '), orElse: () => '');
       expect(flutterCall, 'flutter test test/a_test.dart test/b_test.dart --exclude-tags golden --reporter expanded');
     });
@@ -362,5 +393,5 @@ flutter() { echo "flutter \$*" >> calls.log; return $flutterRc; }
       expect(r.code, 0, reason: r.out);
       expect(r.calls, contains('flutter test test/a_test.dart test/b/c-d_test.dart test/e+f/g.h_test.dart'));
     });
-  });
+  });  }
 }

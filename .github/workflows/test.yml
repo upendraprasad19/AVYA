@@ -127,6 +127,10 @@ jobs:
   # The first run also logs each shard's duration: a slowest/fastest skew above 1.5x
   # re-balances with a committed measured-duration table in the same batch.
   #
+  # SINCE 2026-11-24 this matrix runs the CORE set only (`--set core`: every test file
+  # not under test/plan_generator/); the sweeps have their own matrix, `sweep-test`,
+  # below. The round-robin rule above is unchanged, over the core files.
+  #
   # `fail-fast: false` so one red shard does not hide the others' failures. The shard
   # count is the matrix length (`strategy.job-total`), never a second literal.
   unit-test:
@@ -192,21 +196,76 @@ jobs:
         # step's status is that of its last command. The matrix shape test runs this
         # block with a failing flutter and pins the exact last line.
         run: |
-          FILES="$(dart scripts/ci_test_partition.dart "${{ matrix.shard }}" "${{ strategy.job-total }}")" || exit 1
+          FILES="$(dart scripts/ci_test_partition.dart "${{ matrix.shard }}" "${{ strategy.job-total }}" --set core)" || exit 1
           test -n "$FILES" || { echo "::error::shard ${{ matrix.shard }}/${{ strategy.job-total }} has no test files"; exit 1; }
           STRAY="$(printf '%s\n' "$FILES" | grep -v -E '^test/[A-Za-z0-9_./+-]+_test\.dart$' || true)"
           test -z "$STRAY" || { echo "::error::the partition printed a line that is not a test path: $STRAY"; exit 1; }
           echo "shard ${{ matrix.shard }}/${{ strategy.job-total }}: $(echo "$FILES" | wc -l) test files"
           flutter test $FILES --exclude-tags golden --reporter expanded
 
+  # ── The plan-generator sweeps: their own matrix (docs/plans/2026-11-24-ci-sweep-split.md) ──
+  #
+  # MEASURED 2026-11-24 on runs 45340748319, 45318405229 and 45343469169: the files
+  # under test/plan_generator/ (whole-engine sweeps) were 66-69% of all per-file test
+  # time, while 859 of 1072 files finished in a second or less. Dealt round-robin with
+  # everything else they left two of the four shards near 21 min and two near 13, and
+  # the workflow at a median of 20.95 min over 20 green PR runs (the B3 target was
+  # 9.84). So `unit-test` above now runs only the CORE set (`--set core`: every test
+  # file NOT under test/plan_generator/), and this matrix runs the SWEEP set, packed
+  # longest-first by the measured table scripts/data/ci_sweep_durations.json (five legs
+  # of 644-651 s by that table). The steps are the same as a core shard's on purpose:
+  # the same empty-list and stray-line guards, `flutter test` last and unpiped.
+  # Splitting the heavy files was planned and DROPPED: the heaviest file (587 s on a
+  # slow runner) is below the per-leg load, so the packing balances without it.
+  #
+  # PRE-COMMITTED ABORT CONDITIONS (plan section 5; any one reverts the batch):
+  #   (1) a PR that skips the sweeps takes more than 11.5 min (median of 3 runs);
+  #   (2) a PR that runs the sweeps takes more than 16.8 min (median of 3 runs);
+  #   (3) any test red here that is green in the old layout on the same SHA;
+  #   (4) sweep-leg skew above 1.6x (median of 3 runs) after one re-pack of the table;
+  #   (5) median queue delay of the 9 matrix legs over the first 5 runs above 120 s.
+  sweep-test:
+    name: Unit Tests sweep shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build the local indexes (strict)
+        run: dart run scripts/build_local_indexes.dart
+
+      - name: Run this shard's whole sweep files
+        run: |
+          FILES="$(dart scripts/ci_test_partition.dart "${{ matrix.shard }}" "${{ strategy.job-total }}" --set sweep)" || exit 1
+          test -n "$FILES" || { echo "::error::sweep shard ${{ matrix.shard }}/${{ strategy.job-total }} has no test files"; exit 1; }
+          STRAY="$(printf '%s\n' "$FILES" | grep -v -E '^test/[A-Za-z0-9_./+-]+_test\.dart$' || true)"
+          test -z "$STRAY" || { echo "::error::the partition printed a line that is not a test path: $STRAY"; exit 1; }
+          echo "sweep shard ${{ matrix.shard }}/${{ strategy.job-total }}: $(echo "$FILES" | wc -l) test files"
+          flutter test $FILES --exclude-tags golden --reporter expanded
+
   # The single check that means "the unit tests passed". `if: !cancelled()` so it
   # still RUNS (and fails) when a shard failed — a gate that is skipped when its
   # input fails reports "skipped", which scripts/safe_pr_merge_lib.dart does not
   # treat as success for this job. It passes only on `success`: a skipped, failed or
-  # cancelled shard set is a failure of THIS check.
+  # cancelled shard set is a failure of THIS check. Since 2026-11-24 it needs BOTH
+  # matrices: the core shards and the sweep shards.
   unit-tests-gate:
     name: Unit Tests
-    needs: unit-test
+    needs: [unit-test, sweep-test]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -215,10 +274,16 @@ jobs:
       - name: Every shard must have succeeded
         env:
           SHARDS_RESULT: ${{ needs.unit-test.result }}
+          SWEEPS_RESULT: ${{ needs.sweep-test.result }}
         run: |
           echo "unit-test shards finished as: $SHARDS_RESULT"
+          echo "sweep-test shards finished as: $SWEEPS_RESULT"
           if [ "$SHARDS_RESULT" != "success" ]; then
             echo "::error::Unit Tests failed: the shards finished as '$SHARDS_RESULT', not 'success'"
+            exit 1
+          fi
+          if [ "$SWEEPS_RESULT" != "success" ]; then
+            echo "::error::Unit Tests failed: the sweep shards finished as '$SWEEPS_RESULT', not 'success'"
             exit 1
           fi
 
