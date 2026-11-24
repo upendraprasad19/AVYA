@@ -31,7 +31,7 @@ writers:
   - { file: scripts/add_library_batch_c_v15.js, method_or_widget: "appends each removal's alias_to name to its target row's name_aliases", line: 297 }
   - { file: supabase/functions/promote-community-item/index.ts, method_or_widget: "INSERTs exercise_library rows with is_active true and no name check, so an active same-name pair can appear", line: 191 }
 readers:
-  - { file: supabase/functions/_shared/tools/exercise/getFormCues.ts, method_or_widget: "exact, alias and partial stages, each is_active-filtered, name-ordered, LIKE-escaped; not-found hint", line: 60 }
+  - { file: supabase/functions/_shared/tools/exercise/getFormCues.ts, method_or_widget: "exact, alias and partial stages, each is_active-filtered, name-ordered, LIKE-escaped; not-found hint", line: 65 }
   - { file: supabase/functions/_shared/tools/progress/getExerciseHistory.ts, method_or_widget: "ilike on exercise_id now through escapeLike", line: 63 }
   - { file: supabase/functions/_shared/tools/progress/getPRTimeline.ts, method_or_widget: "ilike on exercise_id now through escapeLike", line: 84 }
 hive_key_prefix: "none: a server-side read of the cloud exercise_library and the caller's own workout_log_exercises; Hive is untouched"
@@ -94,10 +94,26 @@ alias_audit: |
   Both are RECORDED library decisions pinned by contract tests, so changing them is a library re-seed (v28): unit B, own branch,
   merged and applied live BEFORE this unit merges or deploys. The founder decided 2026-11-23: remove the lunge alias; the
   donkey alias is put to the founder at the start of unit B.
+live_rest_check: |
+  2026-11-24, read-only REST reads on `dedsavbjuwgarrhphgnl` with the public anon key (B-pass finding 1: the test fake cannot
+  observe either filter). (a) `exercise_library?is_active=eq.true&name_aliases=neq.{}` answers 200 with exactly 13 rows
+  (`content-range 0-12/13`; NULL rows absent; 13 and not 14 because unit B, migration 183, removed the Forward Lunge alias).
+  (b) `name=ilike.\%` answers 0 rows and `name=ilike.\_` answers 0 rows (the backslash is a literal escape), while the
+  unescaped `name=ilike.%` answers all 870, which is the defect. (c) `name=ilike.Quad Stretch` answers 0 rows, so the alias
+  stage is what resolves it. Post-deploy smoke (the founder's go for `ai-proxy`): call `getFormCues` for "Quad Stretch" and
+  require `matched_via: "alias"` and `exercise_name: "Standing Quad Stretch"`; a `partial` answer ("Banded Quad Stretch")
+  means the fail-open alias stage is dead.
+b_pass_triage: |
+  B-pass 2026-11-24 (`docs/reviews/oi507-formcues-bpass.md`): 1 P2 and 5 P3. P2 closed by the live REST check above. P3 fixed
+  here: secondary `.order("id")` on all three reads (T10), a test where the alias read THROWS (T11), `.max(200)` on
+  `exercise_name` (T12, CLAUDE.md rule 18), and three doc cites. Mutations of the three new fixes (rule 21): `.order("id")`
+  removed from all three reads reddens T10; the alias `try`/`catch` removed reddens T11; `.max(200)` removed reddens T12 (each
+  1 test red, restored). Declined: replacing `*` with `_` instead of removing it (finding 4): the removal is a recorded
+  plan decision, no library name contains `*`, and only a tester-typed custom exercise with an asterisk is affected.
 touched_layers_checked:
   - { layer: client_code, status: not_applicable, evidence: "no lib/ file reads exercise_library through Supabase; the Hive client's own alias fallback (exercise_repository.dart:45) is unchanged by this unit" }
   - { layer: postgres_schema, status: verified, evidence: "live 2026-11-23: exercise_library.name_aliases is text[]; there is NO is_foundational column (a round-3 review's suggested ranking column); is_active bool" }
-  - { layer: postgres_data, status: verified, evidence: "live read-only 2026-11-23: 14 active rows carry a non-empty name_aliases, 0 inactive; workout_log_sets.exercise_id holds names: 10 sets name a retired-only exercise (Donkey Calf Raise x4, aliased; Negative Pull Up x6, no alias, answered by the hint); Reverse Lunge is a retired row" }
+  - { layer: postgres_data, status: verified, evidence: "live read-only 2026-11-23: 14 active rows carried a non-empty name_aliases (13 after unit B removed the lunge alias, live REST 2026-11-24), 0 inactive; workout_log_sets.exercise_id holds names: 10 sets name a retired-only exercise (Donkey Calf Raise x4, aliased; Negative Pull Up x6, no alias, answered by the hint); Reverse Lunge is a retired row" }
   - { layer: edge_function_code, status: fixed_in_this_batch, evidence: "getFormCues.ts, getExerciseHistory.ts, getPRTimeline.ts, like_escape.ts; deno check clean on them and ai-proxy/index.ts; whole supabase/functions deno test 1789 passed, 2 failed = future-prediction and re-engagement index_test.ts AddrInUse :8000 (known VPS quirk, files untouched). NOT yet deployed: needs the founder's separate go, after unit B" }
   - { layer: client_server_contract, status: verified, evidence: "ai-proxy is the only bundler of the tools; the tool result is a superset (matched_via gains alias, hint added, all old fields kept); no consumer pins the two-value matched_via union (derive_only_tool_surface_test.dart:58, captain_manual.ts:406 only route to the tool)" }
 ---

@@ -722,7 +722,7 @@ Before introducing a new name:
 
 When two writers exist for the same concept (rare; should never be the goal), one MUST be the canonical writer and the other MUST delegate. The 2026-05-06 EditWorkoutLogSheet vs WorkoutWriteService drift (memory file `feedback_source_of_truth_audit.md`) is the cautionary tale.
 
-### 9.x `escapeLike` / `_shared/like_escape.ts` (OI-507, 2026-11-23)
+### `escapeLike` / `_shared/like_escape.ts` (OI-507, 2026-11-23)
 
 The one helper that escapes model- or user-supplied text before it goes into a PostgREST `ilike` pattern (`%`, `_`, backslash escaped, backslash first; `*` removed because PostgREST reads it as `%`). Used by `getFormCues.ts`, `getExerciseHistory.ts`, `getPRTimeline.ts`. A NEW `ilike` that takes caller text goes through it; a constant pattern does not need it (`future-prediction/index.ts:82`). Not a `like` for user-facing search in Dart.
 

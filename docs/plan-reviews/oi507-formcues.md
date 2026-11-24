@@ -5,7 +5,8 @@ blast_radius: platform
 review_rounds: 4
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/oi507-formcues-bpass.md
 ---
 
 # Plan-review record: OI-507 getFormCues lookup follow-ups (unit A)

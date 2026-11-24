@@ -19,6 +19,9 @@ const schema = z.object({
   exercise_name: z
     .string()
     .min(1)
+    // The longest library name is 50 characters and the longest alias 27; escapeLike can double the
+    // length in the URL, so an oversized model-supplied name is refused before any read (rule 18).
+    .max(200)
     .describe(
       "Exact or close match to exercise_library.name (e.g. 'Bench Press', 'Romanian Deadlift', 'Pull Up'). Use the name from the user's workout if available.",
     ),
@@ -92,8 +95,8 @@ async function handler(
 
   // Retired rows (is_active = false) are hidden, never deleted (workout_logs /
   // template_exercises reference them by FK). Every stage skips them (OI-438, OI-469).
-  // Every ORDER BY name makes the pick deterministic where `limit(1)` alone left it to
-  // the planner (OI-507 item 1). The name is LIKE-escaped on both ilike stages (item 2).
+  // Every ORDER BY name, id makes the pick deterministic where `limit(1)` alone left it to
+  // the planner (OI-507 item 1); id breaks a tie between two active rows that share a name. The name is LIKE-escaped on both ilike stages (item 2).
   // Stage 1: exact case-insensitive match
   const { data: exact, error: exactErr } = await sb
     .from("exercise_library")
@@ -101,6 +104,7 @@ async function handler(
     .ilike("name", escapeLike(name))
     .eq("is_active", true)
     .order("name")
+    .order("id")
     .limit(1)
     .maybeSingle();
 
@@ -120,6 +124,7 @@ async function handler(
       .eq("is_active", true)
       .neq("name_aliases", "{}")
       .order("name")
+      .order("id")
       .limit(200); // literal for the unbounded-read gate; MUST equal ALIAS_READ_CAP
     if (aliasErr) {
       console.error(`getFormCues alias read failed: ${aliasErr.message}`);
@@ -145,6 +150,7 @@ async function handler(
       .ilike("name", `%${escapeLike(name)}%`)
       .eq("is_active", true)
       .order("name")
+      .order("id")
       .limit(1)
       .maybeSingle();
 

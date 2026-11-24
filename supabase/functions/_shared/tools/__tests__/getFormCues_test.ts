@@ -278,3 +278,44 @@ Deno.test("T9 getFormCues — the tool description tells the model to name the m
   assert(d.includes("matched_via is 'partial' or 'alias'"), "description lacks the partial/alias sentence");
   assert(d.includes("which exercise's cues you are giving"), "description lacks the name-the-exercise instruction");
 });
+
+// ---- B-pass triage (2026-11-24): a tie on name, an alias read that THROWS, an oversized name ----
+
+Deno.test("T10 getFormCues — two active rows with the same name: the lower id wins on every stage", async () => {
+  // Both rows listed higher-id first, so an unordered read returns the wrong one.
+  const hi = (name: string, cue: string, aliases?: string[]) => ({ ...row(name, true, cue, aliases), id: "b-high" });
+  const lo = (name: string, cue: string, aliases?: string[]) => ({ ...row(name, true, cue, aliases), id: "a-low" });
+  const exact = await run([hi("Twin Row", "HIGH"), lo("Twin Row", "LOW")], "twin row");
+  assertEquals(exact.result.coaching_cues, ["LOW"]);
+  const alias = await run([hi("Twin Press", "HIGH", ["Shared Twin"]), lo("Twin Press", "LOW", ["Shared Twin"])], "Shared Twin");
+  assertEquals(alias.result.matched_via, "alias");
+  assertEquals(alias.result.coaching_cues, ["LOW"]);
+  const partial = await run([hi("Twin Curl Variant", "HIGH"), lo("Twin Curl Variant", "LOW")], "curl variant");
+  assertEquals(partial.result.matched_via, "partial");
+  assertEquals(partial.result.coaching_cues, ["LOW"]);
+});
+
+Deno.test("T11 getFormCues — the alias stage fails OPEN when the read THROWS (not only when it returns an error)", async () => {
+  const { sb } = fakeSb({ exercise_library: [row("Stage Two Target", true, "T")] });
+  const wrapped = withMaybeSingle(sb as any);
+  const throwing = {
+    from(t: string) {
+      const b = wrapped.from(t);
+      const origNeq = b.neq;
+      b.neq = (c: string, v: unknown) => {
+        if (c === "name_aliases") throw new Error("socket closed");
+        return origNeq(c, v);
+      };
+      return b;
+    },
+  };
+  const ctx = { userId: "u1", isPro: false, sb: throwing, requestId: "t" } as ToolContext;
+  const out = await captureErrors(() => getFormCuesTool.handler!(ctx, { exercise_name: "Stage Two" }));
+  assertEquals(out.value.matched_via, "partial");
+  assert(out.errors.some((e) => e.includes("alias stage threw")), `throw not logged: ${JSON.stringify(out.errors)}`);
+});
+
+Deno.test("T12 getFormCues — exercise_name over 200 characters is refused by the schema; 200 is accepted", () => {
+  assertEquals(getFormCuesTool.schema.safeParse({ exercise_name: "x".repeat(201) }).success, false);
+  assertEquals(getFormCuesTool.schema.safeParse({ exercise_name: "x".repeat(200) }).success, true);
+});
