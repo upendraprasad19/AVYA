@@ -817,3 +817,43 @@ Mutation (rule 21), each restored by `cp` and sha256-checked: F2 (return instead
 reconcile deadline), F4 (no per-row catch), F9 x2 (each half of the failed rule), F8 x2 (no Bearer form, Bearer only),
 W3, R2, S3, F5 (one glob deleted): each reddened at least one test. F1: the rehearsal on the pre-fix code (14 red).
 Whole Deno tree: 1842 pass; the 2 failures are the VPS port-8000 quirk (`future-prediction`, `re-engagement`).
+
+Round 2 (fresh seat on the fixes) added F10-F12; all fixed; the committed review file is
+`docs/reviews/ec073c981012-review.md` (commit 0f40b0ff).
+
+## 25. U5 record (2026-11-24): the client
+
+- **Getters** (`purchase_mode.dart`): `showsPurchaseUi` = razorpay or playBilling; `showsRazorpay` unchanged (Razorpay
+  checkout still refused in play_billing); new `showsWebLinks` = razorpay only; `showsPlayBilling` now read.
+- **Paywall** (`paywall_sheet.dart`): `_playBody` (play_billing AND a `goog_` key) is decided once in `initState`; it
+  draws `PaywallPlayBody` FIRST. A keyless Play build sells nothing: `_sells` = showsRazorpay or `_playBody` drives the
+  neutral body, the default subtitle and the restore-failure branch, so it reads exactly like `none`, plus a
+  `play_billing_key_missing` event. `paywall_play_shown` when the Play body draws.
+- **`PaywallPlayBody`** (`lib/shared/widgets/paywall_play_body.dart`, new): loading skeleton -> `identify(uid)` THEN
+  `loadPlans()` (no buy button before the store user is this user) -> two cards from `priceString`, saving computed from
+  the two store prices -> buy -> one state per outcome (purchased -> confirm; cancelled; pending; owned by another AVYA
+  account + manage link; identity mismatch; failed + code). RESTORE = the confirm step (`revenuecat-sync` up to 4 asks
+  after a purchase, 1 on restore, 429 stops; ALWAYS ends with `verifyFromServer(force: true)`, which alone writes Hive).
+  Already paid (any store, not referral days): "PRO until" the display date as the IST day, no plans, no store call; a
+  Play row gets MANAGE IN GOOGLE PLAY. The buyer uid is the auth uid only when it equals the Hive owner
+  (`playBuyerUid`). Play subscriptions terms line under the button.
+- **Phase variant**: routes to the paywall when `!showsRazorpay` (its own sheet carries a Razorpay price line).
+- **Profile**: website row on `showsWebLinks`; RENEWS only when the row renews by itself, else EXPIRES (a Razorpay
+  payment does not renew: the old label was wrong there too); the shown date is `displayExpiresAt` as the IST day;
+  MANAGE on a Play row opens Google Play.
+- **Delete account**: in play_billing with a Play row, a cancel-in-Google-Play-first card with the manage link; the
+  receipts line names Google Play in a Play build. No Play cancel-failed client message: the server's Play cancel is
+  best effort and never fails the delete (section 4), so no error code reaches the client.
+- **Share card QR**: `shareCardQrUrl(mode)`, the website only when `showsWebLinks`, else the Play listing.
+- **SubscriptionInfoData**: `store`, `autoRenews`, `displayExpiresAt`, `isPlayStore`, `hasActivePaidPlan`.
+- `.env.example` moves to the U6 commit (U6 row of section 7).
+- Tests: `paywall_play_body_behavioral_test.dart` (23), `play_billing_surfaces_behavioral_test.dart` (12), the four
+  none-mode files re-pinned (play_billing now sells: banner, pill, getters; the keyless Play build stays in the
+  nothing-can-be-bought loop with an explicit keyless store), `purchase_literal_inventory_test.dart` counts with the new
+  surfaces classified in section 5.2 of the 2026-11-20 plan. 110 affected files, 1144 tests green.
+- Mutants (rule 21), each restored and compared: Play branch removed (18 red), identify skipped (1), restore sent as a
+  purchase (2), end date shown instead of the store date (1), pending confirms (1), upgrade flag dropped (1), manage link
+  hidden (1), delete card on any row (1) / in any mode (2), receipts branch flipped (1), QR on showsPurchaseUi (1),
+  `isPlayStore` without isPro (1), `hasActivePaidPlan` with referral days (1). The second uid check in `_buy` is
+  unreachable from the UI (no buy button without a uid); its mutant only failed to compile, so it is NOT proven.
+- SoT registry: 56 cites in the changed files shifted from the `git diff HEAD` hunks (script, not by hand).

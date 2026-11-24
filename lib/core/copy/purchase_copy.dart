@@ -93,4 +93,74 @@ class PurchaseCopy {
       purchaseUi
           ? 'Deploy to Phase $nextPhase \u2014 go PRO \u2192'
           : 'Deploy to Phase $nextPhase \u2192';
+
+  // ── Google Play build (`PurchaseMode.playBilling`, OI-519, +51) ──────────
+  // Plan section 5. No website, no outside price: every price shown comes
+  // from Google Play. No em dashes.
+
+  /// The Play body's buy button (same words as the web build's button).
+  static const String playBuyButton = 'UPGRADE TO PRO';
+
+  /// Plan card labels.
+  static const String playMonthly = 'MONTHLY';
+  static const String playYearly = 'YEARLY';
+  static const String playPerMonth = 'PER MONTH';
+  static const String playPerYear = 'PER YEAR';
+
+  /// The yearly card's saving line, computed from the two Play prices.
+  static String playYearlySaving(int percent) => 'SAVE $percent%';
+
+  /// Subscription terms under the buy button (Play subscriptions policy).
+  static const String playRenewalTerms =
+      'Renews automatically until you cancel. Cancel anytime in Google Play.';
+
+  /// A referral-days user buying: Play starts a subscription today.
+  static const String playReferralStartsToday =
+      'Your paid plan starts the day you buy. Your free days end then.';
+
+  static const String playLoading = 'Loading plans';
+  static const String playConfirming = 'Confirming your PRO with Google Play';
+  static const String playLoadFailed =
+      "Couldn't load the plans. Check your connection and try again.";
+  static const String playRetry = 'TRY AGAIN';
+
+  /// Google `PENDING` (e.g. a cash payment not yet made).
+  static const String playPending =
+      'Payment pending. PRO unlocks once Google confirms it.';
+
+  /// This Google account's subscription belongs to another AVYA account.
+  static const String playOwnedByOtherAccount =
+      'This Google account already has PRO on another AVYA account. '
+      'Sign in with that account, or manage it in Google Play.';
+
+  /// The store's user is not (yet) the signed-in user: nothing was charged.
+  static const String playAccountNotReady =
+      'Your account is still loading. Try again in a moment.';
+
+  static const String playPurchaseFailed =
+      "The purchase didn't go through. Try again.";
+
+  /// Google took the order but our server has not confirmed PRO yet.
+  static const String playConfirmSlow =
+      'Google took your order. PRO is still being confirmed: tap '
+      'CHECK MY PRO STATUS in a minute.';
+
+  static const String playRestored = 'PRO restored.';
+  static const String playWelcome = 'You are PRO. Every feature is unlocked.';
+  static const String playNothingToRestore =
+      'No active PRO found for this account.';
+
+  /// Already PRO: no plan cards, no buy button.
+  static String proUntil(String date) => 'PRO until $date';
+
+  static const String playManageButton = 'MANAGE IN GOOGLE PLAY';
+
+  /// Delete account, Play row: cancel in Google Play before deleting.
+  static const String playDeleteCancelFirst =
+      'Your Google Play subscription keeps renewing until it is cancelled. '
+      'Cancel it in Google Play before you delete your account.';
+
+  /// Delete account, Play variant of the receipts line.
+  static const String playReceiptsKept =
+      'Google Play keeps your purchase receipts.';
 }

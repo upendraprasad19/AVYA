@@ -1594,7 +1594,9 @@ class AiSnapshotBuilder {
       'tier': isPro ? 'pro' : 'free',
       'expires_at': expiresAtIso,
       'plan': config.get('plan') as String?,
-      'auto_renew': (config.get('auto_renew') as bool?) ?? false,
+      // OI-519: the old read of config key `auto_renew` had no writer (always
+      // false). The real value is the Play row's auto-renew flag.
+      'auto_renew': SubscriptionService.instance.proAutoRenews,
     };
   }
 
