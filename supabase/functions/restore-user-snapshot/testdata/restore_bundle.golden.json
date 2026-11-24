@@ -1,0 +1,872 @@
+{
+ "tables": {
+  "user_profile": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "full_name": "P-a",
+    "units_system": "metric"
+   }
+  ],
+  "users": {
+   "id": "11111111-1111-4111-8111-111111111111",
+   "full_name": "U-a",
+   "email": "a@x.test"
+  },
+  "user_progress": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "current_phase": 2,
+    "plan_json": {
+     "weeks": 4,
+     "tag": "a"
+    },
+    "streak_freezes_available": 1,
+    "streak_freezes_used_dates": [],
+    "streak_freezes_last_refill": "2026-11-16",
+    "streak_freezes_first_pro_grant_done": true,
+    "streak_progress_version": 3
+   }
+  ],
+  "user_preferences": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "notification_preferences": {
+     "morning": true
+    }
+   }
+  ],
+  "workout_templates": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "t-a-0",
+    "name": "T0",
+    "deleted_at": null
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "t-a-2",
+    "name": "T2",
+    "deleted_at": null
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "t-a-1",
+    "name": "T1",
+    "deleted_at": "2026-10-01T00:00:00Z"
+   }
+  ],
+  "workout_plan": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "current_phase": 2,
+    "plan_json": {
+     "weeks": 4,
+     "tag": "a"
+    },
+    "streak_freezes_available": 1,
+    "streak_freezes_used_dates": [],
+    "streak_freezes_last_refill": "2026-11-16",
+    "streak_freezes_first_pro_grant_done": true,
+    "streak_progress_version": 3
+   }
+  ],
+  "user_custom_exercises": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "user_custom_exercises-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "user_custom_exercises-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "user_custom_exercises-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "user_custom_exercises-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "user_custom_foods": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "user_custom_foods-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "user_custom_foods-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "user_custom_foods-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "user_custom_foods-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "workout_logs": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_logs-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_logs-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_logs-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_logs-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "workout_log_exercises": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_log_exercises-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_log_exercises-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_log_exercises-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_log_exercises-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "workout_log_sets": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_log_sets-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_log_sets-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_log_sets-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_log_sets-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "workout_schedule_completions": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_schedule_completions-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_schedule_completions-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_schedule_completions-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "workout_schedule_completions-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "weight_logs": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "weight_logs-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "weight_logs-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "weight_logs-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "weight_logs-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "daily_steps": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "daily_steps-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "daily_steps-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "daily_steps-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "daily_steps-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "nutrition_logs": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "nutrition_logs-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "nutrition_logs-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "nutrition_logs-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "nutrition_logs-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "body_measurements": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "body_measurements-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "body_measurements-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "body_measurements-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "body_measurements-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "water_logs": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "water_logs-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "water_logs-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "water_logs-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "water_logs-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "sleep_logs": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "sleep_logs-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "sleep_logs-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "sleep_logs-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "sleep_logs-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "streaks": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "s-a",
+    "week_start": "2026-11-16"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "s2-a",
+    "week_start": "2026-11-09"
+   }
+  ],
+  "scheduled_workouts": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "scheduled_workouts-a-0",
+    "created_at": "2026-11-10T06:00:00Z",
+    "completed_at": "2026-11-10T06:00:00Z",
+    "date": "2026-11-10",
+    "logged_at": "2026-11-10T06:00:00Z",
+    "scheduled_date": "2026-11-10",
+    "week_start": "2026-11-10",
+    "measured_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "scheduled_workouts-a-1",
+    "created_at": "2026-11-11T06:00:00Z",
+    "completed_at": "2026-11-11T06:00:00Z",
+    "date": "2026-11-11",
+    "logged_at": "2026-11-11T06:00:00Z",
+    "scheduled_date": "2026-11-11",
+    "week_start": "2026-11-11",
+    "measured_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "scheduled_workouts-a-2",
+    "created_at": "2026-11-12T06:00:00Z",
+    "completed_at": "2026-11-12T06:00:00Z",
+    "date": "2026-11-12",
+    "logged_at": "2026-11-12T06:00:00Z",
+    "scheduled_date": "2026-11-12",
+    "week_start": "2026-11-12",
+    "measured_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "scheduled_workouts-a-3",
+    "created_at": "2026-11-13T06:00:00Z",
+    "completed_at": "2026-11-13T06:00:00Z",
+    "date": "2026-11-13",
+    "logged_at": "2026-11-13T06:00:00Z",
+    "scheduled_date": "2026-11-13",
+    "week_start": "2026-11-13",
+    "measured_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "user_saved_meals": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "m-a",
+    "name": "Dal"
+   }
+  ],
+  "ai_coach_interactions": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "ci-a-0",
+    "created_at": "2026-11-10T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "ci-a-1",
+    "created_at": "2026-11-11T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "ci-a-2",
+    "created_at": "2026-11-12T06:00:00Z"
+   },
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "ci-a-3",
+    "created_at": "2026-11-13T06:00:00Z"
+   }
+  ],
+  "coach_memory": {
+   "user_id": "11111111-1111-4111-8111-111111111111",
+   "coach_notes": "notes-a",
+   "why_now": "x"
+  },
+  "freezes": {
+   "user_id": "11111111-1111-4111-8111-111111111111",
+   "current_phase": 2,
+   "plan_json": {
+    "weeks": 4,
+    "tag": "a"
+   },
+   "streak_freezes_available": 1,
+   "streak_freezes_used_dates": [],
+   "streak_freezes_last_refill": "2026-11-16",
+   "streak_freezes_first_pro_grant_done": true,
+   "streak_progress_version": 3
+  },
+  "notifications_inbox": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "id": "n-a",
+    "created_at": "2026-11-20T00:00:00Z"
+   }
+  ],
+  "saved_diet_plan": {
+   "user_id": "11111111-1111-4111-8111-111111111111",
+   "plan_json": {
+    "meals": 3,
+    "tag": "a"
+   }
+  },
+  "rank_promotions": [
+   {
+    "user_id": "11111111-1111-4111-8111-111111111111",
+    "rank_code": "SD1",
+    "achieved_at": "2026-11-01T00:00:00Z"
+   }
+  ],
+  "referral_codes": {
+   "user_id": "11111111-1111-4111-8111-111111111111",
+   "code": "Ca",
+   "expires_at": "2099-01-01T00:00:00Z",
+   "created_at": "2026-11-01T00:00:00Z"
+  },
+  "referral_redemptions": [
+   {
+    "code": "Ca",
+    "referrer_id": "11111111-1111-4111-8111-111111111111",
+    "referee_id": "22222222-2222-4222-8222-222222222222",
+    "days_granted_each": 7,
+    "created_at": "2026-11-02T00:00:00Z"
+   },
+   {
+    "code": "Cb",
+    "referrer_id": "22222222-2222-4222-8222-222222222222",
+    "referee_id": "11111111-1111-4111-8111-111111111111",
+    "days_granted_each": 7,
+    "created_at": "2026-11-02T00:00:00Z"
+   }
+  ]
+ },
+ "calls": {
+  "ai_coach_interactions": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":false}],[\"order\",\"id\",{\"ascending\":false}],[\"limit\",1000]]"
+  ],
+  "body_measurements": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "coach_memory": [
+   "[[\"select\",\"committed_at, committed_to_lt_cdr, induction_completed_at, why_now, definition_of_winning, known_injuries, typical_wake_time, preferred_workout_time, body_part_priorities, coach_notes\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"maybeSingle\"]]"
+  ],
+  "daily_steps": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"date\",\"2020-01-01\"],[\"order\",\"date\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"date\",\"2020-01-01\"],[\"order\",\"date\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "notifications_inbox": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"order\",\"created_at\",{\"ascending\":false}],[\"limit\",200]]"
+  ],
+  "nutrition_logs": [
+   "[[\"select\",\"*, nutrition_log_items(*)\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*, nutrition_log_items(*)\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "rank_promotions": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"order\",\"achieved_at\",{\"ascending\":false}],[\"limit\",20]]"
+  ],
+  "referral_codes": [
+   "[[\"select\",\"code, expires_at, created_at\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gt\",\"expires_at\",\"<now>\"],[\"order\",\"created_at\",{\"ascending\":false}],[\"limit\",1],[\"maybeSingle\"]]"
+  ],
+  "referral_redemptions": [
+   "[[\"select\",\"code, referrer_id, referee_id, days_granted_each, created_at\"],[\"or\",\"referrer_id.eq.11111111-1111-4111-8111-111111111111,referee_id.eq.11111111-1111-4111-8111-111111111111\"],[\"order\",\"created_at\",{\"ascending\":false}],[\"limit\",50]]"
+  ],
+  "saved_diet_plans": [
+   "[[\"select\",\"plan_json\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"maybeSingle\"]]"
+  ],
+  "scheduled_workouts": [
+   "[[\"select\",\"*, template:template_id(id, name, workout_type, deleted_at, user_id, template_exercises(*))\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"scheduled_date\",\"2020-01-01\"],[\"order\",\"scheduled_date\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*, template:template_id(id, name, workout_type, deleted_at, user_id, template_exercises(*))\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"scheduled_date\",\"2020-01-01\"],[\"order\",\"scheduled_date\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "sleep_logs": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "streaks": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"order\",\"week_start\",{\"ascending\":false}],[\"limit\",52]]"
+  ],
+  "user_custom_exercises": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "user_custom_foods": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "user_preferences": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"limit\",1]]"
+  ],
+  "user_profile": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"limit\",1]]"
+  ],
+  "user_progress": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"limit\",1]]",
+   "[[\"select\",\"plan_json\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"limit\",1]]",
+   "[[\"select\",\"streak_freezes_available, streak_freezes_used_dates, streak_freezes_last_refill, streak_freezes_first_pro_grant_done, streak_progress_version\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"maybeSingle\"]]"
+  ],
+  "user_saved_meals": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"limit\",500]]"
+  ],
+  "users": [
+   "[[\"select\",\"full_name, email\"],[\"eq\",\"id\",\"11111111-1111-4111-8111-111111111111\"],[\"maybeSingle\"]]"
+  ],
+  "water_logs": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"date\",\"2020-01-01\"],[\"order\",\"date\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"date\",\"2020-01-01\"],[\"order\",\"date\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "weight_logs": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "workout_log_exercises": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"completed_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"completed_at\",{\"ascending\":true}],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"completed_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"completed_at\",{\"ascending\":true}],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "workout_log_sets": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"completed_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"completed_at\",{\"ascending\":true}],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"completed_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"completed_at\",{\"ascending\":true}],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "workout_logs": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"created_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"created_at\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "workout_schedule_completions": [
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"completed_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"scheduled_date\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",0,999]]",
+   "[[\"select\",\"*\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"gte\",\"completed_at\",\"2020-01-01T00:00:00Z\"],[\"order\",\"scheduled_date\",{\"ascending\":true}],[\"order\",\"id\",{\"ascending\":true}],[\"range\",4,1003]]"
+  ],
+  "workout_templates": [
+   "[[\"select\",\"*, template_exercises(*)\"],[\"eq\",\"user_id\",\"11111111-1111-4111-8111-111111111111\"],[\"order\",\"deleted_at\",{\"ascending\":true,\"nullsFirst\":true}],[\"limit\",500]]"
+  ]
+ }
+}

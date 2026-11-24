@@ -243,6 +243,11 @@ extension SyncServiceProfile on SyncService {
       // pushed, `false` included (a restore merge ignores a cloud NULL);
       // absent stays absent (dietSupplementsPushEntry).
       ...dietSupplementsPushEntry(p, enabled: DietSupplementsFlags.enabled),
+      // OI-348 B9 (e9a6c1): `units_system` / `measurement_unit` (migration 185,
+      // applied BEFORE any build carrying these keys ships: an unknown column
+      // rejects the whole row). A valid stored value is pushed; absent or
+      // invalid stays absent; switch `disable_unit_pref_sync` -> none.
+      ...unitPrefsPushEntries(p, enabled: UnitPrefFlags.pushEnabled),
       if (SyncService._hasValue(p['injuries'])) 'injuries': p['injuries'] is List ? p['injuries'] : <String>[],
       if (SyncService._hasValue(p['city'])) 'city': p['city'],
       if (SyncService._hasNumber(p['bmr'])) 'bmr': (p['bmr'] as num).round(),
@@ -792,7 +797,7 @@ extension SyncServiceProfile on SyncService {
         } else if (!identical(preFetchedUsers, _kNoInject)) {
           // C3 single-call restore already queried `users` through the
           // Edge Function's service-role client (RLS-immune — see
-          // restore-user-snapshot/index.ts) and got a real empty result,
+          // restore-user-snapshot/restore_reads.ts) and got a real empty result,
           // not the ambiguous stale-token race _fetchUsersRowForRestore
           // exists to retry. Retrying here would just re-ask the same
           // authoritative answer. But a genuinely-absent `users` row is

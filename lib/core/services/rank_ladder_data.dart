@@ -255,3 +255,35 @@ RankLadderEntry? rankByCode(String code) {
   }
   return null;
 }
+
+/// The floor rung (ordinal 0) every account holds from sign-up (diagnose
+/// 8b1f3d). It is written to `rank_promotions` as history but never
+/// announced: no celebration, no coach message, no push. Mirrors
+/// `isFloorRank` in `supabase/functions/_shared/rank_engine.ts`; the trigger
+/// migration's `WHEN (NEW.rank_code <> '<floor>')` literal is pinned equal to
+/// both by `test/contracts/rank_floor_trigger_migration_test.dart`.
+bool isFloorRank(String? code) =>
+    code != null && code == kRankLadder.first.code;
+
+/// Whether reaching [code] stamps the pending full-screen celebration that
+/// Home shows on its next mount (`RankService.evaluateAndPromote`). False only
+/// for the floor rung.
+bool shouldStampPromotionCelebration(String code) => !isFloorRank(code);
+
+/// What Home does with a pending-celebration stamp it has just read.
+enum PendingPromotionAction {
+  /// No stamp: nothing to do.
+  none,
+
+  /// A floor stamp (written by a build before 8b1f3d): clear it, show nothing.
+  clearOnly,
+
+  /// Clear the stamp, then open `PromotionCelebrationScreen`.
+  clearAndCelebrate,
+}
+
+PendingPromotionAction pendingPromotionAction(String? code) {
+  if (code == null) return PendingPromotionAction.none;
+  if (isFloorRank(code)) return PendingPromotionAction.clearOnly;
+  return PendingPromotionAction.clearAndCelebrate;
+}

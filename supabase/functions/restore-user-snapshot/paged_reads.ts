@@ -276,40 +276,32 @@ export async function readPaged(
   }
   const spec = PAGED_READS[name];
 
-  // This table may take at most what the request has left, capped at the per-table ceiling.
-  const maxPages = Math.min(MAX_PAGES, budget.remaining);
-  let pagesTaken = 0;
-  try {
-    const rows = await fetchAllPages<Record<string, unknown>>(
-      () => {
-        pagesTaken++;
-        // The user scope is applied HERE, first, on every page: fetchAllPages calls this factory
-        // once per page, so no page can ever be unscoped.
-        let q = db.from(name).select(spec.select).eq("user_id", vUid);
-        if (spec.gte) q = q.gte(spec.gte.column, spec.gte.value);
-        return q;
-      },
-      {
-        orderBy: spec.order,
-        pageSize: PAGE_SIZE,
-        maxPages,
-        label: `restore-user-snapshot ${name}`,
-      },
-    );
-    return spec.embedScope ? scopeEmbed(rows, vUid, spec.embedScope) : rows;
-  } catch (e) {
-    // fetchAllPages words a maxPages throw as a SORT-KEY problem ("an unstable sort key can loop
-    // forever"). When the request budget, not the per-table ceiling, was the limit, say so: an
-    // operator reading the log must not chase a sort key that is fine.
-    if (maxPages < MAX_PAGES && e instanceof Error && e.message.includes("exceeded maxPages")) {
-      throw new Error(
-        `paged_reads: page budget exhausted at '${name}' (this read was allowed ${maxPages} pages)`,
-      );
-    }
-    throw e;
-  } finally {
-    budget.remaining -= pagesTaken;
-  }
+  // OI-348 B10 (a0d5f7): the shared budget is charged PER PAGE, inside the factory, right before
+  // the page request is built. Several paged reads now run at once (restore_reads.ts runLimited),
+  // so a budget RESERVED up front (the old `min(MAX_PAGES, remaining)` at entry) would let the
+  // first reads starve later ones; a per-page charge makes pass/fail depend only on the total
+  // demand (fails iff the request needs more than TOTAL_PAGE_BUDGET pages, or one table more than
+  // MAX_PAGES), whatever the order. A failing page is still charged (it was requested).
+  const rows = await fetchAllPages<Record<string, unknown>>(
+    () => {
+      if (budget.remaining <= 0) {
+        throw new Error(`paged_reads: page budget exhausted at '${name}'`);
+      }
+      budget.remaining--;
+      // The user scope is applied HERE, first, on every page: fetchAllPages calls this factory
+      // once per page, so no page can ever be unscoped.
+      let q = db.from(name).select(spec.select).eq("user_id", vUid);
+      if (spec.gte) q = q.gte(spec.gte.column, spec.gte.value);
+      return q;
+    },
+    {
+      orderBy: spec.order,
+      pageSize: PAGE_SIZE,
+      maxPages: MAX_PAGES,
+      label: `restore-user-snapshot ${name}`,
+    },
+  );
+  return spec.embedScope ? scopeEmbed(rows, vUid, spec.embedScope) : rows;
 }
 
 /**

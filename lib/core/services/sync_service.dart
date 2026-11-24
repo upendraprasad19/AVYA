@@ -40,6 +40,7 @@ import 'package:icanbefitter/core/services/sync/nutrition_slot_section.dart';
 import 'package:icanbefitter/core/services/sync/exlog_push_rules.dart';
 import 'package:icanbefitter/core/services/sync/exlog_restore_rules.dart';
 import 'package:icanbefitter/core/services/sync/first_sweep_decision.dart';
+import 'package:icanbefitter/core/services/sync/restore_readiness_prefetch.dart';
 import 'package:icanbefitter/core/services/sync/measurement_push_rules.dart';
 import 'package:icanbefitter/core/services/sync_error.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
@@ -63,6 +64,8 @@ import 'package:icanbefitter/features/profile/services/profile_target_recompute.
 import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_supplements_flags.dart';
 import 'package:icanbefitter/core/utils/diet_supplements_rule.dart';
+import 'package:icanbefitter/core/services/unit_pref_flags.dart';
+import 'package:icanbefitter/core/utils/unit_prefs_rule.dart';
 import 'package:icanbefitter/features/ai_coach/models/coach_memory.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/ai_coach_repository.dart';
 import 'package:icanbefitter/features/ai_coach/repositories/coach_interaction_repository.dart';
@@ -2385,6 +2388,16 @@ class SyncService {
       String userId, String since) async {
     final sw = Stopwatch()..start();
     try {
+      // OI-348 B10 (a0d5f7): readiness is not in the bundle, so its own read
+      // starts NOW and overlaps the Edge Function call; step B consumes it.
+      // The future never rejects (wrapped at creation); on every exit before
+      // step B it is simply dropped. `disable_restore_overlap` → null → step B
+      // reads serially, as before.
+      final readinessPrefetch = RestoreReadinessPrefetch.start(
+        readConfig: (key) => _hive.configBox.get(key),
+        read: () => _fetchReadinessRows(userId, since),
+      );
+
       // ── Fetch (one round-trip; e8a1c3 auth via callFunction/fresh token) ──
       final FunctionResponse resp =
           await _supabase.callFunction('restore-user-snapshot');
@@ -2478,8 +2491,19 @@ class SyncService {
       // platform-wide). So it restores via a standalone network read HERE, on the
       // fast path, before the success return — else readiness is synced-but-never
       // -restored for most reinstalls. One extra read; the C3 speedup is intact.
+      // B10: the read was started before the Edge Function call (above). A
+      // failed prefetch is reported, then `_restoreReadiness` does its OWN read
+      // (no argument = the _kNoInject sentinel; `null` would mean "no rows").
       await _safeRestoreOp(
-          'readiness_daily', _restoreReadiness(userId, since));
+          'readiness_daily',
+          RestoreReadinessPrefetch.consume(
+            readinessPrefetch,
+            restoreWithRows: (rows) =>
+                _restoreReadiness(userId, since, preFetched: rows),
+            restoreWithOwnRead: () => _restoreReadiness(userId, since),
+            reportFailure: (e, st) =>
+                _reportSyncFailure(opType: 'restore_readiness', error: e),
+          ));
       await _safeRestoreOp(
           'streaks', _restoreStreaks(userId, preFetched: row('streaks')));
       await _safeRestoreOp(

@@ -120,6 +120,11 @@ class ProfileWriteService {
     var wrote = false;
     await _withLock(() async {
       try {
+        final injected = debugFailNextPatchWith;
+        if (injected != null) {
+          debugFailNextPatchWith = null;
+          throw injected;
+        }
         if (!stillOwner()) return;
         final box = HiveService.instance.userBox;
         final existing = box.get('profile');
@@ -156,6 +161,19 @@ class ProfileWriteService {
   /// (tests have no Supabase user, so the push itself is a no-op there).
   @visibleForTesting
   static void Function()? debugOnFireSync;
+
+  /// Test seam (OI-348 B9, e9a6c1): holds the profile write lock until
+  /// [release] completes, so a test can observe the UI while a queued write
+  /// has NOT landed yet. Production never calls it.
+  @visibleForTesting
+  Future<void> debugHoldLockUntil(Future<void> release) =>
+      _withLock(() => release);
+
+  /// Test seam (OI-348 B-pass B9 F1): the NEXT [patchProfileWith] throws this
+  /// inside its own try, so its real report-and-rethrow path runs, then the
+  /// seam clears itself. Production never sets it.
+  @visibleForTesting
+  Object? debugFailNextPatchWith;
 
   /// Fire SyncService.syncProfileNow if we have a logged-in user.
   /// Fire-and-forget per docs/architecture/sync.md — Hive write already succeeded

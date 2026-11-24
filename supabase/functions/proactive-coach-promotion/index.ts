@@ -19,6 +19,17 @@
 // verify_jwt=false — invoked by the Postgres trigger using the
 // service_role_key from Vault. The trigger payload is internal-only.
 
+//
+// Diagnose 8b1f3d (2026-11-23): the floor rung (SD2, held from sign-up) is
+// never announced. A floor payload returns 200 {skipped:"floor"} before any
+// DB read, write or push. The trigger itself also skips the floor (WHEN
+// clause, migration <trigger>); this guard is the sink-side mirror.
+//
+// Test seam (same shape as evaluate-rank-promotions): `handler(req, deps)`
+// with the admin client, the prefs read and the push injected; env is read
+// only inside realDeps() / the push, so importing this module binds nothing.
+// Auth stays a direct `isAuthorizedCronCall(req)` call (contract-pinned).
+
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.42.0";
 import { isAuthorizedCronCall } from "../_shared/cron_auth.ts";
@@ -26,12 +37,14 @@ import {
   fetchNotificationPrefs,
   isNotificationEnabled,
 } from "../_shared/notification_prefs.ts";
+import { isFloorRank } from "../_shared/rank_engine.ts";
 import { composeCongrats } from "./congrats.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID")!;
-const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY")!;
+export interface PromotionDeps {
+  createAdmin: () => SupabaseClient;
+  fetchPrefs: typeof fetchNotificationPrefs;
+  sendPush: (user_id: string, rank_code: string, congrats: string) => Promise<void>;
+}
 
 interface TriggerPayload {
   user_id: string;
@@ -47,7 +60,10 @@ interface UserContext {
   total_workouts_done: number;
 }
 
-serve(async (req: Request): Promise<Response> => {
+export async function handler(
+  req: Request,
+  deps: PromotionDeps = realDeps(),
+): Promise<Response> {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
@@ -84,7 +100,13 @@ serve(async (req: Request): Promise<Response> => {
     return jsonResponse({ error: "user_id + rank_code required" }, 400);
   }
 
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  // Diagnose 8b1f3d — the floor rung is history, never news.
+  if (isFloorRank(rank_code)) {
+    console.log(`[proactive-coach-promotion] floor rank skipped`);
+    return jsonResponse({ ok: true, skipped: "floor" });
+  }
+
+  const admin = deps.createAdmin();
 
   // Unit E — the Promotion Day toggle gates the PUSH, not the chat message.
   //
@@ -98,7 +120,7 @@ serve(async (req: Request): Promise<Response> => {
   // Absent means SEND (N2): a failed lookup must never cost a promotion push.
   let pushAllowed = true;
   try {
-    const prefs = await fetchNotificationPrefs(admin, [user_id]);
+    const prefs = await deps.fetchPrefs(admin, [user_id]);
     pushAllowed = isNotificationEnabled(prefs, user_id, "rank_promotion");
   } catch (prefErr) {
     console.error(
@@ -144,7 +166,7 @@ serve(async (req: Request): Promise<Response> => {
     //    the app is closed.
     // The chat message above is written regardless; only the push is gated.
     if (pushAllowed) {
-      await sendOneSignalPush(user_id, rank_code, congrats);
+      await deps.sendPush(user_id, rank_code, congrats);
     } else {
       console.log(
         `[proactive-coach-promotion] user=${user_id} opted out of rank_promotion — chat message kept, push suppressed`,
@@ -163,7 +185,21 @@ serve(async (req: Request): Promise<Response> => {
       "proactive_coach_promotion_failed", msg);
     return jsonResponse({ error: msg }, 500);
   }
-});
+}
+
+function realDeps(): PromotionDeps {
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return {
+    createAdmin: () => createClient(SUPABASE_URL, SERVICE_ROLE_KEY),
+    fetchPrefs: fetchNotificationPrefs,
+    sendPush: sendOneSignalPush,
+  };
+}
+
+if (import.meta.main) {
+  serve((req) => handler(req));
+}
 
 async function loadUserContext(
   admin: SupabaseClient,
@@ -203,6 +239,8 @@ async function sendOneSignalPush(
 ): Promise<void> {
   // OneSignal `external_user_id` is the Supabase user_id by convention
   // (set by client on first sign-in).
+  const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID")!;
+  const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY")!;
   const preview = congrats.length > 80
     ? congrats.slice(0, 77) + "..."
     : congrats;

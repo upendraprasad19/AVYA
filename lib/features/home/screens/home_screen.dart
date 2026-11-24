@@ -14,6 +14,7 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import 'package:icanbefitter/shared/widgets/weight_trend_chart.dart';
 import 'package:icanbefitter/shared/widgets/pwa_install/pwa_install_banner.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/rank_ladder_data.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/sync_banner.dart';
@@ -221,11 +222,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void _maybeShowPendingPromotion() {
     if (!mounted) return;
     final rankCode = UserRepository.instance.getPendingPromotionRankCode();
-    if (rankCode == null) return;
+    final action = pendingPromotionAction(rankCode);
+    if (rankCode == null || action == PendingPromotionAction.none) return;
     // Clear the slot BEFORE pushing the modal — guards against re-fire
     // if the user backgrounds the app mid-celebration (didChangeApp
     // LifecycleState fires again on resume).
     unawaited(UserRepository.instance.clearPendingPromotionRankCode());
+    // Diagnose 8b1f3d: a floor stamp left by an older build is cleared
+    // above and never shown (no route, no "shown" event).
+    if (action == PendingPromotionAction.clearOnly) return;
     unawaited(ErrorTelemetry.logEvent('rank_promotion_celebration_shown',
         message: 'rank_code=$rankCode'));
     WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -21,6 +21,7 @@ import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/units_pref_adopter.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
@@ -505,7 +506,7 @@ class _RestoringScreenState extends ConsumerState<RestoringScreen> {
           'migrator=plan_integrity ms=${swPlanIntegrity.elapsedMilliseconds}',
     ));
     await _runL2CustomRepair();
-
+    await _runUnitsPrefAdopter(reason: 'restoring_units_pref_adopter');
     // Relocated from splash_screen._runDeferredInit (diagnose dc52a4) --
     // touches userBox, so MUST run AFTER HiveUserSession.openForUser above.
 

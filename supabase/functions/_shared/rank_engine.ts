@@ -109,6 +109,15 @@ export async function highestQualified(s: EvalState): Promise<RankLadderEntry> {
   return winner;
 }
 
+// The floor rung (ordinal 0) every account holds from sign-up (diagnose
+// 8b1f3d). Written to rank_promotions as history, never announced: no
+// ceremony row, no coach message, no push. Mirrors `isFloorRank` in
+// lib/core/services/rank_ladder_data.dart; the trigger migration's
+// WHEN (NEW.rank_code <> '<floor>') literal is pinned equal to both.
+export function isFloorRank(code: string | null | undefined): boolean {
+  return code != null && code === kRankLadder[0].code;
+}
+
 export function ranksUpTo(code: string): RankLadderEntry[] {
   const target = kRankLadder.find((r) => r.code === code);
   if (!target) return [kRankLadder[0]];

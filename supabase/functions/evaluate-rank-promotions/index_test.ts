@@ -3,7 +3,7 @@
 // handler(req, fakeDeps); importing index.ts starts no server (serve() sits
 // under import.meta.main).
 // deno-lint-ignore-file no-explicit-any
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { handler, realDeps } from "./index.ts";
 
@@ -307,4 +307,51 @@ Deno.test("rank job: a read that reports truncated is a failure for that user; t
 Deno.test("rank job: no head-count of workout_logs rows remains (presence-only: guards the retired API shape)", async () => {
   const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
   assertEquals(src.includes("head: true"), false);
+});
+
+// ── 8b1f3d: the floor rung is history, never a ceremony ─────────────────────
+
+const ceremonies = (fake: ReturnType<typeof makeFake>, user: string) =>
+  fake.writes.filter((w) =>
+    w.table === "ai_coach_interactions" && w.op === "insert" &&
+    w.payload.user_id === user && w.payload.channel === "promotion_ceremony"
+  );
+
+Deno.test("8b1f3d: a new user qualifying only the floor gets the SD2 row and NO ceremony", async () => {
+  const t = tables([]);
+  // streak 0 fails SD1's streak gate, so the winner is the floor rung.
+  for (const p of t.user_progress) p.current_streak_days = 0;
+  const fake = makeFake(t);
+  const { status } = await run(fake);
+  assertEquals(status, 200);
+  const a = promotionUpserts(fake).find((w) => upsertUser(w) === "A")!;
+  assert(a, "A gets its floor row (history)");
+  assertEquals(a.payload.map((r: any) => r.rank_code), ["SD2"]);
+  assertEquals(ceremonies(fake, "A").length, 0);
+});
+
+Deno.test("8b1f3d mirror: a new user qualifying SD1 gets SD2 + SD1 rows and ONE ceremony, SD2 -> SD1", async () => {
+  const fake = makeFake(tables([]));
+  await run(fake);
+  const a = promotionUpserts(fake).find((w) => upsertUser(w) === "A")!;
+  assertEquals(a.payload.map((r: any) => r.rank_code), ["SD2", "SD1"]);
+  const c = ceremonies(fake, "A");
+  assertEquals(c.length, 1);
+  // From the floor (address "Recruit") to SD1: the fallback previous rank is
+  // the floor rung, not a hard-coded or wrong code.
+  assert(
+    c[0].payload.ai_response.startsWith("Recruit, "),
+    c[0].payload.ai_response,
+  );
+  assertStringIncludes(c[0].payload.ai_response, "Promotion: Seaman 1st Class.");
+});
+
+Deno.test("8b1f3d mirror: a user already holding SD2 who qualifies SD1 gets one ceremony", async () => {
+  const t = tables([]);
+  t.rank_promotions = [{ user_id: "A", rank_code: "SD2" }];
+  const fake = makeFake(t);
+  await run(fake);
+  const a = promotionUpserts(fake).find((w) => upsertUser(w) === "A")!;
+  assertEquals(a.payload.map((r: any) => r.rank_code), ["SD1"]);
+  assertEquals(ceremonies(fake, "A").length, 1);
 });

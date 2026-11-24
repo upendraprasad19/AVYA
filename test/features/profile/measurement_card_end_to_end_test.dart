@@ -169,6 +169,10 @@ void main() {
 
       late WriteResult r;
       await tester.runAsync(() async {
+        // OI-348 B9 (e9a6c1): a signed-in user has a profile; the remembered
+        // unit is its `measurement_unit` field (never written without one).
+        await HiveService.instance.userBox
+            .put('profile', <String, dynamic>{'full_name': 'T'});
         r = await containerOf(tester)
             .read(measurementWriteProvider.notifier)
             .save(
@@ -348,16 +352,14 @@ void main() {
       testWidgets('card and sheet agree: ${row.name}', (tester) async {
         await writeThreeDays(tester);
         await tester.runAsync(() async {
-          await HiveService.instance.configBox.put(
-            'units_metric',
-            row.deviceMetric,
-          );
-          if (row.remembered != null) {
-            await HiveService.instance.userBox.put(
-              'body_measurement_sheet_unit',
-              row.remembered,
-            );
-          }
+          // OI-348 B9 (e9a6c1): both settings are profile fields now.
+          final stored = HiveService.instance.userBox.get('profile');
+          await HiveService.instance.userBox.put('profile', <String, dynamic>{
+            if (stored is Map) ...Map<String, dynamic>.from(stored),
+            'full_name': 'T',
+            'units_system': row.deviceMetric ? 'metric' : 'imperial',
+            if (row.remembered != null) 'measurement_unit': row.remembered,
+          });
         });
         await tester.pumpWidget(host());
         await tester.pump();
