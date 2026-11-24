@@ -108,6 +108,8 @@ concepts:
           Computes sessionLabel "SESSION N" when >1 workout_log_id per day.
           PHASE label resolves via WorkoutScheduleReadService.phaseForDate
           (Obs 1 6f1a2c — was hardcoded to 1); see concept phase_blocks_bucketing.
+          Since OI-348 B3 (5c8e2a) a PAST date's label equals the Train chip
+          that lists it (phaseForDateDisplay; concept past_phase_display_buckets).
           Unit 7 / OI-50 (d4e7c2): the set-count MAX and the duration total are
           NO LONGER hand-rolled here — both delegate to WorkoutReadService
           (below), so this reader and the edit sheet cannot disagree again.
@@ -688,7 +690,7 @@ concepts:
       read result['total_calories'] at top level of an AI response.
     writers:
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 61-185
+        line_range: 63-190
         method: logMeal
         notes: |
           Computes totalCals/Protein/Carbs/Fat/Fiber from items[].
@@ -826,6 +828,8 @@ concepts:
       - { file: lib/core/services/sync/sync_nutrition.dart, reason: "cloud sync writer scans nlog_* prefix" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks NlogKeyMigrator flag (config.get('nlog_key_migration_v7')) — not an nlog_* row reader; added batch 2026-05-19 / diagnose 4f8e2d for migrator timing telemetry" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for nlog_* (meals_today / nutrition_trend_7d) split out of ai_coach_repository.dart" }
+      - { file: lib/core/services/sync/nutrition_slot_engine.dart, reason: "a6c4e2 (OI-348 1a-ii): slot sync groups nlog_* rows by (date, meal_type) to push, merge and re-baseline them; the nutrition_slot_sync concept owns it" }
+      - { file: lib/features/profile/screens/profile/export_data.dart, reason: "a6c4e2: the data export now reads only nlog_* keys so sync bookkeeping maps in nutritionBox are not exported as meals" }
     regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
     hive:
       box: nutritionBox
@@ -854,7 +858,7 @@ concepts:
       old slot's cloud row is not explicitly tombstoned.
     writers:
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 390-492
+        line_range: 397-499
         method: moveMealLog
         notes: |
           Reads the row at the old key, recomputes the key via
@@ -903,7 +907,7 @@ concepts:
           with allowUndo: true → 10s SnackBar UNDO → restoreLastDeleted.
           Service handles both Hive write + cloud delete projection.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 502-647
+        line_range: 509-663
         method: deleteLog + restoreLastDeleted (in-memory stash)
         notes: |
           Canonical writer for the new path. deleteLog stashes the deleted
@@ -914,7 +918,7 @@ concepts:
           meanwhile, on a copy (OI-493 Landing B, diagnose 4cb58f). Fires
           provider invalidation + cloud delete projection.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 953-989
+        line_range: 969-1011
         method: restoreFoodLog (Map-based restore for legacy snackbar)
         notes: |
           OI-493 Landing B: same owner rule and first-free-occurrence
@@ -965,6 +969,8 @@ concepts:
       - { file: lib/core/services/sync/sync_nutrition.dart, reason: "cloud sync writer scans nlog_* prefix" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks NlogKeyMigrator flag (config.get('nlog_key_migration_v7')) — not an nlog_* row reader; added batch 2026-05-19 / diagnose 4f8e2d" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for nlog_* split out of ai_coach_repository.dart" }
+      - { file: lib/core/services/sync/nutrition_slot_engine.dart, reason: "a6c4e2 (OI-348 1a-ii): slot sync groups nlog_* rows by (date, meal_type) to push, merge and re-baseline them; the nutrition_slot_sync concept owns it" }
+      - { file: lib/features/profile/screens/profile/export_data.dart, reason: "a6c4e2: the data export now reads only nlog_* keys so sync bookkeeping maps in nutritionBox are not exported as meals" }
     regression_test: test/contracts/food_log_notifier_to_nutrition_log_items_test.dart
     hive:
       box: nutritionBox
@@ -1046,7 +1052,7 @@ concepts:
           Rebuilds the context via buildAiContext() between retry
           rounds so the snapshot reflects post-mutation Hive state.
       - file: lib/core/services/sync_service.dart
-        line_range: 810-855
+        line_range: 883-928
         method: pushSnapshot (coalesced) -> pushSnapshotNow (body)
         semantic: pass-through
         fields_read: [<full context map>]
@@ -1234,7 +1240,7 @@ concepts:
           dismiss (per-user IST date key) + configBox kill-switch
           'disable_expiry_banner'. Renders via _buildExpiryBanner in home_screen.
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 38-45
+        line_range: 123-126
         method: WeekSelector build
         semantic: display-only
         fields_read: [isPro]
@@ -1762,7 +1768,7 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/core/services/sync_service.dart
-        line_range: 1402-1465
+        line_range: 1479-1542
         method: _replayPendingOnboardingSync (value passed through)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -2141,7 +2147,7 @@ concepts:
         line_range: 1-276
         method: logExercise (workout series)
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 61-185
+        line_range: 63-190
         method: logMeal (calorie + protein series)
     reader_manifest_complete: true
     readers:
@@ -2600,19 +2606,19 @@ concepts:
       in-flight map by action id.
     writers:
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 60-185
+        line_range: 62-190
         method: logMeal (first free occurrence; override only when > 0)
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 407-492
+        line_range: 414-499
         method: moveMealLog (first free occurrence at the destination)
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 593-692
+        line_range: 600-708
         method: restoreLastDeleted + owner record + _restoreTargetKey / _withLogKey
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 941-989
+        line_range: 957-1011
         method: restoreFoodLog (same owner rule and target)
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 1073-1095
+        line_range: 1125-1147
         method: kNlogKeyShape / baseLogKey / firstFreeLogKey
       - file: lib/core/services/nlog_key_migrator.dart
         line_range: 1-179
@@ -2644,7 +2650,7 @@ concepts:
           reaches the cloud as a second nutrition_log_items row. A second
           device restores ONE row with both items (accepted residual, R9).
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 609-796
+        line_range: 625-895
         method: _restoreNutritionLogs
         semantic: aggregated
         fields_read: [date, meal_type, items[]]
@@ -2683,7 +2689,7 @@ concepts:
       WriteService output keys are a contract with every consumer.
     writers:
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 61-185
+        line_range: 63-190
         method: logMeal
       - file: lib/features/ai_coach/services/coach_meal_log.dart
         line_range: 33-146
@@ -2749,6 +2755,8 @@ concepts:
       - { file: lib/core/services/nlog_key_migrator.dart, reason: "v7 nlog_* key-rewrite migrator" }
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks NlogKeyMigrator flag (config.get('nlog_key_migration_v7')) — not an nlog_* row reader; added batch 2026-05-19 / diagnose 4f8e2d" }
       - { file: lib/features/ai_coach/services/ai_snapshot_builder.dart, reason: "Tech-debt audit 2026-05-20 finding A10 — snapshot reader for nlog_* prefix split out of ai_coach_repository.dart" }
+      - { file: lib/core/services/sync/nutrition_slot_engine.dart, reason: "a6c4e2 (OI-348 1a-ii): slot sync groups nlog_* rows by (date, meal_type) to push, merge and re-baseline them; the nutrition_slot_sync concept owns it" }
+      - { file: lib/features/profile/screens/profile/export_data.dart, reason: "a6c4e2: the data export now reads only nlog_* keys so sync bookkeeping maps in nutritionBox are not exported as meals" }
     regression_test: test/contracts/nutrition_write_to_read_contract_test.dart
     behavioral_test_path: test/contracts/nutrition_write_service_ist_anchored_test.dart
     build_gate: scripts/check_nlog_key_canonical.dart
@@ -3204,10 +3212,10 @@ concepts:
         line_range: 1-9999
         method: _syncScheduledWorkouts (confirmed :1778; constructs a SyncSkipIndex(domain: SyncSkipDomain.sched) and drives the FK-resilient upsert through its pushIfChanged closure -- the helper stores index[scheduled_date]=fp ON CONFIRMED ONLY; commit(liveKeys:) prunes to live schedule_ dates + persists after the loop)
       - file: lib/core/services/sync_service.dart
-        line_range: 298-331
+        line_range: 371-404
         method: schedPayloadFingerprint (pure static, byte-identical) + _schedHashSkipDisabled kill-switch getter
       - file: lib/features/dev/simulation_service.dart
-        line_range: 103-183
+        line_range: 103-185
         method: "resetJourney (A-fix-3 — clears the RAW 'sync_sched_payload_hash_index' literal in the workoutBox prefix-clear list; NOT repointed to SyncSkipDomain.sched.indexKey by this task -- out of Task 15's stated file scope, functionally identical since the enum's indexKey string is byte-identical to the literal)"
     reader_manifest_complete: true
     readers:
@@ -3296,7 +3304,7 @@ concepts:
         line_range: 1-9999
         method: exlogPayloadFingerprint (confirmed :340, pure static, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (confirmed :329, generic kill-switch reader shared with nlog/every future domain, replaces the deleted _exlogHashSkipDisabled getter)
       - file: lib/features/dev/simulation_service.dart
-        line_range: 103-183
+        line_range: 103-185
         method: resetJourney (clears SyncSkipDomain.exlog.indexKey in the workoutBox prefix-clear list -- repointed from the raw 'sync_exlog_payload_hash_index' literal to the symbol, G1's index_literal_outside_helper rule)
     reader_manifest_complete: true
     readers:
@@ -3423,21 +3431,28 @@ concepts:
       `disabled: true` (the same behavior the deleted else-branch in the
       old postamble implemented for finding I9), so that branch's removal
       is not a regression.
+      OI-348 Landing 1a-ii (diagnose a6c4e2, 2026-11-23): this index is written
+      and read ONLY in legacy mode. `_syncNutritionLogs` (205-214) is now a
+      router: the slot sync (`NslotSection.pushBody`, its own index
+      `SyncSkipDomain.nslot`, concept nutrition_slot_sync) runs in new mode;
+      the body below moved verbatim into `_syncNutritionLogsLegacy` (216-447),
+      reached through `NslotSection.legacyPass` when the kill switch
+      `disable_nutrition_slot_sync` is set or the RPC probe has not answered.
     writers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 201-432
-        method: _syncNutritionLogs (constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
+        line_range: 209-452
+        method: _syncNutritionLogs -> _syncNutritionLogsLegacy (legacy mode only; constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
       - file: lib/core/services/sync_service.dart
-        line_range: 368-428
+        line_range: 441-501
         method: nlogPayloadFingerprint / nlogHashSkipDisabledFor (pure statics, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (generic kill-switch reader shared with exlog, replaces the deleted _nlogHashSkipDisabled getter)
       - file: lib/features/dev/simulation_service.dart
-        line_range: 103-183
+        line_range: 103-185
         method: resetJourney (clears SyncSkipDomain.nlog.indexKey in the nutritionBox prefix-clear list -- repointed from the raw 'sync_nlog_payload_hash_index' literal to the symbol, G1's index_literal_outside_helper rule)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 201-432
-        method: _syncNutritionLogs (the skip decision is now internal to SyncSkipIndex.pushIfChanged, which reads its own `_stored[rowKey]` -- hydrated from readIndex(box, domain.indexKey) in the SyncSkipIndex constructor)
+        line_range: 209-452
+        method: _syncNutritionLogsLegacy (legacy mode only; the skip decision is now internal to SyncSkipIndex.pushIfChanged, which reads its own `_stored[rowKey]` -- hydrated from readIndex(box, domain.indexKey) in the SyncSkipIndex constructor)
         semantic: latest
         fields_read: [sync_nlog_payload_hash_index.<slot_id>]
     regression_test: test/contracts/sync_nutrition_log_payload_hash_index_writer_to_reader_test.dart
@@ -3543,15 +3558,15 @@ concepts:
       `cloud_restore`. Kill switch `disable_nutrition_phantom_clean`.
     writers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 958-1005
+        line_range: 1070-1117
         method: _cleanupNutritionPullCopies (deleteAll of the matched keys; syncBox flag put)
       - file: lib/core/services/sync_service.dart
-        line_range: 2610-2655
+        line_range: 2690-2738
         method: pullRecentCrossChannelLogs / pullRecentCrossChannelLogsForUser / _pullRecentCrossChannelLogsFor (awaits the cleanup before the legs; the nutrition leg runs only under restore_nutrition_launch_pull)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 1032-1041
+        line_range: 1146-1155
         method: isNutritionPullCopy (the one match rule)
         semantic: latest
         fields_read: [user_id, date, meal_type, items, is_saved_meal, source]
@@ -3571,6 +3586,85 @@ concepts:
       columns: [id, user_id, date, meal_type, total_calories, total_protein, total_carbs, total_fat, total_fiber, created_at]
     sync_methods: [pullRecentCrossChannelLogs]
     restore_methods: []
+
+  - concept: nutrition_slot_sync
+    domain: nutrition
+    description: |
+      OI-348 Landing 1a-ii (diagnose a6c4e2, 2026-11-23, decision B; spec
+      docs/plans/nutrition-slot-sync.md FINAL v17). Cross-device meal sync
+      per slot (date + meal_type). Every meal row (nlog_) carries a stable
+      `entry_id` (logMeal; editLog strips it with the other protected keys).
+      The server (migration 181) keeps per slot a revision `rev`, the
+      `entries` list, `legacy_rev`, and a tombstone per deleted slot; the
+      INVOKER RPCs nutrition_slot_put / nutrition_slot_delete compare-and-set
+      on `rev` and answer a conflict with the current state
+      (nutrition_slot_state). A non-RPC write (an old client) is marked
+      legacy by the `trg_zz_nutrition_rev` trigger (entries null). The client
+      keeps a ledger per date (nutritionBox `nslot_ledger_<date>`: the last
+      rev + entry signatures it agreed with the server), a keyset cursor
+      (`nslot_cursor`) and meta (`nslot_meta`: rebaselined, full,
+      inflight_sigs); no whole-box reader counts an nslot_ value (test/sync/nutrition_slot_store_readers_test.dart).
+      Push sends only changed slots (put, or delete for an emptied slot)
+      through SyncSkipIndex domain nslot; pull walks rows + tombstones after
+      the cursor; push conflicts, pull and restore all merge three ways by
+      entry_id (base = ledger) with a day pass that removes a moved meal from
+      its old slot (nutrition_slot_merge.dart, pure). A legacy row seen in
+      steady state schedules a FULL re-baseline. Section bodies run under
+      one SerialSlot ticket bound to (userId, generation). Kill switch
+      `disable_nutrition_slot_sync` (configBox) runs the old push / restore
+      verbatim (legacyPass); a missing RPC keeps the probe failing and never
+      selects legacy-seen. Pull also runs on app resume (2 min throttle) and
+      after pullRecentCrossChannelLogs in checkAndSync.
+    writers:
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 69-190
+        method: logMeal (stamps entry_id = uuid v4 on every new meal row)
+      - file: lib/core/services/sync/nutrition_slot_engine.dart
+        line_range: 469-623
+        method: NslotEngine.applyLocked (3-way merge of one date's cloud winners into nlog_ rows + ledger)
+      - file: lib/core/services/sync/nutrition_slot_engine.dart
+        line_range: 627-794
+        method: NslotEngine.push / _pushSlot (conditional put / delete per slot; ledger written from the payload SENT on ok)
+      - file: lib/core/services/sync/nutrition_slot_engine.dart
+        line_range: 928-991
+        method: NslotEngine._applyWinners / restoreSteady (pull + restore apply)
+      - file: lib/core/services/sync/nutrition_slot_engine.dart
+        line_range: 995-1328
+        method: NslotEngine.rebaseline (one-time FULL re-baseline: snapshot S0, replaceable set R, kept set K, inflight_sigs)
+      - file: lib/core/services/sync/nutrition_slot_section.dart
+        line_range: 124-393
+        method: NslotSection.pushBody / pullBody / restoreBody / legacyPass (ticket, generation, owed flags)
+      - file: supabase/migrations/181_nutrition_slot_sync.sql
+        line_range: 91-421
+        method: nutrition_slot_put / nutrition_slot_delete (CAS on rev, tombstone upsert / delete)
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/sync/nutrition_slot_engine.dart
+        line_range: 798-926
+        method: NslotEngine.pull / winnersOf (keyset cursor over rows and tombstones; newest rev per slot wins)
+        semantic: latest
+        fields_read: [rev, updated_at, entries, legacy_rev, nutrition_log_items.entry_key, nutrition_slot_tombstones.rev]
+      - file: lib/core/services/sync/nutrition_slot_remote.dart
+        line_range: 1-9999
+        method: NslotCloudRow.fromJson / toLocalEntries (a legacy row becomes one synthetic entry; else one entry per entries[] with its items by entry_key)
+        semantic: latest
+        fields_read: [id, date, meal_type, rev, legacy_rev, updated_at, created_at, entries, items]
+      - file: lib/features/nutrition/providers/nutrition_provider.dart
+        line_range: 440-440
+        method: whole-box walk by date (day total; nslot_ store values carry no date/meal_type, so the walk is unaffected: store_readers test)
+        semantic: latest
+        fields_read: [date, total_calories]
+    regression_test: test/contracts/nutrition_slot_sync_writer_to_reader_test.dart
+    behavioral_test_path: test/sync/nutrition_slot_sync_behavioral_test.dart
+    hive:
+      box: nutritionBox
+      key_prefix: "nlog_ (meals), nslot_ (engine store)"
+      key_formula: "nlog_<date>_<meal>_<hash8>; nslot_ledger_<date>, nslot_cursor, nslot_meta"
+    cloud:
+      table: nutrition_logs
+      columns: [id, user_id, date, meal_type, rev, updated_at, entries, legacy_rev, total_calories, total_protein, total_carbs, total_fat, total_fiber, created_at]
+    sync_methods: [_syncNutritionLogs, pullNutritionSlots]
+    restore_methods: [_restoreNutritionLogs]
 
   - concept: sync_fanout_nutrition_domain
     domain: nutrition
@@ -3720,7 +3814,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2236-2441
+        line_range: 2315-2521
         method: _attemptSingleCallRestore
         semantic: aggregated
         fields_read: [schema_version, tables]
@@ -3780,7 +3874,7 @@ concepts:
       assumption (it cannot detect a lowered production cap).
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3154-3225
+        line_range: 3239-3310
         method: _fetchAllRows
         notes: |
           The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
@@ -3803,8 +3897,8 @@ concepts:
           Shared by _restoreCustomExercises and _restoreCustomFoods: kill switch off -> the
           bare select().eq(user_id); on -> _fetchAllRows (no since, tieBreak id).
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 609-646
-        method: _restoreNutritionLogs
+        line_range: 676-744
+        method: _fetchNutritionRowsForSlotRestore / _restoreNutritionLogsLegacy (both paging loops)
         notes: |
           Its own paging loop (a nested embed read) gets the same explicit-direction id
           term behind the same kill switch, and the same restore_row_ceiling_hit event.
@@ -4099,7 +4193,7 @@ concepts:
           step. Uses _safeRestoreOp wrapper to keep one surface's
           failure from aborting the rest.
       - file: lib/core/services/sync_service.dart
-        line_range: 1895-2110
+        line_range: 1973-2188
         method: _restoreFromCloudForUserCore
         semantic: aggregated
         fields_read: [<the body of restoreFromCloudForUser, moved verbatim by OI-284>]
@@ -4118,7 +4212,7 @@ concepts:
           routing to /home (15s timeout safety). Cancels in-flight
           restore when user_profile is null (brand-new user).
       - file: lib/core/services/sync_service.dart
-        line_range: 691-700
+        line_range: 764-773
         method: restoreFromCloud (legacy entry point)
         semantic: pass-through
         fields_read: []
@@ -4276,7 +4370,11 @@ concepts:
         line_range: 1-9999
         method: _PhaseGroup → _WeekChip (hasCompletedDay)
         semantic: flag-check
-        notes: renders Icons.check_circle when hasCompletedDay && !isLocked.
+        notes: |
+          renders Icons.check_circle when hasCompletedDay && !isLocked.
+          A PAST group draws one chip per week its display bucket spans (min 4,
+          `_PastPhase.weekCount`, OI-348 B3 5c8e2a), so a week of a long past
+          group past W4 gets its chip and its ✓ (it had none before).
     regression_test: test/contracts/week_completion_check_test.dart
     class_constraints: |
       Same "any completed day that week" predicate for past AND current
@@ -4387,6 +4485,11 @@ concepts:
         notes: |
           carry-forward: an unstamped row inherits the nearest preceding
           stamped phase (B-pass F-2); fully-unstamped → 28-day fallback.
+          This stamp grouping is the STRICT set only (the reconciler's input).
+          Since OI-348 B3 (5c8e2a) DISPLAY reads bucketPastRowsForDisplay
+          (concept past_phase_display_buckets), and phaseForDate labels a past
+          date with the chip number (phaseForDateDisplay) after its
+          current-window short-circuit.
       - file: lib/core/services/phase_progress_reconciler.dart
         line_range: 1-9999
         method: PhaseProgressReconciler.reconcile (block count, monotonic, +12 clamp)
@@ -4395,6 +4498,7 @@ concepts:
         line_range: 1-9999
         method: past-phase rendering (_PastPhase blocks)
         semantic: historical-series
+        notes: reads pastPhaseBlocksForDisplay (date-ordered display buckets, past_phase_display_buckets); one chip per week a group spans (min 4) since 5c8e2a.
       - file: lib/features/train/widgets/workout_receipt_card.dart
         line_range: 1-9999
         method: WorkoutReceiptData.fromExerciseLogs (PHASE label via phaseForDate)
@@ -5330,7 +5434,7 @@ concepts:
         semantic: historical-series
         fields_read: [healthBox keys starting with 'water_ml_', value (int or Map total_ml)]
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 203-229
+        line_range: 477-533
         method: _syncWaterLogs (cloud upsert)
         semantic: pass-through
         fields_read: [healthBox keys starting with 'water_ml_']
@@ -5383,16 +5487,16 @@ concepts:
         line_range: 1324-1394
         method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators — relogSavedMeal no longer bumps times_used, a8e3f1)
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 845-989
+        line_range: 861-1011
         method: saveMealPreset (keys Hive via savedMealKey(name) — diagnose b8d5c2) + deleteSavedMeal + restoreFoodLog (sole writers post-C-12)
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 708-835
+        line_range: 724-851
         method: relogSavedMeal (owns the times_used bump for BOTH formats — a8e3f1) + saveMealAsTemplate (meal_<hash> templates; a re-save keeps times_used)
       - file: lib/core/services/saved_meal_key_migrator.dart
         line_range: 1-100
         method: SavedMealKeyMigrator.runIfNeeded (one-shot re-key legacy saved_meal_<ms> → canonical, boot-wired; b8d5c2)
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 232-330
+        line_range: 252-350
         method: _syncSavedMeals (cloud projection)
     behavioral_test_path_times_used: test/contracts/saved_meal_relog_times_used_behavioral_test.dart  # a8e3f1 — meal_* + legacy counts, re-save keeps count
     # audit-2026-05-16 reader-side — every callsite reading
@@ -5438,7 +5542,7 @@ concepts:
         semantic: flag-check
         fields_read: [is_saved_meal]
       - file: lib/core/services/sync/sync_nutrition.dart
-        line_range: 232-330
+        line_range: 252-350
         method: _syncSavedMeals (cloud upsert)
         semantic: pass-through
         fields_read: [is_saved_meal, name, total_calories, items, meal_type, created_at]
@@ -5912,20 +6016,20 @@ concepts:
       before the legacy fan-out re-runs the ops.
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 1990-2008
+        line_range: 2068-2086
         method: _settleRestoreMarker
         notes: |
           The ONE marker writer; the decision is the pure
           `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
           failure, uid non-null, live uid == uid, Hive owner == uid).
       - file: lib/core/services/sync_service.dart
-        line_range: 2021-2039
+        line_range: 2099-2117
         method: restoreFromCloudForUser
         notes: |
           Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
           core inside `RestoreFailureCollector.run`, heals titles, THEN settles.
       - file: lib/core/services/sync_service.dart
-        line_range: 195-260
+        line_range: 200-333
         method: _onUserChanged
         notes: clears `_restoreSettledUserId` and the withheld reason on an account swap, as its FIRST statement (every later step can throw; B-pass F3).
       - file: lib/core/services/sync/sync_restore_failure_collector.dart
@@ -5943,7 +6047,7 @@ concepts:
           a stale failure from the aborted attempt cannot hold the marker closed
           (B-pass reviewer B F4).
       - file: lib/core/services/sync_service.dart
-        line_range: 2983-3056
+        line_range: 3068-3141
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
@@ -6043,7 +6147,7 @@ concepts:
         method: phaseStartAfterGap
         notes: the ONE start-date rule; pure.
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 2164-2203
+        line_range: 2327-2366
         method: nextPhaseStartDate
         notes: delegates to phaseStartAfterGap (gapStart false = the original rule, used by the graduation unlock).
       - file: lib/shared/services/pro_phase_advance.dart
@@ -7952,7 +8056,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2983-3056
+        line_range: 3068-3141
         method: _reportSyncFailure (funnel — all sync failures route through here)
         semantic: pass-through
         fields_read: []
@@ -8117,7 +8221,7 @@ concepts:
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 502-592
+        line_range: 509-599
         method: deleteLog
         notes: removes nlog_* entry from nutritionBox + fires cloud delete (shifted by the moveMealLog insertion, obs 1 2026-09-20 batch — see nutrition_log_retag)
     reader_manifest_complete: true
@@ -9528,7 +9632,7 @@ concepts:
         fields_read: []
         notes: Fired at :58/:285/:883; invalidates subscriptionInfoProvider + messageLimitProvider.
       - file: lib/core/services/nutrition_write_service.dart
-        line_range: 1025-1025
+        line_range: 1047-1047
         method: onStateChanged
         semantic: callback-invocation
         fields_read: []
@@ -10194,12 +10298,12 @@ concepts:
       getCurrentPlanMap, hasPlan, getCurrentCalendarWeek.
     writers:
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 135-2289
+        line_range: 135-2452
         method: WorkoutScheduleReadService
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 35-45
+        line_range: 123-128
         method: build → getPlanStartDate
         semantic: latest
         fields_read: [plan_start_date]
@@ -10350,12 +10454,12 @@ concepts:
         method: SelectedWeek / SelectedWeekNotifier.build (default, picked false) / select (picked true)
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 1025-1032
+        line_range: 1089-1096
         method: weekChipLit (pure)
         semantic: latest
         fields_read: [SelectedWeek.week, SelectedWeek.picked, HoldStatusData.todayHoldOrdinal]
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 150-160
+        line_range: 151-161
         method: _WeekSelectorState.build — selected + holdingToday for the current group
         semantic: latest
         fields_read: [selectedWeekProvider.picked, holdStatusProvider.todayHoldOrdinal]
@@ -13721,7 +13825,7 @@ concepts:
           at :969 (the cloud progress row; both cites re-derived 2026-11-14 from
           the 'current_week': 1 literal, the old 473 / 786 had drifted). NOT routed through the projection (no need).
       - file: lib/core/services/sync_service.dart
-        line_range: 1093-1097
+        line_range: 1170-1174
         method: _replayPendingOnboardingSync (NO LONGER writes current_week)
         notes: |
           B-pass F1: this boot-replay used to pass the frozen Hive current_week
@@ -13978,7 +14082,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1120-1177
+        line_range: 1197-1254
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -14180,7 +14284,7 @@ concepts:
         method: pastPhaseBlocks
         semantic: strict-set
       - file: lib/core/services/workout_schedule_read_service.dart
-        line_range: 1955-2006
+        line_range: 1955-2016
         method: pastPhaseBlocksForDisplay
         semantic: display-recovery
         notes: |
@@ -14198,7 +14302,7 @@ concepts:
           account).
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 137
+        line_range: 144-149
         method: past-phase strip
         semantic: render
         notes: The ONLY permitted caller of the display wrapper.
@@ -14224,6 +14328,63 @@ concepts:
       - "re-bucketing schedule_* inside week_selector.dart instead of delegating to the shared SoT"
       - "adding a `bool strict` parameter instead of two named methods — it puts the reconciler one boolean away from the dangerous path, invisibly at the call site"
     contract_test_path: test/contracts/week_selector_past_phases_test.dart
+
+  - concept: past_phase_display_buckets
+    domain: workout
+    behavioral_test_path: test/contracts/past_phase_display_runs_behavioral_test.dart
+    description: |
+      OI-348 B3/B7 (diagnose 5c8e2a). The Train strip's past groups, their
+      week chips and a past receipt's PHASE label follow the DATE sequence of
+      the schedule_* rows, not the stamp NUMBER. A write-time `phase` stamp can
+      go stale (the L1 merge keeps a local rest row wholesale), so grouping by
+      number pulled days out of their own month and merged months. Display
+      only: the strict pastPhaseBlocks() that PhaseProgressReconciler counts
+      is unchanged. Rules: runs over stamped rows; a run of at most 2 rows that
+      are all rest rows is noise unless every run is; adjacent equal runs merge;
+      each row joins the last segment starting on or before it, with the
+      Mon-Sun edge rule; a past group draws one chip per week it spans (min 4);
+      phaseForDate labels a past date with that group's chip number. Kill switch
+      configBox `disable_past_phase_display_runs` restores the stamp grouping,
+      4 chips and the strict-index label verbatim.
+    writers:
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 2094-2196
+        method: bucketPastRowsForDisplay (+ _sameMonSunWeek)
+        semantic: display-buckets
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 1955-2016
+        method: pastPhaseBlocksForDisplay
+        semantic: display-buckets
+        notes: both branches (strict non-empty, and the c9e4b7 recovery) bucket through bucketPastRowsForDisplay while the switch is on.
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 2198-2210
+        method: pastPhaseDisplayRunsEnabled (kill switch, unreadable box = on)
+        semantic: flag-check
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/train/widgets/week_selector.dart
+        line_range: 340-438
+        method: _toPastPhases (weekCount) + pastPhaseWeekCount + pastPhaseWeekOf (the one calendar week rule for count and chip assignment) + pastPhaseGroupsForTest
+        semantic: render
+        notes: chip loop `for (var w = 1; w <= past.weekCount; w++)`; extendWeeks read once per build.
+      - file: lib/core/services/workout_schedule_read_service.dart
+        line_range: 2212-2295
+        method: phaseForDate -> phaseForDateDisplay
+        semantic: display-only
+        notes: the current-window short-circuit runs BEFORE any block walk (test T11); the chip slice is implemented independently of _toPastPhases and pinned equal by the Hive agreement test.
+    hive:
+      box: workoutBox
+      key: schedule_<yyyy-MM-dd>
+      shape: "Map with `date`, optional int `phase`, `type`/`status` (rest rows)"
+    cloud:
+      table: user_progress
+      columns: [plan_json]
+    sync_methods: []
+    restore_methods: []
+    forbidden_legacy_patterns:
+      - "PhaseProgressReconciler or pro_phase_advance reading the display buckets (a monotonic over-advance is unrecoverable)"
+      - "adopting the incoming stamp in the L1 merge to 'fix' the data (the mirror: the local stamp can be the fresh one)"
+    contract_test_path: test/contracts/past_phase_display_runs_behavioral_test.dart
 
   - concept: signout_teardown_window_and_restore_op_ceiling
     domain: auth_profile
@@ -14277,7 +14438,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2829-2829
+        line_range: 2912-2912
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -14288,7 +14449,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2852-2856
+        line_range: 2935-2939
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -14298,7 +14459,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2868-2870
+        line_range: 2951-2953
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -14313,7 +14474,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2851-2893
+        line_range: 2934-2977
         method: _safeRestoreOp
         semantic: bounded-await
         notes: all four ranges shifted +24 by OI-348 Landing 1a-i (diagnose b1d2a8, the cross-channel pull gained its cleanup call and test seam earlier in the file).
@@ -19940,6 +20101,8 @@ concepts:
       - test/ai_coach/coach_composer_speech_test.dart
       - test/widgets/food_logger_speech_test.dart
       - test/widgets/food_logger_send_test.dart
+      - test/core/speech_segment_accumulator_test.dart
+      - test/core/speech_segment_kill_switch_test.dart
     description: |
       The `speech_to_text` plugin is a process-wide singleton with ONE result
       listener and no session ids. SpeechInputService is its only owner: it binds
@@ -19960,11 +20123,11 @@ concepts:
       the host's text field until the host sends them.
     writers:
       - file: lib/core/services/speech_input_service.dart
-        line_range: 324-651
+        line_range: 342-692
         method: SpeechInputService (begin / release / _onStatus / _cancelOwnerless)
         semantic: per-session
       - file: lib/core/services/speech_input_controller.dart
-        line_range: 101-596
+        line_range: 102-639
         method: SpeechInputController (_finish latch, start / stop / send / cancel)
         semantic: per-session
       - file: lib/core/services/speech_input_lifecycle.dart
@@ -19991,6 +20154,61 @@ concepts:
       columns: []
     sync_methods: []
     regression_test: test/core/speech_input_controller_behavioral_test.dart
+
+  - concept: speech_segment_accumulation
+    domain: cross_domain
+    behavioral_test_path: test/core/speech_input_controller_behavioral_test.dart
+    additional_tests:
+      - test/core/speech_segment_accumulator_test.dart
+      - test/core/speech_segment_kill_switch_test.dart
+    description: |
+      OI-348 B5 (diagnose 6d9f3b). On Android the speech_to_text plugin reports
+      a finished segment as ResultType.intermediate and adds no accumulation;
+      the wrapper used to drop the type and the controller replaced its text
+      with every result, so a long sentence kept only its last segment. The
+      wrapper now carries `isSegmentEnd` (raw int compare, never
+      resultTypeValue) and a pure SpeechSegmentAccumulator decides the
+      recognizer's shape once per session (segmented = append, cumulative =
+      replace) and the final transcript (whole-utterance final replaces, a
+      repeat of the last segment adds nothing). Native only; web untouched.
+      One `speech_segments` event per process (counts + mode, never words).
+      Kill switch configBox `disable_speech_segment_accumulate`, read once per
+      session in `_start`.
+    writers:
+      - file: lib/core/services/speech_input_service.dart
+        line_range: 208-218
+        method: engineResultFromPlugin (isSegmentEnd from the raw int; called by PluginSpeechEngine.listen)
+        semantic: per-session
+      - file: lib/core/services/speech_segment_accumulator.dart
+        line_range: 31-189
+        method: SpeechSegmentAccumulator (onResult / onFinal)
+        semantic: per-session
+      - file: lib/core/services/speech_input_service.dart
+        line_range: 357-376
+        method: segmentAccumulateEnabled (kill switch, unreadable box = on)
+        semantic: flag-check
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/speech_input_controller.dart
+        line_range: 404-428
+        method: engineResult (liveText from the accumulator; final through onFinal)
+        semantic: per-session
+      - file: lib/core/services/speech_input_controller.dart
+        line_range: 559-572
+        method: _maybeLogSegments (speech_segments, once per process)
+        semantic: telemetry
+    hive:
+      box: in_memory_only  # session-only; only the configBox switch is read
+      key_prefix: ""
+    cloud:
+      table: client_errors
+      columns: [message]
+    sync_methods: []
+    restore_methods: []
+    forbidden_legacy_patterns:
+      - "a transcript word in the speech_segments message"
+      - "ResultType.fromValue / resultTypeValue in the result mapping (throws on an unknown int inside the plugin's chain)"
+    regression_test: test/core/speech_segment_accumulator_test.dart
 
   - concept: purchase_mode_surface_decision
     domain: subscription

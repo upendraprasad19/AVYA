@@ -79,7 +79,10 @@ void main() {
     });
 
     test('_restoreNutritionLogs derives Hive key, not cloud UUID', () {
-      final body = _restoreBody(src, 'NutritionLogs');
+      // OI-348 Landing 1a-ii: the pre-1a-ii body is now the LEGACY-mode
+      // restore (kill switch); the new-mode slot restore keys by the
+      // entry's own key (nslotPlaceKey, test/sync/nutrition_slot_merge_test).
+      final body = _restoreBody(src, 'NutritionLogsLegacy');
       // Pre-fix: `_hive.nutritionBox.put(id, map)` where `id` was the
       // cloud UUID. Must instead build `nlog_<...>` from row data.
       expect(

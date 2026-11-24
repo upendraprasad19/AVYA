@@ -294,10 +294,13 @@ void main() {
         // 75 after the pairing scope moved from a 300-char window to the
         // enclosing block (same day): 5 pairs the window could not see, 4
         // already flagged and 1 (the nlog item catch) fixed with it.
+        // 76 with OI-348 Landing 1a-ii's pullNutritionSlots catch (a NEW pair,
+        // flagged from the start); 77 with the new-mode _restoreNutritionLogs
+        // catch (B-pass seat B P3, flagged from the start).
         expect(
           pairedSiteCount,
-          equals(75),
-          reason: 'expected exactly 75 caller-level H-42 telemetry-pair '
+          equals(77),
+          reason: 'expected exactly 77 caller-level H-42 telemetry-pair '
               'sites across sync_service.dart + lib/core/services/sync/ '
               '(verified live 2026-09-28) — if this count changes, a new '
               'pair was added (it needs skipServerPost:true from the '

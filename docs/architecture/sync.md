@@ -171,14 +171,15 @@ the sync layer now goes through `SyncSkipIndex.pushIfChanged(rowKey, fingerprint
   single-row steps and the coach loop, which skips by its own stamped cloud id), and no code
   outside `sync_skip_index.dart` may write a `*_payload_hash_index` key.
 
-**2. The domain table.** 17 `SyncSkipDomain` values (`lib/core/services/sync/sync_skip_index.dart`),
+**2. The domain table.** 18 `SyncSkipDomain` values (`lib/core/services/sync/sync_skip_index.dart`),
 each `(indexKey, killSwitchKey, opType, box)`:
 
 | Domain | Hive index key | box | Kill switch | Wraps |
 |---|---|---|---|---|
 | `sched` | `sync_sched_payload_hash_index` | workout | `disable_sched_hash_skip` | `_syncScheduledWorkouts` (`sync_workout.dart`) |
 | `exlog` | `sync_exlog_payload_hash_index` | workout | `disable_exlog_hash_skip` | `_syncExerciseLogs` (`sync_workout.dart`) |
-| `nlog` | `sync_nlog_payload_hash_index` | nutrition | `disable_nlog_hash_skip` | `_syncNutritionLogs` (`sync_nutrition.dart`) |
+| `nlog` | `sync_nlog_payload_hash_index` | nutrition | `disable_nlog_hash_skip` | `_syncNutritionLogs` (`sync_nutrition.dart`), legacy mode only (`_syncNutritionLogsLegacy`) |
+| `nslot` | `sync_nslot_payload_hash_index` | nutrition | `disable_nslot_hash_skip` | `NslotEngine.push` (`nutrition_slot_engine.dart`), op `sync_nslot_put` — SoT `nutrition_slot_sync`; a slot whose payload matches is skipped, the ledger decides put vs delete |
 | `wlog` | `sync_wlog_payload_hash_index` | workout | `disable_wlog_hash_skip` | `_syncWorkoutLogs` (`sync_workout.dart`) — SoT concept `sync_workout_log_payload_hash_index` (the Hive key stays the short `wlog` form; only the SoT registry concept name spells it out) |
 | `completion` | `sync_completion_payload_hash_index` | workout | `disable_completion_hash_skip` | `_syncScheduleCompletions` (`sync_workout.dart`) — SoT `sync_schedule_completion_payload_hash_index` |
 | `template` | `sync_template_payload_hash_index` | workout | `disable_template_hash_skip` | `_syncWorkoutTemplates` (`sync_workout.dart`) — SoT `sync_workout_template_payload_hash_index` |
@@ -425,6 +426,34 @@ Not in this batch (tracked on the OI board): two overlapping live passes of the 
 restore recording fingerprints for the other 15 domains, request batching, telemetry batching, the
 phone cold start, Google `prompt=select_account`.
 
+### Nutrition slot sync (OI-348 Landing 1a-ii, diagnose `a6c4e2`, 2026-11-23)
+
+Cross-device meal sync per slot (`date` + `meal_type`). Spec: `docs/plans/nutrition-slot-sync.md`
+(FINAL v17). SoT `nutrition_slot_sync`.
+
+- **Identity.** Every `nlog_` row carries `entry_id` (uuid v4 at `logMeal`; `editLog` cannot change
+  it). A row from before the build gets one at the first re-baseline (`stampLocked`).
+- **Server (migration 181).** `nutrition_logs` gains `rev`, `updated_at`, `entries`, `legacy_rev`;
+  items gain `entry_key`; `nutrition_slot_tombstones` keeps `rev` across a delete. INVOKER RPCs
+  `nutrition_slot_put` / `nutrition_slot_delete` compare-and-set on `rev` and answer a conflict
+  with the current state. A non-RPC write (an older app) sets `entries = null` and
+  `legacy_rev = rev` (trigger `trg_zz_nutrition_rev`).
+- **Device store** (nutritionBox, never read by a meal reader): `nslot_ledger_<date>` (per slot the
+  last `rev` and entry signatures this device agreed with the server), `nslot_cursor`, `nslot_meta`.
+- **Push.** Only slots whose rows differ from the ledger: put (or delete, when emptied), new slot
+  before old slot. On a conflict the cloud state is merged in and the put retried (3 rounds). The
+  ledger records the payload SENT, never the rows on disk after the call.
+- **Pull.** Keyset cursor over rows and tombstones (5 min overlap); one winner per slot, largest
+  `rev` over everything read; on app resume (2 min throttle) and in `checkAndSync`.
+- **Merge.** Three-way by `entry_id` with the ledger as base (`nutrition_slot_merge.dart`, pure),
+  then a day pass: one copy of an `entry_id` per date, the newer wins (a meal moved on two devices).
+- **Legacy.** A row written by an older app (or `legacy_rev` above the ledger) stops the pass and
+  schedules a FULL re-baseline. Kill switch `disable_nutrition_slot_sync` runs the old push / restore
+  verbatim and forces a FULL re-baseline when it is cleared. Until the RPCs exist (migration 181
+  unapplied) the probe fails and nothing changes.
+- **Restore** runs through the same merge (`restoreBody`); it never moves a cursor and never treats
+  an absent slot as deleted.
+
 ### Restore conflict policy — local-wins / additive (ADR-0014, diagnose c5a1f2)
 Since the slow-boot guard, returning users reach /home WHILE the cloud restore runs in
 the **background** — so the restore is concurrent with the user logging. Loss-sensitive
@@ -579,7 +608,7 @@ Current contracts:
 - **`exlog_*`** (`WorkoutWriteService`) — fields: `exercise_name`, `date`, `sets[]` (List of Map), `set_number`, `reps_completed`, `weight_kg`, `volume_kg`, `logging_type`, `is_pr`, `source`, `updated_at_ms`, optional `notes`.
   Consumers: `WorkoutReceiptData.fromExerciseLogs`, `WorkoutRepository.getExerciseLogsForDate`, `AiCoachRepository.buildAiContext` (recent_logs section), calendar week provider, `WorkoutWriteService._rescanAllPrsFor` PR detector, `SyncService.syncWorkoutData` cloud projection.
 
-- **`nlog_*`** (`NutritionWriteService`) — fields: `log_key`, `date`, `meal_type`, `total_calories`, `total_protein`, `total_carbs`, `total_fat`, `total_fiber`, `items[]` (List of Map; per-item keys: `name`, `quantity_g`, `calories`, `protein`, `carbs`, `fat`, `fiber`), `source`, `logged_at`, `created_at`. Consumers: `TodaysMealsCard`, `NutritionRepository`, `home_provider` daily-completion ring, `AiCoachRepository.buildAiContext` (meals_today / nutrition_trend_7d), `SyncService.syncNutritionData`.
+- **`nlog_*`** (`NutritionWriteService`) — fields: `log_key`, `entry_id` (a6c4e2, never changes), `date`, `meal_type`, `total_calories`, `total_protein`, `total_carbs`, `total_fat`, `total_fiber`, `items[]` (List of Map; per-item keys: `name`, `quantity_g`, `calories`, `protein`, `carbs`, `fat`, `fiber`), `source`, `logged_at`, `created_at`. Consumers: `TodaysMealsCard`, `NutritionRepository`, `home_provider` daily-completion ring, `AiCoachRepository.buildAiContext` (meals_today / nutrition_trend_7d), `SyncService.syncNutritionData`.
 
 If you rename a field in a WriteService, the corresponding contract test in `test/contracts/<x>_write_to_read_contract_test.dart` must be updated in the same commit. The receipt-rendering bug in APK Test #7 (set_number vs sets_completed) is the canonical failure mode this contract prevents.
 

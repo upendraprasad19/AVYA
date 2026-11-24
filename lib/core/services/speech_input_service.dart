@@ -19,6 +19,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/serial_slot.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
@@ -193,10 +194,28 @@ bool isRetryableStartError(String code) {
 // ---------------------------------------------------------------------------
 
 class SpeechEngineResult {
-  const SpeechEngineResult(this.words, {this.isFinal = false});
+  const SpeechEngineResult(this.words,
+      {this.isFinal = false, this.isSegmentEnd = false})
+      : assert(!(isFinal && isSegmentEnd));
   final String words;
   final bool isFinal;
+
+  /// The plugin's `intermediate` result: a segment the recognizer finished
+  /// mid-dictation (Android `final_result` on a partial bundle). Never final.
+  final bool isSegmentEnd;
 }
+
+/// The plugin result mapped to the engine seam (OI-348 B5). Compares the raw
+/// `resultType` int, never `resultTypeValue`: its `fromValue` throws on an
+/// unknown value inside the plugin's result chain, so an unknown type is a
+/// plain partial here. Pure, so it is tested without the plugin channel.
+@visibleForTesting
+SpeechEngineResult engineResultFromPlugin(SpeechRecognitionResult r) =>
+    SpeechEngineResult(
+      r.recognizedWords,
+      isFinal: r.finalResult,
+      isSegmentEnd: r.resultType == ResultType.intermediate.value,
+    );
 
 class SpeechEngineError {
   const SpeechEngineError(this.code, {this.permanent = false});
@@ -258,9 +277,8 @@ class PluginSpeechEngine implements SpeechEngine {
     required SpeechListenOptions options,
   }) async {
     await _speech.listen(
-      onResult: (SpeechRecognitionResult r) => onResult(
-        SpeechEngineResult(r.recognizedWords, isFinal: r.finalResult),
-      ),
+      onResult: (SpeechRecognitionResult r) =>
+          onResult(engineResultFromPlugin(r)),
       listenOptions: options,
     );
   }
@@ -327,12 +345,35 @@ class SpeechInputService {
     bool? isWeb,
     TargetPlatform? platform,
     Duration Function()? monotonic,
+    bool Function()? segmentAccumulateEnabled,
   }) : _engine = engine,
        isWeb = isWeb ?? kIsWeb,
        platform = platform ?? defaultTargetPlatform,
-       _monotonic = monotonic ?? _stopwatchClock();
+       _monotonic = monotonic ?? _stopwatchClock(),
+       _segmentAccumulateOverride = segmentAccumulateEnabled;
 
   final SpeechEngine _engine;
+
+  /// Kill switch for segment accumulation (OI-348 B5).
+  static const String kDisableSpeechSegmentAccumulateKey =
+      'disable_speech_segment_accumulate';
+
+  final bool Function()? _segmentAccumulateOverride;
+
+  /// False when `configBox['disable_speech_segment_accumulate'] == true`. A
+  /// missing or unopened box reads as ENABLED (the `plate_flags.dart` guard);
+  /// tests inject [segmentAccumulateEnabled] and never touch Hive.
+  bool get segmentAccumulateEnabled {
+    final override = _segmentAccumulateOverride;
+    if (override != null) return override();
+    try {
+      return HiveService.instance.configBox
+              .get(kDisableSpeechSegmentAccumulateKey) !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
 
   /// A monotonic clock for the settle (a real [Stopwatch] by default). A timer
   /// armed at every cancel would outlive a widget test and trip its pending-

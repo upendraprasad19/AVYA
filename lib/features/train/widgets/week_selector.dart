@@ -145,6 +145,7 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
     final pastPhases = _toPastPhases(
       service.pastPhaseBlocksForDisplay(widget.currentPhase),
       widget.currentPhase,
+      extendWeeks: service.pastPhaseDisplayRunsEnabled,
     );
 
     // Free-tier hold weeks. HoldStatusData.empty for a user who never held,
@@ -332,7 +333,12 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
 /// schedule data without deleting anything. Fix 2026-06-02 (two-Phase-1 bug;
 /// previously numbered idx+1, always labelling the oldest block "PHASE I" and
 /// colliding with the hardcoded forward "PHASE I").
-List<_PastPhase> _toPastPhases(List<PastPhaseBlock> blocks, int currentPhase) {
+///
+/// [extendWeeks] (OI-348 B3, the `disable_past_phase_display_runs` switch read
+/// once per build): a group gets one chip per week its rows span (min 4), so a
+/// row past day 28 is on a chip; off → always 4 chips (old behaviour).
+List<_PastPhase> _toPastPhases(List<PastPhaseBlock> blocks, int currentPhase,
+    {bool extendWeeks = false}) {
   final showCount = (currentPhase - 1).clamp(0, blocks.length);
   if (showCount == 0) return const [];
   final shown = blocks.sublist(blocks.length - showCount);
@@ -362,10 +368,74 @@ List<_PastPhase> _toPastPhases(List<PastPhaseBlock> blocks, int currentPhase) {
       startDate: entries.first.date,
       endDate: entries.last.date,
       entries: entries,
+      weekCount: extendWeeks
+          ? pastPhaseWeekCount(entries.first.date, entries.last.date)
+          : 4,
     ));
   }
   return result;
 }
+
+/// Chips a past group needs to put every row on one (min 4): the day
+/// difference of [start]/[end] as UTC calendar dates (DST-proof) / 7 + 1.
+@visibleForTesting
+int pastPhaseWeekCount(DateTime start, DateTime end) {
+  final weeks = pastPhaseWeekOf(start, end);
+  return weeks < 4 ? 4 : weeks;
+}
+
+/// The 1-based chip of [date] in a past group starting on [start], from the
+/// CALENDAR dates (UTC day difference), never from elapsed time: a 7 x 24 h
+/// window drifts by an hour across a DST change, and the chip count above
+/// uses calendar days, so the two must agree (B-pass, OI-348 B3). A date
+/// before [start] gives 0 or less.
+@visibleForTesting
+int pastPhaseWeekOf(DateTime start, DateTime date) {
+  final days = DateTime.utc(date.year, date.month, date.day)
+      .difference(DateTime.utc(start.year, start.month, start.day))
+      .inDays;
+  return (days / 7).floor() + 1;
+}
+
+/// Test view of what the strip renders for past phases (OI-348 B3): number,
+/// chip count and the dates of every row each group lists. Same code path as
+/// the widget ([_toPastPhases]); numbering deliberately NOT shared with
+/// `WorkoutScheduleReadService.phaseForDateDisplay`.
+@visibleForTesting
+List<
+        ({
+          int phaseNumber,
+          int weekCount,
+          List<DateTime> dates,
+          List<List<DateTime>> chips,
+          List<List<String>> chipStatuses,
+          List<bool> chipTicks,
+        })>
+    pastPhaseGroupsForTest(List<PastPhaseBlock> blocks, int currentPhase,
+            {required bool extendWeeks}) =>
+        [
+          for (final p
+              in _toPastPhases(blocks, currentPhase, extendWeeks: extendWeeks))
+            (
+              phaseNumber: p.phaseNumber,
+              weekCount: p.weekCount,
+              dates: [for (final e in p.entries) e.date],
+              // What each chip's sheet lists (entriesForWeek, W1..weekCount).
+              chips: [
+                for (var w = 1; w <= p.weekCount; w++)
+                  [for (final e in p.entriesForWeek(w)) e.date],
+              ],
+              chipStatuses: [
+                for (var w = 1; w <= p.weekCount; w++)
+                  [for (final e in p.entriesForWeek(w)) e.status],
+              ],
+              // The ✓ each chip draws (hasCompletedDayInWeek).
+              chipTicks: [
+                for (var w = 1; w <= p.weekCount; w++)
+                  p.hasCompletedDayInWeek(w),
+              ],
+            ),
+        ];
 
 class _ScheduleEntry {
   final String key;
@@ -391,35 +461,29 @@ class _PastPhase {
   final DateTime startDate;
   final DateTime endDate;
   final List<_ScheduleEntry> entries;
+
+  /// Chips in the group (4, or the weeks the rows span; OI-348 B3).
+  final int weekCount;
   const _PastPhase({
     required this.phaseNumber,
     required this.startDate,
     required this.endDate,
     required this.entries,
+    this.weekCount = 4,
   });
 
-  bool hasCompletedDayInWeek(int weekInPhase) {
-    final weekStart =
-        startDate.add(Duration(days: (weekInPhase - 1) * 7));
-    final weekEnd = weekStart.add(const Duration(days: 7));
-    return entries.any((e) =>
-        e.status == 'completed' &&
-        !e.date.isBefore(weekStart) &&
-        e.date.isBefore(weekEnd));
-  }
+  // A row's chip is its CALENDAR week from [startDate] (pastPhaseWeekOf), the
+  // same arithmetic as [weekCount], so the two never disagree across DST.
+  bool hasCompletedDayInWeek(int weekInPhase) => entries.any((e) =>
+      e.status == 'completed' &&
+      pastPhaseWeekOf(startDate, e.date) == weekInPhase);
 
-  List<_ScheduleEntry> entriesForWeek(int weekInPhase) {
-    final weekStart =
-        startDate.add(Duration(days: (weekInPhase - 1) * 7));
-    final weekEnd = weekStart.add(const Duration(days: 7));
-    return entries
-        .where((e) =>
-            !e.date.isBefore(weekStart) && e.date.isBefore(weekEnd))
-        .toList();
-  }
+  List<_ScheduleEntry> entriesForWeek(int weekInPhase) => entries
+      .where((e) => pastPhaseWeekOf(startDate, e.date) == weekInPhase)
+      .toList();
 }
 
-// ── Past phase group (label + 4 chips, visually muted) ────────────────────
+// ── Past phase group (label + week chips, visually muted) ─────────────────
 
 class _PastPhaseGroup extends StatelessWidget {
   const _PastPhaseGroup({required this.past, required this.onTap});
@@ -458,7 +522,7 @@ class _PastPhaseGroup extends StatelessWidget {
         ),
         Row(
           children: [
-            for (var w = 1; w <= 4; w++)
+            for (var w = 1; w <= past.weekCount; w++)
               Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: _PastWeekChip(

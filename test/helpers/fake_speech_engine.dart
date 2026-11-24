@@ -74,6 +74,10 @@ class FakeSpeechEngine implements SpeechEngine {
   // The plugin's `done` rule state, reset by every `listen`.
   bool _resultSent = false;
   bool _latestResultFinal = false;
+  // The plugin swallows `done` only while the latest result is a PARTIAL
+  // (`_onNotifyStatus`, speech_to_text 7.4.0): an `intermediate` (segment end)
+  // lets it through (OI-348 B5).
+  bool _latestResultSegmentEnd = false;
   bool _notifiedDone = false;
 
   void Function(String status)? _onStatus;
@@ -115,6 +119,7 @@ class FakeSpeechEngine implements SpeechEngine {
     _resultListener = onResult;
     _resultSent = false;
     _latestResultFinal = false;
+    _latestResultSegmentEnd = false;
     _notifiedDone = false;
     final thrown = listenThrows;
     if (thrown != null) throw thrown;
@@ -154,7 +159,9 @@ class FakeSpeechEngine implements SpeechEngine {
     if (status == 'notListening' || status == 'done') running = false;
     if (status == 'done') {
       _notifiedDone = true;
-      if (_resultSent && !_latestResultFinal) return;
+      if (_resultSent && !_latestResultFinal && !_latestResultSegmentEnd) {
+        return;
+      }
     }
     _onStatus?.call(status);
   }
@@ -170,9 +177,15 @@ class FakeSpeechEngine implements SpeechEngine {
   /// Delivered to the result listener of the LAST `listen`, like the plugin.
   /// A FINAL result after a swallowed `done` releases it (plugin: the final
   /// status check right after the result).
-  void emitResult(String words, {bool isFinal = false}) {
+  void emitResult(String words,
+      {bool isFinal = false, bool isSegmentEnd = false}) {
+    // The plugin can never report both (a final is ResultType 2, a segment
+    // end ResultType 1).
+    assert(!(isFinal && isSegmentEnd));
     _resultSent = true;
-    _resultListener?.call(SpeechEngineResult(words, isFinal: isFinal));
+    _latestResultSegmentEnd = isSegmentEnd;
+    _resultListener?.call(SpeechEngineResult(words,
+        isFinal: isFinal, isSegmentEnd: isSegmentEnd));
     if (isFinal) {
       _latestResultFinal = true;
       if (_notifiedDone) _onStatus?.call('done');

@@ -65,6 +65,10 @@ enum SyncSkipDomain {
       'upsert_readiness_daily', SyncSkipBox.health),
   savedMeal('sync_saved_meal_payload_hash_index', 'disable_saved_meal_hash_skip',
       'upsert_saved_meal', SyncSkipBox.nutrition),
+  // OI-348 Landing 1a-ii: the new-mode nutrition slot push (one row per slot,
+  // `<date> <meal>`). The legacy `nlog` index is never written by it.
+  nslot('sync_nslot_payload_hash_index', 'disable_nslot_hash_skip',
+      'sync_nslot_put', SyncSkipBox.nutrition),
   customItem('sync_custom_item_payload_hash_index',
       'disable_custom_item_hash_skip', 'sync_custom_items', SyncSkipBox.custom);
 

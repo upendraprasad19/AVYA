@@ -108,6 +108,14 @@ const Set<String> kNotSweptOpTypes = {
   'sync_saved_diet_plan',
   'sync_notifications_inbox_entry',
   'upsert_coach_memory_induction',
+  // OI-348 Landing 1a-ii: READS of the nutrition slot sync. Their prefixes
+  // already make isPushFailureOpType false; listed so the op-name forcing
+  // test enumerates them. A failed read is retried by the next trigger
+  // (launch, resume, restore), never by the sweep. `sync_nslot_put` /
+  // `sync_nslot_delete` are pushes the sweep re-sends (not listed here).
+  'pull_nutrition_slots',
+  'rebaseline_nutrition',
+  'restore_nutrition_slots',
 };
 
 /// `_reportSyncFailure` also receives restore, onboarding and
