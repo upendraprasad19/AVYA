@@ -41,8 +41,10 @@ proposed_fix: |
   3. cleanup() also deletes `nutrition_slot_tombstones`, placed AFTER `nutrition_logs`: every direct delete of a nutrition_logs row writes a tombstone, and a tombstone left by one run's cleanup would win the next run's re-baseline for (2026-01-15, lunch) and remove the seeded local row, so T4 would pass once and fail on the following run.
 regression_test_planned: |
   T4 itself (test/supabase/sync_service_test.dart) is the regression test; it runs only in the main-push CI job (QA credentials are CI secrets, not on this machine). Locally the file compiles, analyzes clean (one pre-existing deprecation info in the helper) and skips by design.
+  test/supabase/cleanup_call_timeout_test.dart (credential-free, runs in Unit Tests): table counts repointed 12 -> 13 and 13 -> 14 (PR 335's first CI run caught the stale counts), plus a new pin that nutrition_slot_tombstones is deleted after nutrition_logs.
 mutation_proof: |
   Rule 21, stated honestly: this test cannot run on this machine (no QA credentials; I do not handle the password). The "mutant" is the pre-fix test, which is red on 5 consecutive main runs (45195149928, 45227053138, 45313402791, 45319467400, 45320916004), every time on T4 alone. The fix is proven by (a) the first main run after the merge: T4 green, and (b) the SECOND main run after it: T4 green again, which is the run the tombstone cleanup exists for (without it, (b) is the run that fails). Live check after (a): `select count(*) from nutrition_slot_tombstones where user_id = <QA user>` must be 0. Recorded below once observed.
+  Order pin (runs here): mutant = tombstones moved before nutrition_logs in cleanup() (grep showed 'nutrition_slot_tombstones' at 392, 'nutrition_logs' at 393) -> 1 of 4 red in cleanup_call_timeout_test.dart; restored by cp, cmp identical.
 impact_analysis: |
   Test-only. No product code, schema, function or Hive key changes. The main CI's integration job returns to green, which restores the only live check that the nutrition writer lands rows in cloud.
 touched_layers_checked:
