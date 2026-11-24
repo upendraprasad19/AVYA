@@ -864,7 +864,11 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
 
   @override
   CurrentPlanData build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return const CurrentPlanData();
     final repo = WorkoutRepository.instance;
     final progress = UserRepository.instance.getProgress();
     final phase = (progress?['current_phase'] as int?) ?? 1;
@@ -1210,7 +1214,11 @@ final selectedWeekProvider = NotifierProvider<SelectedWeekNotifier, SelectedWeek
 /// automatically after workout completion via ref.invalidate().
 final workoutStatsProvider =
     Provider<Map<String, Map<String, double>>>((ref) {
-  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+  final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // A raw box read throws there; serve the empty value, and the token
+  // flipping back re-runs this with the real data.
+  if (token == '<anon>') return const <String, Map<String, double>>{};
   return WorkoutRepository.instance.loadKeyLiftPRs();
 });
 
@@ -2732,7 +2740,11 @@ final restTimerProvider =
 class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
   @override
   List<Map<String, dynamic>> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return <Map<String, dynamic>>[];
     final box = HiveService.instance.workoutBox;
     final templates = <Map<String, dynamic>>[];
 
@@ -2870,7 +2882,11 @@ List<PrRecord> graduationTopPrs(List<ExercisePR> allPrs) {
 }
 
 final graduationStatsProvider = Provider<GraduationStatsData>((ref) {
-  ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+  final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // A raw box read throws there; serve the empty value, and the token
+  // flipping back re-runs this with the real data.
+  if (token == '<anon>') return const GraduationStatsData();
   final hive = HiveService.instance;
   final progress = UserRepository.instance.getProgress() ?? {};
 

@@ -52,10 +52,15 @@ void main() {
     await Hive.openBox(HiveService.migrationBoxName);
     HiveService.debugMarkInitializedForTests();
     GuardedBox.testBypassOwnership = true;
+    // a2d9f4: a signed-in app has a live auth uid; the providers that serve an
+    // empty value on the '<anon>' token read it through this seam. It follows
+    // the open session's owner, so there is never an auth/Hive disagreement.
+    debugAuthUidResolverForTests = () => HiveUserSession.currentOwnerFullId;
   });
 
   tearDownAll(() async {
     GuardedBox.testBypassOwnership = false;
+    debugAuthUidResolverForTests = null;
     await HiveUserSession.closeAll();
     await Hive.close();
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);

@@ -41,7 +41,18 @@ class WeeklyReportSeries {
 class WeeklyReportDataNotifier extends Notifier<WeeklyReportSeries> {
   @override
   WeeklyReportSeries build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') {
+      return const WeeklyReportSeries(
+        weight: <double>[0, 0, 0, 0, 0, 0, 0],
+        calories: <double>[0, 0, 0, 0, 0, 0, 0],
+        protein: <double>[0, 0, 0, 0, 0, 0, 0],
+        workouts: <double>[0, 0, 0, 0, 0, 0, 0],
+      );
+    }
     final hive = HiveService.instance;
     final today = DateTime.now();
 
