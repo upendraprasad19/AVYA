@@ -17,8 +17,10 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 /// Bottom sheet that shows the user's referral code with an EXPIRES IN N DAYS
 /// countdown. After expiry, the badge changes to EXPIRED and the button
-/// becomes REGENERATE → which creates a fresh 7-day code via
-/// [SupabaseService.regenerateReferralCode].
+/// becomes REGENERATE → which asks the server for a fresh 7-day code via
+/// [SupabaseService.regenerateReferralCode]. A load or regenerate that gets no
+/// code shows [ReferralCopy.codeIssueFailed] with a Retry (OI-348 B2: it used
+/// to do nothing at all).
 class InviteFriendsSheet extends ConsumerStatefulWidget {
   const InviteFriendsSheet({super.key, this.loadCodeForTest});
 
@@ -52,6 +54,9 @@ class _InviteFriendsSheetState extends ConsumerState<InviteFriendsSheet> {
   DateTime? _expiresAt;
   bool _loading = true;
   bool _regenerating = false;
+
+  /// The last load or regenerate got no code from the server.
+  bool _issueFailed = false;
 
   // U8 fix: "Apply someone else's code" section
   final _applyController = TextEditingController();
@@ -88,21 +93,27 @@ class _InviteFriendsSheetState extends ConsumerState<InviteFriendsSheet> {
       setState(() {
         _code = result?.code;
         _expiresAt = result?.expiresAt;
+        _issueFailed = result == null;
         _loading = false;
       });
     }
   }
 
   Future<void> _regenerate() async {
-    setState(() => _regenerating = true);
+    setState(() {
+      _regenerating = true;
+      _issueFailed = false;
+    });
     try {
       final result = await SupabaseService.instance.regenerateReferralCode();
-      if (mounted && result != null) {
-        setState(() {
+      if (!mounted) return;
+      setState(() {
+        if (result != null) {
           _code = result.code;
           _expiresAt = result.expiresAt;
-        });
-      }
+        }
+        _issueFailed = result == null;
+      });
     } finally {
       if (mounted) setState(() => _regenerating = false);
     }
@@ -267,6 +278,34 @@ class _InviteFriendsSheetState extends ConsumerState<InviteFriendsSheet> {
                         ],
                       ),
                     ),
+                    if (_issueFailed) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        key: const ValueKey('referral-code-issue-failed'),
+                        children: [
+                          Expanded(
+                            child: Text(
+                              ReferralCopy.codeIssueFailed,
+                              style: AppTypography.bodySm.copyWith(
+                                color: AppColors.bad,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _regenerating ? null : _regenerate,
+                            child: Text(
+                              ReferralCopy.codeIssueRetry,
+                              style: AppTypography.mono.copyWith(
+                                fontSize: 11,
+                                letterSpacing: 1.4,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.accent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     // Description

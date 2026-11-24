@@ -1,0 +1,58 @@
+# Closure ledger - oi348-landing2-referral (OI-348 device walk A10, Landing 2 PR B: B2 referral REGENERATE).
+# Gate 40. One terminal_state per unit; no `deferred:` key.
+# Plan: docs/plans/oi348-walk-fixes-landing2.md, Unit B2 (v4 CONVERGED). `oi348-landing2-referral@branch` is the in-branch commit form (the commit that carries this file).
+
+batch: oi348-landing2-referral
+plan_review_record: docs/plan-reviews/oi348-landing2-referral.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-24-referral-regenerate-c2e8a4.md
+total_findings: 8
+closed_count: 8
+
+findings:
+  - id: B2-M1-FUNCTION
+    title: "Migration 186: public.issue_referral_code() mints or returns the caller's code (SECURITY DEFINER, search_path '', advisory lock, unbiased draw, code-key retry, final re-select)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2-referral@branch"
+    verification: "issue_referral_code_function_pin_test.dart green (whole-text pin, 24); post-B-pass dry run 13/13 in one aborting request; SQL mutants MS1-MS5, MP1-MP4 and the V2/V8 run red (diagnose c2e8a4)"
+
+  - id: B2-M1-APPLY
+    title: "Apply migration 186 after the staged B-pass + Hermes accept and the founder go; ledger row + post-apply live verify"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2-referral@branch"
+    verification: "Applied 2026-11-24 after both reviews accepted and the founder go ('Apply 186 now'), cloud version 20261124080819; live md5(prosrc) equals the file body; post-apply live verify 14/14 (rolled back); ledger row with the file hash (Gate 39 PASS)."
+
+  - id: B2-CLIENT-RPC
+    title: "getOrCreateReferralCode / regenerateReferralCode call the RPC; the client upsert, local code builder and dart:math are deleted"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2-referral@branch"
+    verification: "referral_code_issue_writer_to_reader_test.dart green (parser table, issueReferralCodeVia order with fakes, wiring pin, no client write statement, names pinned to the migration); mutants MC1, MG1-MG5 red"
+
+  - id: B2-SHEET-ERROR
+    title: "Invite sheet shows codeIssueFailed + TRY AGAIN on a null load or REGENERATE; keeps the old code; re-enables the button"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2-referral@branch"
+    verification: "test/profile/invite_friends_sheet_issue_failure_test.dart green; mutants L96, L115 red"
+
+  - id: B2-CONCURRENCY
+    title: "Two simultaneous calls on an expired row return the same code (the advisory lock)"
+    terminal_state: verified_clean
+    notes: "NOT runtime-proven, stated. The live two-session attempt (2026-11-24) was void: the MCP database tool runs calls one after another, so the calls never overlapped; no local Postgres; a loopback dblink needs the database password. Founder decision 2026-11-24 ('Ship on reasoning'): ship on the reasoning of two independent guards, each closing the race (the per-user advisory xact lock; DO UPDATE only when expired, so a concurrent writer never overwrites a live code), checked by 3 B-pass seats and Hermes L2/L14. The whole-text pin holds both guards (the lock mutant MP3 reddens it; the WHERE clause is part of the pinned literal)."
+
+  - id: B2-M2-PR-C
+    title: "Migration M2: drop the INSERT policy, REVOKE ALL on referral_codes from anon and authenticated, GRANT SELECT to authenticated"
+    terminal_state: upstream_blocked
+    blocker: "The live web app still ships the old first-code INSERT; M2 before the RPC build is live would break first codes on web."
+    reopen_when: "PR B is merged, the Vercel deployment for its merge SHA is READY and main.dart.js contains issue_referral_code; then founder go, PR C. PR C carries its own rollback (re-grant INSERT to authenticated and re-create the INSERT-own policy) and states the accepted breakage: builds before PR B (cached web tabs, AAB +50) can no longer create a first code after M2 (testing accounts only)."
+
+  - id: B2-DOCS
+    title: "SoT referral_code_issue, naming row, profile CLAUDE.md, cqrs rationale, diagnose c2e8a4"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2-referral@branch"
+    verification: "check_sot_registry_parity PASS; validate_diagnose_doc PASS"
+
+  - id: B2-C7F4E2-RUN-B
+    title: "Record the second main run proving the T4 tombstone leg in diagnose c7f4e2"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2-referral@branch"
+    verification: "main run 45343469169 on 0759f7e5 green, T4 passed (recorded in the diagnose doc)"

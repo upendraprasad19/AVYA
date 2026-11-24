@@ -1457,5 +1457,14 @@
     "diagnose": "e9a6c1",
     "slug": "user_profile_unit_prefs",
     "note": "OI-348 Landing 2 B9: adds user_profile.units_system text ('metric'|'imperial') and measurement_unit text ('cm'|'in'), both nullable, CHECK-constrained (user_profile_units_system_check, user_profile_measurement_unit_check), plus column comments. No row rewritten. Applied to project dedsavbjuwgarrhphgnl only, after the founder go (2026-11-24, 'Apply both'), via MCP apply_migration with the file's statements (without the comment blocks; the sha256 above is of the whole file); registered as version 20261124012742. Pre-apply live: neither column. Post-apply live: both text / nullable, both constraints present. Applied BEFORE any build that pushes the keys (an unknown column would fail the whole profile upsert). Rollback: the inline DROP COLUMN block at the end of the file, only after the pushing client is withdrawn."
+  },
+  {
+    "migration": "186",
+    "applied_at": "2026-11-24T13:38:19+05:30",
+    "hash": "sha256:b95cddbdece13a8ea2350e71876bb17e9568d4e2cac094a7e01e34450d2e649a",
+    "applier": "claude-via-mcp",
+    "diagnose": "c2e8a4",
+    "slug": "issue_referral_code",
+    "note": "OI-348 Landing 2 PR B (B2, walk A10; plan docs/plans/oi348-walk-fixes-landing2.md Unit B2): public.issue_referral_code() SECURITY DEFINER, search_path '', returns the caller's live referral code or mints a fresh 7-day AVYA- + 8 [A-Z0-9] code under a per-user advisory lock (DO UPDATE only when expired; code-key clash retried up to 5 times); EXECUTE revoked from PUBLIC and anon, granted to authenticated. Applied to project dedsavbjuwgarrhphgnl only, after the staged B-pass (docs/reviews, 18 findings fixed) and Hermes pass (11) accepted and the founder go (2026-11-24, 'Apply 186 now'), via MCP apply_migration with the file's statements (without the comment blocks; the sha256 above is of the whole file); registered as version 20261124080819. Pre-apply: function absent, referral_codes 3 rows; dry runs of file + live verify in one aborting request 11/11 then 13/13. Post-apply live: prosecdef true, proconfig {search_path=\"\"}, owner postgres, anon EXECUTE false, authenticated true, md5(prosrc) 967e0c89d4350a331e5dc9044b49ae3a equal to the file's body, 3 rows untouched. Rollback: roll forward with CREATE OR REPLACE restating SECURITY DEFINER and search_path; the inline DROP strands every build that calls it (see the file)."
   }
 ]
