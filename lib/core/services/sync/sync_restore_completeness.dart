@@ -398,7 +398,7 @@ extension SyncServiceRestoreCompleteness on SyncService {
                 'streak_freezes_last_refill, '
                 'streak_freezes_first_pro_grant_done, '
                 // Unit 3b (e6b9c4) — the cross-device optimistic-lock version.
-                // Must stay in sync with restore-user-snapshot/index.ts's
+                // Must stay in sync with restore-user-snapshot/restore_reads.ts's
                 // "freezes" bundle projection (H-1 shape contract).
                 'streak_progress_version',
               )

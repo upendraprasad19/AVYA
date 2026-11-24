@@ -93,12 +93,26 @@ void main() {
       expect(args.contains('saved: result.success'), isTrue);
       expect(args.contains('tokenBefore: tokenBefore'), isTrue);
       expect(args.contains('tokenNow: tokenNow'), isTrue);
-      final write = RegExp(r"MigratedKey\.write\(\s*'body_measurement_sheet_unit'")
+      // OI-348 B9 (e9a6c1): the unit is the synced profile field
+      // `measurement_unit`, written under the same gate and, inside it, only
+      // with an owner (`if (owner != null)`), and (B-pass B9 F1) inside a try
+      // whose catch reports `measurement_unit_write_failed`, so a failed unit
+      // write never escapes the saved measurement: three blocks in.
+      expect(body.contains("MigratedKey.write('body_measurement_sheet_unit'"),
+          isFalse, reason: 'the legacy per-user key is no longer written');
+      final write = RegExp(r'ProfileWriteService\.instance\.patchProfileWith\(')
           .firstMatch(body);
       expect(write, isNotNull);
       expect(write!.start, greaterThan(end));
-      expect(_depthAt(body, write.start), 2,
-          reason: 'inside the if-block, not at the top level of save');
+      expect(_depthAt(body, write.start), 4,
+          reason: 'inside the gate, the owner check and the try, not at the '
+              'top level');
+      final tryAt = body.lastIndexOf('try {', write.start);
+      expect(tryAt, greaterThan(end), reason: 'the try sits inside the gate');
+      expect(body.indexOf("reason: 'measurement_unit_write_failed'", write.start),
+          greaterThan(write.start), reason: 'its catch reports the failure');
+      expect(body.indexOf('kMeasurementUnitKey', write.start),
+          greaterThan(write.start));
     });
 
     test('the provider is invalidated AFTER the awaited write, through the '

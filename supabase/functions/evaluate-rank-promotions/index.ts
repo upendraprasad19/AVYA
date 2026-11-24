@@ -19,6 +19,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
   EvalState,
   highestQualified,
+  isFloorRank,
   LADDER,
   ranksUpTo,
   completionRateOverWindow,
@@ -324,11 +325,15 @@ export const handler = async (
         // via _restoreCoachInteractions → coachBox → ChatHistoryNotifier.
         //
         // We reconstruct "old rank" as the highest code already on file
-        // before this batch (existingCodes), falling back to "SD2" for a
-        // brand-new user. Then we walk the toInsert list in ladder order.
+        // before this batch (existingCodes), falling back to the floor rung
+        // for a brand-new user. Then we walk the toInsert list in ladder
+        // order. Diagnose 8b1f3d: the floor rung itself gets no ceremony
+        // (its row above is history only), so a first run inserting the
+        // floor + SD1 yields exactly one ceremony, floor -> SD1.
         const ladderOrder = LADDER.map((r) => r.code);
         const sortedNew = toInsert
           .map((row) => row.rank_code)
+          .filter((c) => !isFloorRank(c))
           .sort(
             (a, b) => ladderOrder.indexOf(a) - ladderOrder.indexOf(b),
           );
@@ -338,7 +343,7 @@ export const handler = async (
           ? [...existingCodes].sort(
               (a, b) => ladderOrder.indexOf(a) - ladderOrder.indexOf(b),
             ).at(-1)! // highest existing rank before this batch
-          : "SD2";
+          : LADDER[0].code;
 
         for (const newCode of sortedNew) {
           const ceremonyText = formatPromotionCeremony({

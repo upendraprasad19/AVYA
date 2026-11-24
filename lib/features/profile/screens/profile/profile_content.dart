@@ -411,10 +411,7 @@ extension _ProfileContent on _ProfileScreenState {
                   title: 'Units',
                   trailing: UnitsSegmentedControl(
                     isMetric: _isMetric,
-                    onChanged: (metric) {
-                      setState(() => _isMetric = metric);
-                      UserRepository.instance.setUnitsMetric(metric);
-                    },
+                    onChanged: (metric) => unawaited(_onUnitsChanged(metric)),
                   ),
                 ),
                 // Health Sync moved here from its own top-level section

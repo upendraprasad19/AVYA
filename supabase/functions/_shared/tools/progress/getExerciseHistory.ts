@@ -3,6 +3,7 @@ import type { ToolContext, ToolDefinition } from "../types.ts";
 import { buildDayMap, inWindow, istDatesEnding, resolveDay } from "../../exercise_day.ts";
 import { liveSummaryRows, type SummaryRow } from "../../live_exercise_rows.ts";
 import { fetchWleWindow } from "../../wle_window_read.ts";
+import { escapeLike } from "../../like_escape.ts";
 
 const schema = z.object({
   exerciseId: z.string().min(1).describe(
@@ -59,7 +60,7 @@ async function handler(
         withCount ? { count: "exact" } : undefined,
       )
       .eq("user_id", userId)
-      .ilike("exercise_id", args.exerciseId) // case-insensitive name match
+      .ilike("exercise_id", escapeLike(args.exerciseId)) // case-insensitive name match; % _ \ * escaped (OI-507)
       .in("workout_log_id", ids)
       .is("deleted_at", null), dates, { maxPages: 5, label: "getExerciseHistory" });
 

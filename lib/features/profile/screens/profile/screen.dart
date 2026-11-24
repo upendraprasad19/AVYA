@@ -126,6 +126,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     ref.invalidate(firstReportViewedProvider);
   }
 
+  /// OI-348 B9 (e9a6c1): a restore can bring this user's `units_system`
+  /// from another device; [_isMetric] is seeded once, so it is re-read here
+  /// (the mixin checked `mounted` before calling).
+  @override
+  void invalidateOnBackgroundRestore(WidgetRef ref) {
+    invalidateOnRetry(ref);
+    // While a tap's write is still queued the stored value is the OLD one:
+    // re-seeding now would flip the switch back (B-pass B9 F3). The write's
+    // completion re-seeds instead.
+    if (_unitsWritesInFlight > 0) return;
+    _reseedUnits();
+  }
+
+  /// Units writes started by a tap and not finished yet.
+  int _unitsWritesInFlight = 0;
+
+  void _reseedUnits() {
+    final metric = UserRepository.instance.getUnitsMetric();
+    if (metric != _isMetric) setState(() => _isMetric = metric);
+  }
+
+  /// The Units row: the switch moves at once (no snap-back while the
+  /// profile write runs), then the profile provider is refreshed so the
+  /// stats re-render from the stored value. When the last pending write
+  /// finishes, the switch is re-seeded from the store (a restore that landed
+  /// meanwhile, or a refused write, shows its real value).
+  Future<void> _onUnitsChanged(bool metric) async {
+    setState(() => _isMetric = metric);
+    _unitsWritesInFlight++;
+    try {
+      await UserRepository.instance.setUnitsMetric(metric);
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'profile_units_write_failed'));
+    } finally {
+      _unitsWritesInFlight--;
+    }
+    if (!mounted) return;
+    ref.invalidate(userProfileProvider);
+    if (_unitsWritesInFlight == 0) _reseedUnits();
+  }
+
   @override
   void dispose() {
     _predictionPollTimer?.cancel();

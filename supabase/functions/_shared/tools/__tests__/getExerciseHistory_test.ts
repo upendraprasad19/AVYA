@@ -159,3 +159,15 @@ Deno.test("getExerciseHistory — a missing-date-bucket row (selected with the w
   assertEquals(r.total_sessions, 1);
   assertEquals(r.history[0].date, W[26]);
 });
+
+// OI-507: the model-supplied exercise id reaches an `ilike`; a wildcard must be escaped.
+Deno.test("getExerciseHistory — % in the exercise id is escaped before the ilike (OI-507)", async () => {
+  const { sb, calls } = fakeSb({ workout_log_exercises: [await row(W[27], { id: 1 })] });
+  const r = await getExerciseHistoryTool.handler!(mkCtx(sb), { exerciseId: "%", weeks: 4 });
+  assertEquals(r.history.length, 0);
+  const values = calls
+    .filter((c) => c.table === "workout_log_exercises")
+    .flatMap((c) => c.filters.filter(([op, col]) => op === "ilike" && col === "exercise_id").map(([, , v]) => v));
+  assertEquals(values.length > 0, true, "no ilike on exercise_id was recorded");
+  for (const v of values) assertEquals(v, "\\%");
+});

@@ -771,16 +771,12 @@ void main() {
       test(
         'preferredInches: ${row.name} -> ${row.inches ? 'inches' : 'cm'}',
         () async {
-          await HiveService.instance.configBox.put(
-            'units_metric',
-            row.deviceMetric,
-          );
-          if (row.remembered != null) {
-            await HiveService.instance.userBox.put(
-              'body_measurement_sheet_unit',
-              row.remembered,
-            );
-          }
+          // OI-348 B9 (e9a6c1): both settings are profile fields now.
+          await HiveService.instance.userBox.put('profile', <String, dynamic>{
+            'full_name': 'T',
+            'units_system': row.deviceMetric ? 'metric' : 'imperial',
+            if (row.remembered != null) 'measurement_unit': row.remembered,
+          });
           final n = container().read(measurementWriteProvider.notifier);
           expect(n.preferredInches(), row.inches);
           expect(events, isEmpty);
@@ -792,7 +788,10 @@ void main() {
         'measurement_unit_read_failed (stage=unit)', () async {
       // An IMPERIAL device: a catch that fell back to the device setting would
       // answer inches here, so only centimetres proves the fallback is fixed.
-      await HiveService.instance.configBox.put('units_metric', false);
+      await HiveService.instance.userBox.put('profile', <String, dynamic>{
+        'full_name': 'T',
+        'units_system': 'imperial',
+      });
       final n = container(
         extra: [measurementWriteProvider.overrideWith(_ThrowingUnitWrite.new)],
       ).read(measurementWriteProvider.notifier);
@@ -806,9 +805,14 @@ void main() {
     });
 
     test(
-      'an unrecognised stored unit falls through to the device setting',
+      'an unrecognised LEGACY stored unit falls through to the units setting',
       () async {
-        await HiveService.instance.configBox.put('units_metric', false);
+        // The legacy per-user key an older build wrote (read only when the
+        // profile has no `measurement_unit`).
+        await HiveService.instance.userBox.put('profile', <String, dynamic>{
+          'full_name': 'T',
+          'units_system': 'imperial',
+        });
         await HiveService.instance.userBox.put(
           'body_measurement_sheet_unit',
           'x',

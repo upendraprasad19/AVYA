@@ -128,6 +128,9 @@ const _engine = <String>[
   // Diet plan Unit 4a: the diet_supplements push rule and its kill switch.
   'lib/core/utils/diet_supplements_rule.dart',
   'lib/features/nutrition/services/diet_supplements_flags.dart',
+  // OI-348 Landing 2 B9 (e9a6c1): the unit-preference push rule and its kill switch.
+  'lib/core/utils/unit_prefs_rule.dart',
+  '${_services}unit_pref_flags.dart',
 ];
 
 /// lib/ files an engine file reaches that stay BELOW platform — the engine only

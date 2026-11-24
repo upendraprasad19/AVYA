@@ -140,8 +140,11 @@ void main() {
       await HiveUserSession.closeAll();
       await HiveUserSession.openForUser(_user);
       await HiveService.instance.userBox.clear();
-      await HiveService.instance.userBox.put('profile', profile);
-      await HiveService.instance.configBox.put('units_metric', metric);
+      // OI-348 B9 (e9a6c1): the units setting is the profile's units_system.
+      await HiveService.instance.userBox.put('profile', <String, dynamic>{
+        ...profile,
+        'units_system': metric ? 'metric' : 'imperial',
+      });
       await MigratedKey.delete('prediction_stale');
     });
     SyncService.pausedForSimulation = true;

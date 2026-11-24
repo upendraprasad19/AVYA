@@ -58,13 +58,8 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import {
-  createPageBudget,
-  readCoachNewest,
-  readPaged,
-  rowCountLogLine,
-  UUID_RE,
-} from "./paged_reads.ts";
+import { createPageBudget, rowCountLogLine, UUID_RE } from "./paged_reads.ts";
+import { assembleTables, parseReadConcurrency } from "./restore_reads.ts";
 
 // Bump SCHEMA_VERSION whenever the bundle shape or table set changes — the client
 // rejects a bundle whose schema_version it does not recognise (→ legacy fallback).
@@ -124,6 +119,7 @@ serve(async (req: Request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    const authStarted = performance.now();
     const { data: userData, error: userErr } = await db.auth.getUser(token);
     const vUid = userData?.user?.id;
     // H-4: bind the non-empty UUID invariant BEFORE building ANY query. Covers
@@ -132,140 +128,18 @@ serve(async (req: Request) => {
       return jsonError(401, "unauthenticated", requestId);
     }
 
-    // ── 2. ASSEMBLE THE BUNDLE — fail-closed. Any q() throw → caught below → 500. ──
-    // Every builder is scoped to vUid. `q` throws on a PostgREST error (NOT on a
-    // legitimately-empty maybeSingle, which returns null) so a real read failure
-    // aborts the WHOLE call rather than shipping a partial bundle.
-    const q = async <T>(label: string, builder: PromiseLike<{ data: T; error: unknown }>): Promise<T> => {
-      const { data, error } = await builder;
-      if (error) {
-        const msg = (error as { message?: string })?.message ?? String(error);
-        throw new Error(`query_failed:${label}:${msg}`);
-      }
-      return data;
-    };
-
-    const tables: Record<string, unknown> = {};
-    // ONE page budget per request, shared by every paged read (paged_reads.ts: TOTAL_PAGE_BUDGET).
+    // ── 2. ASSEMBLE THE BUNDLE — fail-closed. Any read throw → caught below → 500. ──
+    // OI-348 B10 (a0d5f7): the reads live in ./restore_reads.ts (READS, in the bundle's key
+    // order) and run with at most RESTORE_READ_CONCURRENCY in flight (read PER REQUEST, so a
+    // dashboard change applies on the next call; 1 = the old serial order). Every read is scoped
+    // to the vUid validated above. ONE page budget per request, shared by every paged read
+    // (paged_reads.ts: TOTAL_PAGE_BUDGET, charged per page).
     const budget = createPageBudget();
-
-    // ── Step A — profile + lightweight ──────────────────────────────────────────
-    tables["user_profile"] = await q(
-      "user_profile",
-      db.from("user_profile").select("*").eq("user_id", vUid).limit(1),
-    );
-    tables["users"] = await q(
-      "users",
-      db.from("users").select("full_name, email").eq("id", vUid).maybeSingle(),
-    );
-    tables["user_progress"] = await q(
-      "user_progress",
-      db.from("user_progress").select("*").eq("user_id", vUid).limit(1),
-    );
-    tables["user_preferences"] = await q(
-      "user_preferences",
-      db.from("user_preferences").select("*").eq("user_id", vUid).limit(1),
-    );
-    // OI-252 (stable ID rework): NO `is_active` filter -- the client now
-    // needs BOTH live rows (to restore) AND deleted rows (to remove any
-    // local copy + clean their schedules). `deleted_at` is on `*` already
-    // (migration 145). Order live-first (nullsFirst) so a `.limit(500)`
-    // clip loses stale delete evidence before it loses a live template --
-    // a user is far likelier to approach 500 live templates than 500
-    // deletes.
-    tables["workout_templates"] = await q(
-      "workout_templates",
-      db.from("workout_templates")
-        .select("*, template_exercises(*)")
-        .eq("user_id", vUid)
-        .order("deleted_at", { ascending: true, nullsFirst: true })
-        .limit(500),
-    );
-    // workout_plan = the plan_json snapshot on user_progress (parser reads rows.first['plan_json']).
-    tables["workout_plan"] = await q(
-      "workout_plan",
-      db.from("user_progress").select("plan_json").eq("user_id", vUid).limit(1),
-    );
-    tables["user_custom_exercises"] = await readPaged(db, vUid, "user_custom_exercises", budget);
-    tables["user_custom_foods"] = await readPaged(db, vUid, "user_custom_foods", budget);
-
-    // ── Step B — bulk history (paged: see the PAGED READS header; every call passes vUid) ──
-    tables["workout_logs"] = await readPaged(db, vUid, "workout_logs", budget);
-    tables["workout_log_exercises"] = await readPaged(db, vUid, "workout_log_exercises", budget);
-    tables["workout_log_sets"] = await readPaged(db, vUid, "workout_log_sets", budget);
-    tables["workout_schedule_completions"] = await readPaged(db, vUid, "workout_schedule_completions", budget);
-    tables["weight_logs"] = await readPaged(db, vUid, "weight_logs", budget);
-    tables["daily_steps"] = await readPaged(db, vUid, "daily_steps", budget);
-    tables["nutrition_logs"] = await readPaged(db, vUid, "nutrition_logs", budget);
-    tables["body_measurements"] = await readPaged(db, vUid, "body_measurements", budget);
-    tables["water_logs"] = await readPaged(db, vUid, "water_logs", budget);
-    tables["sleep_logs"] = await readPaged(db, vUid, "sleep_logs", budget);
-    tables["streaks"] = await q(
-      "streaks",
-      db.from("streaks").select("*").eq("user_id", vUid)
-        .order("week_start", { ascending: false }).limit(52),
-    );
-    // OI-252: `deleted_at` is in the embed so the client can tell a deleted template's schedule
-    // day apart from a merely-missing embed. The embed is owner-scoped inside readPaged (a
-    // foreign template becomes null: Hermes C13).
-    tables["scheduled_workouts"] = await readPaged(db, vUid, "scheduled_workouts", budget);
-    tables["user_saved_meals"] = await q(
-      "user_saved_meals",
-      db.from("user_saved_meals").select("*").eq("user_id", vUid).limit(500),
-    );
-    // The NEWEST 1000 coach interactions, ascending (bundle shape unchanged). It used to keep
-    // the OLDEST 1000 once a user passed 1000 rows.
-    tables["ai_coach_interactions"] = await readCoachNewest(db, vUid);
-    tables["coach_memory"] = await q(
-      "coach_memory",
-      // 10-column projection ONLY (H-12) — never SELECT * (keeps server-only risk
-      // scores / private fields off the wire). Mirrors sync_coach.dart:222-230.
-      db.from("coach_memory")
-        .select(
-          "committed_at, committed_to_lt_cdr, induction_completed_at, why_now, definition_of_winning, known_injuries, typical_wake_time, preferred_workout_time, body_part_priorities, coach_notes",
-        )
-        .eq("user_id", vUid)
-        .maybeSingle(),
-    );
-
-    // ── Step C — restore-completeness surfaces ────────────────────────────────────
-    tables["freezes"] = await q(
-      "freezes",
-      db.from("user_progress")
-        .select(
-          "streak_freezes_available, streak_freezes_used_dates, streak_freezes_last_refill, streak_freezes_first_pro_grant_done, streak_progress_version",
-        )
-        .eq("user_id", vUid)
-        .maybeSingle(),
-    );
-    tables["notifications_inbox"] = await q(
-      "notifications_inbox",
-      db.from("notifications_inbox").select("*").eq("user_id", vUid)
-        .order("created_at", { ascending: false }).limit(200),
-    );
-    tables["saved_diet_plan"] = await q(
-      "saved_diet_plan",
-      db.from("saved_diet_plans").select("plan_json").eq("user_id", vUid).maybeSingle(),
-    );
-    tables["rank_promotions"] = await q(
-      "rank_promotions",
-      db.from("rank_promotions").select("*").eq("user_id", vUid)
-        .order("achieved_at", { ascending: false }).limit(20),
-    );
-    tables["referral_codes"] = await q(
-      "referral_codes",
-      db.from("referral_codes").select("code, expires_at, created_at").eq("user_id", vUid)
-        .gt("expires_at", new Date().toISOString())
-        .order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    );
-    tables["referral_redemptions"] = await q(
-      "referral_redemptions",
-      // Dual-FK self-scope (H-8). vUid is UUID-validated → .or() interpolation is safe.
-      db.from("referral_redemptions")
-        .select("code, referrer_id, referee_id, days_granted_each, created_at")
-        .or(`referrer_id.eq.${vUid},referee_id.eq.${vUid}`)
-        .order("created_at", { ascending: false }).limit(50),
-    );
+    const limit = parseReadConcurrency(Deno.env.get("RESTORE_READ_CONCURRENCY"));
+    const { tables } = await assembleTables(db, vUid, budget, limit, {
+      authMs: performance.now() - authStarted,
+      requestId,
+    });
 
     // Table names and row COUNTS only (never a row value): the live behaviour of the paged reads
     // is read from the function logs, since no user token is available to smoke-test with.

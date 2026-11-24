@@ -73,6 +73,9 @@ Future<void> _healAfterRestoreInBackground() async {
     unawaited(
         ErrorTelemetry.recordNonFatal(e, st, reason: 'bg_heal_exlog_index'));
   }
+  // OI-348 B9 (e9a6c1): BEFORE the reckon below, whose tick bump is LAST, so
+  // the Profile screen's restore re-seed sees the adopted unit.
+  await _runUnitsPrefAdopter(reason: 'bg_heal_units_pref_adopter');
   // b4e7a1 — reckon the streak decay NOW that the restore has settled (the
   // cold-start rollover ran before it and was gated off), THEN notify the
   // (now-mounted) tabs to refresh from the updated Hive. Replaces the bare
@@ -91,6 +94,19 @@ Future<void> _runL2CustomRepair() async {
   } catch (e, st) {
     unawaited(ErrorTelemetry.recordNonFatal(e, st,
         reason: 'bg_heal_l2_custom_repair'));
+  }
+}
+
+/// OI-348 B9 (e9a6c1): moves the legacy device-wide unit into the profile,
+/// once per device. Shared by both post-restore paths, each passing its own
+/// [reason] so a failure names the path that ran it. The adopter itself waits
+/// for a settled restore (the foreground path calls it without checking the
+/// restore's result).
+Future<void> _runUnitsPrefAdopter({required String reason}) async {
+  try {
+    await UnitsPrefAdopter.runIfNeeded();
+  } catch (e, st) {
+    unawaited(ErrorTelemetry.recordNonFatal(e, st, reason: reason));
   }
 }
 

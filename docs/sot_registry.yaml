@@ -1052,7 +1052,7 @@ concepts:
           Rebuilds the context via buildAiContext() between retry
           rounds so the snapshot reflects post-mutation Hive state.
       - file: lib/core/services/sync_service.dart
-        line_range: 883-928
+        line_range: 1259-1384
         method: pushSnapshot (coalesced) -> pushSnapshotNow (body)
         semantic: pass-through
         fields_read: [<full context map>]
@@ -1106,7 +1106,7 @@ concepts:
     writers:
       - { file: supabase/functions/_shared/snapshot_merge.ts, line_range: 16-28, method: mergeSnapshotJson, notes: "Pure merge — existing row spread first, incoming client payload layered on top so it wins on any shared key. Mutation-proven: reverting to `return incoming;` reddens 2 of 4 tests in snapshot_merge_test.ts." }
       - { file: supabase/functions/daily-snapshot/index.ts, line_range: 689-754, method: "serve handler", notes: "Reads the existing row via .maybeSingle() at :719 (never .single() — a first-ever snapshot of the day has no existing row, which is a legitimate empty merge base, not an error; a genuine query error is logged at :728 (the console.error call itself, not the surrounding comment — a pre-existing imprecision in this note, corrected while re-deriving the other citations here) rather than silently degrading), merges via mergeSnapshotJson at :734, upserts the MERGED result at :743. Gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:708, code-review finding 2 — platform tier's feature_flag requirement) which falls back to the verbatim pre-fix blind-replace. Wiring pinned by index_test.ts (source-grep — importing this module boots a real server, no import.meta.main guard, so the test reads source text rather than importing). Line numbers shifted +1 by the observation-batch-and-digest-redesign merge (PR #32, 2026-09-22) inserting one unrelated line earlier in the same file — re-verify by grep, not by citation. Re-derived from anchors 2026-11-14 (diet plan Unit 2b) after its insertions earlier in the file, and again after its B-pass fixes (+24); the previous range had already drifted." }
-      - { file: lib/core/services/sync_service.dart, line: 1214, method: "compileDailySnapshot", notes: "Code-review finding 1 (2026-09-21): fitness_summary is ALSO cron-owned (rolling-context writes it), but unlike morning_alert the client DOES carry a local mirror of it in aiContext (buildAiContext() serves both this push and the live ai-proxy chat body, and the chat use case needs it). Sending it here would let the client's lagging/possibly-empty mirror win the merge on a key it does carry. Explicitly removed from the push payload only — buildAiContext()'s direct chat-context use is untouched. Behavioral: test/contracts/daily_snapshot_fitness_summary_omission_test.dart (mutation-proven — reverting the .remove() call reddens both tests)." }
+      - { file: lib/core/services/sync_service.dart, line: 1215, method: "compileDailySnapshot", notes: "Code-review finding 1 (2026-09-21): fitness_summary is ALSO cron-owned (rolling-context writes it), but unlike morning_alert the client DOES carry a local mirror of it in aiContext (buildAiContext() serves both this push and the live ai-proxy chat body, and the chat use case needs it). Sending it here would let the client's lagging/possibly-empty mirror win the merge on a key it does carry. Explicitly removed from the push payload only — buildAiContext()'s direct chat-context use is untouched. Behavioral: test/contracts/daily_snapshot_fitness_summary_omission_test.dart (mutation-proven — reverting the .remove() call reddens both tests)." }
     reader_manifest_complete: false
     readers:
       - { file: supabase/functions/morning-alert/index.ts, line: 413, method_or_widget: "deliver mode — snap.snapshot_json?.morning_alert", semantic: latest, notes: "The concrete consumer whose silent skip (if (!alertMsg) return; — no log, no error) motivated this fix." }
@@ -1446,7 +1446,7 @@ concepts:
       TodaysMealsCard for "FROM YOUR DIET PLAN" hints on empty slots.
     writers:
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 205-218
+        line_range: 1198-1209
         method: saveDietPlan + getSavedDietPlan
         notes: |
           Wrappers over MigratedKey.write/read for the
@@ -1763,12 +1763,12 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 160-269
+        line_range: 160-274
         method: _syncUserProfile (push to user_profile, value passed through)
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/core/services/sync_service.dart
-        line_range: 1479-1542
+        line_range: 1482-1545
         method: _replayPendingOnboardingSync (value passed through)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -2950,12 +2950,12 @@ concepts:
       manual UI writer.
     writers:
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 357-404
+        line_range: 363-410
         method: _syncStepsLogs (push) — source is the native health import
         semantic: cloud-upsert
     readers:
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 572-614
+        line_range: 578-620
         method: _restoreStepsLogs
         semantic: cloud-restore
     hive:
@@ -3212,7 +3212,7 @@ concepts:
         line_range: 1-9999
         method: _syncScheduledWorkouts (confirmed :1778; constructs a SyncSkipIndex(domain: SyncSkipDomain.sched) and drives the FK-resilient upsert through its pushIfChanged closure -- the helper stores index[scheduled_date]=fp ON CONFIRMED ONLY; commit(liveKeys:) prunes to live schedule_ dates + persists after the loop)
       - file: lib/core/services/sync_service.dart
-        line_range: 371-404
+        line_range: 374-407
         method: schedPayloadFingerprint (pure static, byte-identical) + _schedHashSkipDisabled kill-switch getter
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-185
@@ -3443,7 +3443,7 @@ concepts:
         line_range: 209-452
         method: _syncNutritionLogs -> _syncNutritionLogsLegacy (legacy mode only; constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
       - file: lib/core/services/sync_service.dart
-        line_range: 441-501
+        line_range: 444-504
         method: nlogPayloadFingerprint / nlogHashSkipDisabledFor (pure statics, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (generic kill-switch reader shared with exlog, replaces the deleted _nlogHashSkipDisabled getter)
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-185
@@ -3561,7 +3561,7 @@ concepts:
         line_range: 1070-1117
         method: _cleanupNutritionPullCopies (deleteAll of the matched keys; syncBox flag put)
       - file: lib/core/services/sync_service.dart
-        line_range: 2690-2738
+        line_range: 2714-2762
         method: pullRecentCrossChannelLogs / pullRecentCrossChannelLogsForUser / _pullRecentCrossChannelLogsFor (awaits the cleanup before the legs; the nutrition leg runs only under restore_nutrition_launch_pull)
     reader_manifest_complete: true
     readers:
@@ -3735,6 +3735,9 @@ concepts:
           token-derived v_uid (UUID-asserted → else 401); nutrition_log_items +
           template_exercises via parent embed; referral_redemptions dual-FK .or;
           coach_memory 10-col projection. ANY query error → non-200 (no partial 200).
+      - file: supabase/functions/restore-user-snapshot/restore_reads.ts
+        line_range: 48-141
+        method: READS (the 29 bundle reads, in key order, each scoped to v_uid; run by assembleTables with at most RESTORE_READ_CONCURRENCY in flight, tables built by input index; OI-348 B10, a0d5f7)
       - file: lib/core/services/sync_service.dart
         line_range: 1-9999
         method: _attemptSingleCallRestore + validatedSnapshotTables
@@ -3805,22 +3808,35 @@ concepts:
           The ONLY place the paged reads are built. The user scope, the explicit order
           directions, the 51-page per-table ceiling and the shared budget live here.
       - file: supabase/functions/restore-user-snapshot/index.ts
-        line_range: 100-290
+        line_range: 97-165
         method: serve handler
         notes: |
-          Creates ONE budget per request (inside the handler), assigns each bundle key
-          from readPaged(db, vUid, "<same name>", budget), and logs table names + row
+          Creates ONE budget per request (inside the handler) and hands it to
+          assembleTables (restore_reads.ts), whose READS tuples read each paged key
+          from readPaged(db, vUid, "<same name>", budget); logs table names + row
           counts only. The wiring test pins every one of these.
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2315-2521
+        line_range: 2361-2597
         method: _attemptSingleCallRestore
         semantic: aggregated
         fields_read: [schema_version, tables]
         notes: |
           Fail-closed: a non-200 (including a budget or page-limit throw) returns null
-          before any Hive write and the legacy fan-out runs.
+          before any Hive write and the legacy fan-out runs. OI-348 B10 (a0d5f7): the
+          readiness_daily read (not in the bundle) starts BEFORE the Edge Function
+          call and step B consumes it (failed -> reported as restore_readiness, then
+          _restoreReadiness does its own read; configBox disable_restore_overlap ->
+          serial read as before).
+      - file: lib/core/services/sync/restore_readiness_prefetch.dart
+        line_range: 30-81
+        method: RestoreReadinessPrefetch (start wraps the read so it never rejects; consume hands ok rows, or reports a failure then runs the own read)
+        semantic: pass-through
+        fields_read: [rows]
+        notes: |
+          Pure. Behavioural test test/sync/restore_readiness_prefetch_test.dart (also
+          pins the call site's order and the shared _fetchReadinessRows read).
       - file: lib/core/services/sync/sync_workout.dart
         line_range: 2310-2640
         method: _restoreScheduledWorkouts
@@ -3830,7 +3846,9 @@ concepts:
           Reads deleted_at / name / workout_type / template_exercises of the embed; a
           null embed (a foreign or deleted template) is handled.
     additional_tests:
-      - test/contracts/restore_user_snapshot_paged_reads_wiring_test.dart  # presence-only: index.ts routes every key through readPaged with vUid and the one per-request budget
+      - test/contracts/restore_user_snapshot_paged_reads_wiring_test.dart  # presence-only: every READS tuple (restore_reads.ts) routes its key through readPaged with vUid; index.ts makes the one per-request budget
+      - supabase/functions/restore-user-snapshot/restore_reads_test.ts  # OI-348 B10 a0d5f7: golden parity with the e28cdab8 serial code at limit 1 and 3, runLimited, budget under concurrency, clamp table
+      - test/sync/restore_readiness_prefetch_test.dart  # OI-348 B10 a0d5f7: the client readiness prefetch
       - test/sync/restore_single_call_bundle_validation_test.dart  # fail-closed bundle contract, unchanged
     cloud:
       table: workout_logs
@@ -3839,12 +3857,15 @@ concepts:
     class_constraints: |
       1. A read in restore-user-snapshot that can return more than 1000 rows goes
          through readPaged; a bare .range(0, N) with N >= 1000 is the defect.
-      2. Every table read in index.ts mentions vUid; the paged ones get it from
-         readPaged itself.
+      2. Every READS tuple in restore_reads.ts mentions vUid; the paged ones get it
+         from readPaged itself.
       3. createPageBudget() is called once per request, inside the handler.
       4. Every .order() term has an explicit direction (supabase-js defaults to
          ascending, the Dart client to descending).
       5. The tie order among rows that share a sort key is NOT a preservation claim.
+      6. (OI-348 B10) The reads run at most RESTORE_READ_CONCURRENCY (default 3,
+         clamp 1..8, read per request) at a time; tables are assigned by INPUT
+         index (never completion order); the page budget is charged per page.
     notes: |
       Deploy owed (founder go). Rollback: deploy_via_api.js --rollback
       restore-user-snapshot <parent sha>.
@@ -3874,7 +3895,7 @@ concepts:
       assumption (it cannot detect a lowered production cap).
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3239-3310
+        line_range: 3263-3334
         method: _fetchAllRows
         notes: |
           The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
@@ -4002,7 +4023,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 97-126
+        line_range: 98-127
         method: _kickoffRestore
         semantic: awaits-bounded-destination
         fields_read: [PostSignInDestination]
@@ -4014,7 +4035,7 @@ concepts:
           getter throws, which the callback turns into "no evidence", so
           evidence-first would silently never fire).
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 580-642
+        line_range: 581-643
         method: _onContinueAnyway
         semantic: awaits-bounded-guarded-retry
         fields_read: [PostSignInDestination]
@@ -4193,7 +4214,7 @@ concepts:
           step. Uses _safeRestoreOp wrapper to keep one surface's
           failure from aborting the rest.
       - file: lib/core/services/sync_service.dart
-        line_range: 1973-2188
+        line_range: 1976-2191
         method: _restoreFromCloudForUserCore
         semantic: aggregated
         fields_read: [<the body of restoreFromCloudForUser, moved verbatim by OI-284>]
@@ -4203,7 +4224,7 @@ concepts:
           switch open, runs CompletedTitleHealer. Every restore return passes
           through the wrapper; nothing in the core changed.
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 61-151
+        line_range: 62-152
         method: RestoringScreen._init / _ensureOwnershipBeforeHome
         semantic: pass-through
         fields_read: []
@@ -4212,7 +4233,7 @@ concepts:
           routing to /home (15s timeout safety). Cancels in-flight
           restore when user_profile is null (brand-new user).
       - file: lib/core/services/sync_service.dart
-        line_range: 764-773
+        line_range: 1918-1924
         method: restoreFromCloud (legacy entry point)
         semantic: pass-through
         fields_read: []
@@ -4543,7 +4564,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1061-1063
+        line_range: 1063-1065
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -4563,7 +4584,7 @@ concepts:
         semantic: flag-check
         fields_read: [onboarding_completed, onboarding_completed_at]
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 87-96
+        line_range: 171-218
         method: RestoringScreen onboarding self-heal
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -5773,7 +5794,7 @@ concepts:
           weekly refill on Monday transition. Reads via UserRepository
           to user_progress columns (cloud-mirrored MigratedKey).
       - file: lib/core/services/rank_service.dart
-        line_range: 330-340
+        line_range: 335-345
         method: RankService.evaluateAndPromote (gate input)
         semantic: pass-through
         fields_read: []
@@ -6016,20 +6037,20 @@ concepts:
       before the legacy fan-out re-runs the ops.
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2068-2086
+        line_range: 2071-2089
         method: _settleRestoreMarker
         notes: |
           The ONE marker writer; the decision is the pure
           `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
           failure, uid non-null, live uid == uid, Hive owner == uid).
       - file: lib/core/services/sync_service.dart
-        line_range: 2099-2117
+        line_range: 2102-2120
         method: restoreFromCloudForUser
         notes: |
           Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
           core inside `RestoreFailureCollector.run`, heals titles, THEN settles.
       - file: lib/core/services/sync_service.dart
-        line_range: 200-333
+        line_range: 203-336
         method: _onUserChanged
         notes: clears `_restoreSettledUserId` and the withheld reason on an account swap, as its FIRST statement (every later step can throw; B-pass F3).
       - file: lib/core/services/sync/sync_restore_failure_collector.dart
@@ -6047,7 +6068,7 @@ concepts:
           a stale failure from the aborted attempt cannot hold the marker closed
           (B-pass reviewer B F4).
       - file: lib/core/services/sync_service.dart
-        line_range: 3068-3141
+        line_range: 3092-3165
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
@@ -6058,7 +6079,7 @@ concepts:
           `streak_reckon_withheld` event, then bump `restoreCompletedTick` LAST so
           every tick listener repaints from the already-debited ledger.
       - file: lib/features/auth/screens/restoring/heal_after_restore.dart
-        line_range: 107-115
+        line_range: 123-131
         method: healAfterRestoreWhenSucceeded
         notes: |
           Attaches the post-restore heal + reckon to an in-flight restore for the
@@ -6091,7 +6112,7 @@ concepts:
           The ONE persist gate: marker == live uid == Hive owner AND a non-empty
           schedule. Gated off => a read-only count.
       - file: lib/features/home/screens/home_screen.dart
-        line_range: 200-205
+        line_range: 201-206
         method: invalidateOnBackgroundRestore
         semantic: pass-through
         notes: |
@@ -6178,7 +6199,7 @@ concepts:
         semantic: pass-through
         notes: the coach prompt rule is a separate Edge Function change.
       - file: supabase/functions/_shared/rank_engine.ts
-        line_range: 173-250
+        line_range: 182-259
         method: completionRateOverWindow (countBlankDays)
         semantic: flag-check
         fields_read: [scheduled_workouts.scheduled_date]
@@ -6236,15 +6257,15 @@ concepts:
       `streak_progress_service_concurrency_test.dart` greps raw source).
     writers:
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 620-815
+        line_range: 622-817
         method: mergeCloudProgress
         notes: skips the freeze family and the control-plane keys in the cloud-copy loop when the freeze merge is on.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 831-944
+        line_range: 833-946
         method: _mergeFreezeFamily
         notes: the post-pass; delegates to StreakProgressService.mergeFreezeProgress.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 940-1038
+        line_range: 945-1043
         method: _restoreUserProgress
         notes: owner guard before the put, then `unawaited(syncFreezes())` when the merge scheduled a push.
       - file: lib/core/services/auth_session_bootstrapper.dart
@@ -6309,11 +6330,11 @@ concepts:
       date NULL (explicit branch: LEAST(NULL, x) is x).
     writers:
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 620-815
+        line_range: 622-817
         method: mergeCloudProgress
         notes: the date branch inside the cloud-copy loop; laterIsoDate at 125.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 940-1038
+        line_range: 945-1043
         method: _restoreUserProgress
         notes: passes istToday; the push sends p_last_workout_date.
       - file: lib/core/services/auth_session_bootstrapper.dart
@@ -6326,7 +6347,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 940-1038
+        line_range: 945-1043
         method: _restoreUserProgress
         semantic: pass-through
         fields_read: [last_workout_date, current_streak_weeks]
@@ -6500,7 +6521,7 @@ concepts:
           Per-day path only — list key NOT consulted. Feeds the
           snapshot's data_window/coverage signal.
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 305-355
+        line_range: 311-361
         method: _syncSleepLogs (push)
         semantic: pass-through
         fields_read: [date, duration_hrs, quality, bed_time, wake_time, notes, created_at]
@@ -6514,7 +6535,7 @@ concepts:
           SyncSkipIndex (sync_water_log_payload_hash_index's sibling,
           sync_sleep_payload_hash_index).
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 527-566
+        line_range: 533-572
         method: _restoreSleepLogs (pull)
         semantic: pass-through
         fields_read: [user_id, date, duration_hrs, quality, bed_time, wake_time, notes]
@@ -6581,7 +6602,7 @@ concepts:
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
-        line_range: 1-177
+        line_range: 1-195
         method: "updateProfile / patchProfile / patchProfileWith / updateField"
         notes: |
           Canonical writer scaffolded in audit 2026-05-20 / A4. All 7
@@ -6591,7 +6612,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 688-832
+        line_range: 693-837
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [full_name, email]
@@ -6775,7 +6796,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/profile/screens/profile/profile_content.dart
-        line_range: 80-95
+        line_range: 106-114
         method: _buildProfileContent (ProfileIdentity avatarUrl / bannerUrl)
         semantic: display-only
         fields_read: [avatar_url, banner_url]
@@ -6783,7 +6804,7 @@ concepts:
           Passes the stored URL to ProfileIdentity via ProfileImageUrl.forDisplay
           (verbatim). Was _addCacheBuster (per-build ?t= timestamp) — removed.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 145-275
+        line_range: 145-280
         method: _syncUserProfile
         semantic: pass-through
         fields_read: [avatar_url, banner_url]
@@ -6796,7 +6817,7 @@ concepts:
           after Unit 3b's own P1 fix (pushOnboardingProgressSnapshot, inserted
           earlier in the file) shifted both down ~80 lines each.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 688-832
+        line_range: 693-837
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [avatar_url, banner_url]
@@ -6847,7 +6868,7 @@ concepts:
           onboarding_completed_at) to cloud fire-and-forget; preserves the
           sync-before-referral order.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 145-275
+        line_range: 145-280
         method: _syncUserProfile (via syncProfileNow)
         notes: |
           DURABLE recurring writer (c4d8a2). Pre-fix this canonical profile->cloud
@@ -6857,7 +6878,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1066-1068
+        line_range: 1068-1070
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 760-1097
@@ -6887,7 +6908,7 @@ concepts:
           test/contracts/evidence_first_routing_test.dart (value, push, both
           guards, live default, kept / blank stamp).
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 201-253
+        line_range: 202-254
         method: _goHome (both branches — bg-restore fast path at 242-244 +
           default blocking path at 273-275)
         notes: |
@@ -6906,7 +6927,7 @@ concepts:
           _ensureOwnershipBeforeHome), since _goHome is only reached once
           the destination is already classified "treat as onboarded".
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 492-527
+        line_range: 586-661
         method: _onContinueAnyway (30s CONTINUE timeout escape hatch)
         notes: |
           Diagnose a3f6d9, B-pass round 1 Finding 1 (1dcc14cdbf32-review.md,
@@ -6931,7 +6952,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 92-194
+        line_range: 93-195
         method: RestoringScreen._kickoffRestore (post-auth gate)
         semantic: flag-check
         fields_read: [user_id, onboarding_completed_at]
@@ -7307,14 +7328,14 @@ concepts:
           The ONE local writer (max-wins, no await between read and put);
           CoachChatClear.clear stamps the device now and fires the push.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1097-1188
+        line_range: 1102-1193
         method: _restoreUserPreferences
         notes: |
           Removes the column before the generic merge (never lands in
           userBox['preferences']); adopts it max-wins, capped at device now,
           in its own block with a fresh ownerChangedSince.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1206-1234
+        line_range: 1211-1239
         method: pushCoachChatClearedAt
         notes: |
           Cloud push through raise_coach_chat_cleared_at; IST-day pushed-memory;
@@ -7974,7 +7995,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - { file: lib/core/services/sync/sync_profile.dart, line_range: 1092-1183, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
-      - { file: supabase/functions/restore-user-snapshot/index.ts, line: 167, method: "serve handler", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
+      - { file: supabase/functions/restore-user-snapshot/restore_reads.ts, line: 56, method: "READS user_preferences tuple (OI-348 B10: moved from index.ts)", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
     cloud:
       table: user_preferences
       columns: [user_id, coaching_notes]
@@ -8056,7 +8077,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3068-3141
+        line_range: 3092-3165
         method: _reportSyncFailure (funnel — all sync failures route through here)
         semantic: pass-through
         fields_read: []
@@ -8927,7 +8948,7 @@ concepts:
         notes: |
           AI snapshot consumers. Reads per-day keys (sleep_log_*, water_ml_*).
       - file: lib/core/services/sync/sync_health.dart
-        line_range: 30-400
+        line_range: 30-406
         method: cloud projection (push + restore)
         semantic: pass-through
         fields_read: [<all health domain fields>]
@@ -9900,6 +9921,71 @@ concepts:
         - test/contracts/rank_promotion_repository_only_test.dart —
           pins the named caller.
 
+  - concept: rank_floor_never_announced
+    domain: profile
+    behavioral_test_required: false  # Behavioural tests ship in the same batch.
+    behavioral_test_path: test/contracts/rank_floor_never_announced_test.dart
+    description: |
+      The floor rung (ordinal 0, SD2) every account holds from sign-up is written
+      to `rank_promotions` as history but NEVER announced: no pending celebration
+      stamp, no Home celebration, no `promotion_ceremony` row, no trigger dispatch
+      to `proactive-coach-promotion`, no chat message, no push (diagnose 8b1f3d,
+      OI-348 walk, founder 2026-11-23). One floor rule per language: Dart
+      `isFloorRank` (`rank_ladder_data.dart`), TS `isFloorRank`
+      (`_shared/rank_engine.ts`); the SQL literal in migration 184's trigger WHEN
+      clause is pinned equal to both by `rank_floor_trigger_migration_test.dart`.
+      Behavioural tests: the Dart pure seams, the Deno suites of both Edge
+      Functions (`evaluate-rank-promotions/index_test.ts`,
+      `proactive-coach-promotion/index_test.ts`), and the live BEGIN...ROLLBACK
+      verify `test/sql/rank_floor_trigger_live_verify.sql`.
+    writers:
+      - file: lib/core/services/rank_service.dart
+        line_range: 197-209
+        method: RankService.evaluateAndPromote (stamp gate)
+        notes: |
+          `if (shouldStampPromotionCelebration(qualified.code))` wraps ONLY the
+          pending-celebration stamp; current_rank_code, the Hive profile and
+          onStateChanged still move null -> SD2 (pinned by source).
+      - file: supabase/functions/evaluate-rank-promotions/index.ts
+        line_range: 333-346
+        method: cron ceremony sequencing
+        notes: |
+          `sortedNew` filters `isFloorRank`; the previous-rank fallback is
+          `LADDER[0].code`. A first run inserting SD2 + SD1 writes one ceremony,
+          SD2 -> SD1.
+      - file: supabase/migrations/184_rank_floor_trigger_when.sql
+        line_range: 39-43
+        method: trg_dispatch_proactive_coach_promotion WHEN clause
+        notes: The dispatch function itself is untouched.
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/home/screens/home_screen.dart
+        line_range: 222-244
+        method: _maybeShowPendingPromotion
+        semantic: read
+        fields_read: [pending_promotion_rank_code]
+        notes: |
+          `pendingPromotionAction`: a floor stamp (older build) is cleared and
+          never shown; order read -> clear -> clearOnly return -> shown event ->
+          push (pinned).
+      - file: supabase/functions/proactive-coach-promotion/index.ts
+        line_range: 104-107
+        method: handler floor guard
+        semantic: read
+        fields_read: [rank_code]
+        notes: Sink-side mirror of the trigger WHEN clause; 200 {skipped:"floor"}.
+      - file: lib/core/services/rank_ladder_data.dart
+        line_range: 259-289
+        method: isFloorRank / shouldStampPromotionCelebration / pendingPromotionAction (the Dart floor rule)
+        semantic: rule
+        fields_read: [rank_code]
+        notes: The one Dart floor predicate (kRankLadder.first.code); read by the stamp gate and Home.
+      - file: supabase/functions/_shared/rank_engine.ts
+        line_range: 112-119
+        method: isFloorRank (the TS floor rule)
+        semantic: rule
+        fields_read: [rank_code]
+        notes: The one TS floor predicate (kRankLadder[0].code); read by the cron ceremony filter and the Edge Function guard.
   - concept: rank_monotonic_current_code
     domain: profile
     behavioral_test_required: false  # Behavioural test ships in same batch.
@@ -9924,7 +10010,7 @@ concepts:
       `achieved_at`).
     writers:
       - file: lib/core/services/rank_service.dart
-        line_range: 138-194
+        line_range: 72-220
         method: RankService.evaluateAndPromote
         notes: |
           Wraps the cloud user_profile.update + local Hive
@@ -9933,7 +10019,7 @@ concepts:
           qualified))`. Helper at line 61 is the canonical comparator
           and the unit under behavioral test.
       - file: supabase/functions/evaluate-rank-promotions/index.ts
-        line_range: 378-399
+        line_range: 383-404
         method: evaluate-rank-promotions cron sync block
         notes: |
           Mirrors the client guard server-side. Reads existing
@@ -9943,11 +10029,12 @@ concepts:
           due to OPT-E's batch pre-fetch + chunking-helper insertions
           above this block (2026-07-08) — block logic unchanged. Re-anchored
           319-340 -> 378-399 (2026-11-11, coach-workout-parity-2 S1: the
-          distinct-day count and the exported handler seam moved the block).
+          distinct-day count and the exported handler seam moved the block); 378-399 ->
+          383-404 (2026-11-23, 8b1f3d: the floor ceremony filter above it).
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/rank_service.dart
-        line_range: 39-60
+        line_range: 222-239
         method: RankService.getCurrentRank
         semantic: read
         fields_read: [current_rank_code, current_rank_achieved_at]
@@ -9955,7 +10042,7 @@ concepts:
           Reads UserRepository.getProfile() (Hive userBox['profile'])
           and renders the RankInfo for Profile + Home rank widgets.
       - file: lib/core/services/rank_service.dart
-        line_range: 138-145
+        line_range: 140-149
         method: evaluateAndPromote (self-read for guard)
         semantic: read
         fields_read: [current_rank_code]
@@ -10026,7 +10113,7 @@ concepts:
       2026-05-20 A7 audit; PredictionService added 2026-09-26, B-pass
       round 2, single-owner-a — see its writers: entry above.)
     writers:
-      - { file: lib/core/services/sync_service.dart, line: 85, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
+      - { file: lib/core/services/sync_service.dart, line: 86, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
       - { file: lib/core/services/subscription_service.dart, line: 17, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
       - { file: lib/core/services/workout_schedule_service.dart, line: 177, method: "WorkoutScheduleService._() constructor → _registerLifecycle()", notes: "All state in workoutBox / userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/usage_counter_service.dart, line: 13, method: "UsageCounterService._() constructor → _registerLifecycle()", notes: "Counters live in per-user userBox; reset hook is a no-op placeholder." }
@@ -13241,7 +13328,7 @@ concepts:
   - concept: exercise_library_schema
     domain: workout
     behavioral_test_path: test/contracts/exercise_library_schema_contract_test.dart
-    behavioral_test_path_form_cues: supabase/functions/_shared/tools/__tests__/getFormCues_test.ts  # OI-438/OI-469: fake client applies eq/ilike/limit; retired row listed first; both stages
+    behavioral_test_path_form_cues: supabase/functions/_shared/tools/__tests__/getFormCues_test.ts  # OI-438/OI-469/OI-507: fake client applies eq/ilike/order/limit; retired row listed first; exact + alias + partial stages, wildcard escaping, deterministic order, alias lookup, not-found hint
     behavioral_test_path_prune: test/contracts/library_seed_prune_behavioral_test.dart  # Batch A 46fc99: real Hive box, retired id deleted, kept + community keys survive, a shipped id is never pruned
     behavioral_test_path_alias: test/contracts/exercise_alias_lookup_behavioral_test.dart  # Batch A 46fc99: retired names resolve via name_aliases, exact name wins (mirror), queryV4 serves the kept twin
     behavioral_test_path_panel: test/contracts/coaching_panel_numeric_breathing_behavioral_test.dart  # Batch A b7d3e1: rendered panel suppresses a numeric breathing_cue, Surya Namaskar mirror renders it
@@ -13251,7 +13338,17 @@ concepts:
     behavioral_test_path_v25: test/contracts/library_seed_v25_upgrade_behavioral_test.dart  # Unit 1B-F 2026-11-11 (Ruling 12): real SeedService.seedIfNeeded on a v24 box (the 14 jump rows at their v24 tags, test/fixtures/library_hip_tags_v24.json); it ends at v25 with the 14 rows as bundled and every other row unchanged, a v25 box left alone; the v24 bundle digest pinned
     behavioral_test_path_v24: test/contracts/library_seed_v24_upgrade_behavioral_test.dart  # Library Batch S1b-3 2026-11-10 (OI-147): real SeedService.seedIfNeeded on a v23 box holding E053; it ends at v24 without E053 (merged_ids prune), G1373 written as bundled, a community row named Donkey Calf Raise and every other row unchanged, a box at the current version (v25 since Unit 1B-F) left alone
     behavioral_test_path_v20: test/contracts/library_seed_v20_upgrade_behavioral_test.dart  # Batch C2c 2026-11-06 (OI-474): real SeedService.seedIfNeeded on a v19 box holding the cable E230; it ends at v20 with the bodyweight E230 and its picture keys, every other row unchanged, a fresh install gets the new row, a v20 box is left alone
+    behavioral_test_path_v28: test/contracts/library_seed_v28_upgrade_behavioral_test.dart  # OI-523 2026-11-23: real SeedService.seedIfNeeded on a v27 box; G3470 is written without its alias, every other row unchanged; the v27 bundle digest ef1cea15 is pinned
+    behavioral_test_path_lunge_alias: test/contracts/library_v28_lunge_alias_contract_test.dart  # OI-523: generator, removals file, asset, seed record and ExerciseRepository.getByExactName agree that "Reverse Lunge" is no alias
     description: |
+      Library v28 (OI-523, 2026-11-23): 870 rows, one changed. G3470 Forward Lunge no longer carries name_aliases ["Reverse
+      Lunge"] (a forward lunge is not a reverse lunge, and the coach tool getFormCues answers a name through name_aliases): the
+      removals generator's REPLACEMENT.E144 is alias false, so E144 has no alias_to in scripts/data/library_batch_c2_removals.json
+      and the importer (G3470 is a source row, rebuilt on every run) writes no alias. The G1373 alias [Donkey Calf Raise] is KEPT
+      (founder 2026-11-23). scripts/data/library_v28_lunge_alias.json is the seed generator's kept-row record (before
+      ["Reverse Lunge"], after null = key absent); the v28 seed migration re-writes all 870 rows, one tuple differs from 176,
+      and its inline rollback restores the alias. Saved plans that name "Reverse Lunge" (user_progress.plan_json, 4 stale
+      testing-account plans) no longer resolve that name.
       Library v24 (Library Batch S1b-3, 2026-11-10, OI-147): 870 rows. E053 Donkey Calf Raise merged into G1373 Bodyweight
       Standing Calf Raise, the 8th merged_ids retirement and the first on a SOURCE-built kept row: the importer's merge
       stage (scripts/data/library_s1b3_merges.json) drops E053 and gives G1373 merged_ids [E053] and name_aliases [Donkey
@@ -13312,7 +13409,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 305-350
+        line_range: 309-354
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -13343,8 +13440,8 @@ concepts:
         method: getByExactName / hasExactNameWhere (exact loop, then name_aliases) + search (name or alias substring)
         semantic: a retired name resolves to its kept twin; an exact name always wins over an alias
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts
-        method: reads primary_muscles/secondary_muscles/difficulty_level (:60-61)
-        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; both queries filter is_active = true in code (OI-438/OI-469; live after the ai-proxy deploy: a retired row never answers; the seed's cue copy onto retired rows, from migration 162, is now defence in depth)
+        method: reads primary_muscles/secondary_muscles/difficulty_level, and (alias stage, OI-507) name_aliases through `.neq("name_aliases", "{}")`: an exact miss resolves a name another ACTIVE row lists as an alias before the partial stage
+        semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; all three reads (exact, alias, partial) filter is_active = true in code and order by name; the model-supplied name is LIKE-escaped by _shared/like_escape.ts (OI-507) (OI-438/OI-469; live after the ai-proxy deploy: a retired row never answers; the seed's cue copy onto retired rows, from migration 162, is now defence in depth)
       - file: lib/features/train/providers/train_provider.dart
         line_range: 109-117
         method: last-weight suggestion reads the LOGGED row's logging_type (weight_reps or weighted_bodyweight) before it suggests a load
@@ -13510,6 +13607,12 @@ concepts:
       - file: lib/core/services/seed_service.dart
         method: _exerciseLibraryVersion (26 to 27)
         notes: putAll writes the 27 copied rows into exerciseBox by id (Unit 1B-F2)
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (27 to 28)
+        notes: putAll writes G3470 into exerciseBox by id without its name_aliases entry (OI-523); without the bump an installed device keeps the alias
+      - file: scripts/data/library_v28_lunge_alias.json
+        method: before/after record for G3470 name_aliases (before ["Reverse Lunge"], after null)
+        notes: OI-523 — read ONLY by the cloud seed generator (the asset is written by the importer from the removals file); the generator hard-fails when the library row differs from after and builds the migration rollback from before
     readers:
       - file: lib/shared/repositories/plan_engine/core_list_selector.dart
         method: CoreListSelector.rankedPool / typeFor / subFocusMatches
@@ -13797,7 +13900,7 @@ concepts:
       the banner is week-model work, out of scope here.
     writers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 397-471
+        line_range: 402-476
         method: _syncUserProgress
         notes: |
           THE canonical writer. Projects the program week into the current_week
@@ -13825,7 +13928,7 @@ concepts:
           at :969 (the cloud progress row; both cites re-derived 2026-11-14 from
           the 'current_week': 1 literal, the old 473 / 786 had drifted). NOT routed through the projection (no need).
       - file: lib/core/services/sync_service.dart
-        line_range: 1170-1174
+        line_range: 1475-1486
         method: _replayPendingOnboardingSync (NO LONGER writes current_week)
         notes: |
           B-pass F1: this boot-replay used to pass the frozen Hive current_week
@@ -13973,7 +14076,7 @@ concepts:
       enforced at merge.
     writers:
       - file: docs/blast_radius.yaml
-        line_range: 39-669
+        line_range: 39-681
         method: paths list (declaration order, first match wins)
         notes: |
           THE canonical writer. Exact-path rules must be declared ABOVE the
@@ -14082,7 +14185,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1197-1254
+        line_range: 1200-1257
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -14092,7 +14195,7 @@ concepts:
           record, so an unrestored device can no longer assert an all-enabled
           default over the stored copy.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 672-762
+        line_range: 677-767
         method: _syncUserPreferences
         semantic: latest
         notes: |
@@ -14130,7 +14233,7 @@ concepts:
           a corrupted or half-written value cannot silently darken a
           notification. Swallows storage errors and returns {} (=> all-enabled).
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1097-1188
+        line_range: 1102-1193
         method: _restoreUserPreferences
         semantic: latest
         fields_read: [enabled]
@@ -14165,7 +14268,7 @@ concepts:
         fields_read: [enabled]
         notes: self-heals via NotificationPrefsRepository.read() when pushed without `extra`.
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 197-218
+        line_range: 239-260
         method: _loadNotificationPreferences
         semantic: display-only
         fields_read: [enabled]
@@ -14438,7 +14541,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2912-2912
+        line_range: 2936-2936
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -14449,7 +14552,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2935-2939
+        line_range: 2959-2963
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -14459,7 +14562,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2951-2953
+        line_range: 2975-2977
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -14474,7 +14577,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2934-2977
+        line_range: 2958-3001
         method: _safeRestoreOp
         semantic: bounded-await
         notes: all four ranges shifted +24 by OI-348 Landing 1a-i (diagnose b1d2a8, the cross-channel pull gained its cleanup call and test seam earlier in the file).
@@ -15038,7 +15141,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 189-189
+        line_range: 193-193
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -15082,7 +15185,7 @@ concepts:
         line_range: 198-219
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 189-189
+        line_range: 193-193
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -15168,7 +15271,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 189-189
+        line_range: 193-193
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart
@@ -16466,7 +16569,7 @@ concepts:
       upendra@icanbefitter.com.
     writers:
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 309
+        line_range: 351
         method: build (contact card)
         semantic: display-only
       - file: lib/features/profile/screens/delete_account_screen.dart
@@ -17712,7 +17815,7 @@ concepts:
           without this, the very next extraction pass would silently
           overwrite every pre-existing user's genuine profile values.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1375-1395
+        line_range: 1410-1430
         method: lockCoachExtractionFields
         notes: |
           Client call site: `.rpc('lock_coach_extraction_fields', params: {'p_fields': fields})`.
@@ -17736,7 +17839,7 @@ concepts:
           actually added; a lock that throws or times out is non-fatal
           (accepted residue: an extraction may run before it lands).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 887-926
+        line_range: 1307-1407
         method: "syncOnboardingToSupabase (onboarding injuries trigger) + shouldLockOnboardingInjuries (pure decision, line 941)"
         notes: |
           Locks 'injuries' when onboarding collected a REAL selection (not
@@ -17928,7 +18031,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: supabase/functions/evaluate-rank-promotions/index.ts
-        line_range: 252-252
+        line_range: 253-253
         method: handler (ceremony totalWorkouts)
         semantic: aggregated
         fields_read: [date]
@@ -17996,7 +18099,7 @@ concepts:
           streak_freezes_available. The three notice keys are local-only: every progress
           payload builder names its keys (sync_profile.dart _buildUserProgressRpcParams).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1013-1029
+        line_range: 1015-1031
         method: clearStreakFreezeNotice
         notes: |
           The ONE clearer: the flag, the count and the snapshot in ONE updateProgress delta
@@ -18006,7 +18109,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/screens/home_screen.dart
-        line_range: 232-256
+        line_range: 246-270
         method: _checkStreakFreezeUsed
         semantic: display-only
         fields_read: []
@@ -18032,7 +18135,7 @@ concepts:
           in by the caller. The sheet states ONE pair of caps (freeMax 1, proMax 3) for rule 4
           and the PRO note; a test ties it to the refill's isPro ? 3 : 1.
       - file: lib/features/auth/screens/restoring_screen.dart
-        line_range: 362-528
+        line_range: 363-529
         method: _ensureOwnershipBeforeHome
         semantic: flag-check
         fields_read: [streak_freeze_just_used]
@@ -18333,9 +18436,9 @@ concepts:
         semantic: restore-raw
         fields_read: [referral_redemptions.code, referral_redemptions.referrer_id, referral_redemptions.referee_id, referral_redemptions.days_granted_each, referral_redemptions.created_at]
         notes: Selects the rows where the user is either party and stores them raw in Hive (`referral_redemption_history`, which nothing reads); no field is parsed, so a NULL party is carried through. The three 159 columns are deliberately NOT in the select (no reader).
-      - file: supabase/functions/restore-user-snapshot/index.ts
-        line_range: 261-266
-        method: restore snapshot, referral_redemptions table
+      - file: supabase/functions/restore-user-snapshot/restore_reads.ts
+        line_range: 135-140
+        method: restore snapshot, referral_redemptions READS tuple
         semantic: restore-raw
         fields_read: [referral_redemptions.code, referral_redemptions.referrer_id, referral_redemptions.referee_id, referral_redemptions.days_granted_each, referral_redemptions.created_at]
         notes: Same five columns, same `.or(referrer_id.eq.<uid>,referee_id.eq.<uid>)` filter, returned as-is.
@@ -18473,6 +18576,82 @@ concepts:
       - "announcing the first-seen lifetime total as new (the first evaluation on a device is silent)"
       - "writing referral_credit_seen_days without a session owner, or after the account changed"
       - "naming converted_at / referrer_reward_days / referrer_credited_at / referrer_rewarded / referee_rewarded in a client file (migration 160 hides them; the figures come from referrer_summary())"
+  - concept: unit_preference_sync
+    domain: auth_profile
+    behavioral_test_path: test/contracts/unit_preference_sync_writer_to_reader_test.dart
+    description: |
+      OI-348 B9 (2026-11-23, diagnose e9a6c1, docs/plans/oi348-walk-fixes-landing2.md
+      Unit B9). The units setting and the measurement sheet's last unit are
+      per-user PROFILE fields: `units_system` ('metric' | 'imperial') and
+      `measurement_unit` ('cm' | 'in') in userBox['profile']; cloud
+      user_profile.units_system / user_profile.measurement_unit (migration 185,
+      nullable, CHECK-constrained; NULL = never set). Before: the shared device
+      key configBox['units_metric'] (leaked between accounts, never pushed) and
+      the per-user Hive key body_measurement_sheet_unit (never pushed); both
+      are now LEGACY fallbacks, read only while the profile field is absent.
+      One rule file: lib/core/utils/unit_prefs_rule.dart (keys, values,
+      readers: only 'imperial' / 'in' are non-default; a bad value is the
+      default). Writers never create a profile stub and capture the Hive
+      owner first. UnitsPrefAdopter moves the legacy device value into the
+      profile once per device after a SETTLED restore (both post-restore heal
+      paths). Kill switch (push only): configBox['disable_unit_pref_sync'].
+      Conflict rule: the last pushed change wins at every device's next restore.
+    writers:
+      - file: lib/shared/repositories/user_repository.dart
+        line_range: 1111-1128
+        method: setUnitsMetric (profile units_system through ProfileWriteService.patchProfileWith(stillOwner:); no owner or no profile -> no write)
+      - file: lib/features/profile/providers/body_measurements_provider.dart
+        line_range: 100-154
+        method: MeasurementWriteNotifier.save (profile measurement_unit, only under shouldRememberUnit, owner captured, no stub)
+      - file: lib/core/services/units_pref_adopter.dart
+        line_range: 35-123
+        method: UnitsPrefAdopter.runIfNeeded (one-time per device; only if the profile has no units_system; flag units_metric_to_profile_v1_done in migrationBox; deletes configBox units_metric)
+      - file: lib/core/services/sync/sync_profile.dart
+        line_range: 246-250
+        method: _syncUserProfile (push via unitPrefsPushEntries; valid values only, absent stays absent, flag-gated)
+    readers:
+      - file: lib/core/utils/unit_prefs_rule.dart
+        line_range: 1-56
+        method: metricFromProfileValue + inchesFromProfileValue + unitPrefsPushEntries (the one rule)
+      - file: lib/shared/repositories/user_repository.dart
+        line_range: 1086-1109
+        method: getUnitsMetric (profile first, legacy device key until adopted; TOTAL, a throw answers metric and logs units_pref_read_failed)
+      - file: lib/features/profile/providers/body_measurements_provider.dart
+        line_range: 162-193
+        method: lastUnitInches + preferredInches (profile measurement_unit, then the legacy per-user key, then the units setting)
+      - file: lib/features/profile/screens/profile/screen.dart
+        line_range: 127-167
+        method: invalidateOnBackgroundRestore (re-seeds _isMetric on the restore tick) + _onUnitsChanged (the Units row; no build-time re-read, so no snap-back)
+      - file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart
+        line_range: 49-80
+        method: _SwitchGoalDiffState initState (coach goal-change preview unit; was a raw configBox read)
+      - file: lib/core/services/sync/sync_profile.dart
+        line: 773
+        method: _restoreUserProfile (per-key merge, cloud non-null wins, cloud null never wipes)
+    additional_tests:
+      - test/sync/unit_preference_push_restore_test.dart  # the real profile push (stub server) and the real restore merge
+      - test/profile/profile_units_row_test.dart  # the real ProfileScreen: restore re-seed, no snap-back with the write held
+    hive:
+      box: userBox
+      key_prefix: "profile"
+    cloud:
+      table: user_profile
+      columns: [units_system, measurement_unit]
+    sync_methods: [syncProfileNow]
+    restore_methods: [_restoreUserProfile]
+    provider_invalidation_set: [userProfileProvider]
+    class_constraints: |
+      Read the units only through UserRepository.getUnitsMetric and
+      MeasurementWriteNotifier.preferredInches; never configBox['units_metric']
+      directly (only getUnitsMetric's fallback and the adopter read it). Never
+      write the device key. A unit write never creates a profile. The adopter
+      runs only from the two post-restore heal paths (never _ensureLocalUser)
+      and only after restoreSettledForCurrentUser.
+    forbidden_legacy_patterns:
+      - "a configBox write of units_metric"
+      - "a raw configBox.get('units_metric') outside getUnitsMetric and UnitsPrefAdopter"
+      - "MigratedKey.write('body_measurement_sheet_unit', ...)"
+      - "re-reading the Profile screen's _isMetric in build (snap-back)"
   - concept: measurement_prompt_state
     domain: health
     behavioral_test_path: test/contracts/measurement_prompt_state_behavioral_test.dart
@@ -18485,7 +18664,9 @@ concepts:
       they die with the user boxes at sign-out:
         - body_measurement_prompt_dismissed_at         (an IST day, YYYY-MM-DD)
         - body_measurement_prompt_baseline_skipped_at  (an IST day)
-        - body_measurement_sheet_unit                  ('cm' or 'in')
+        - body_measurement_sheet_unit                  ('cm' or 'in'; LEGACY since OI-348 B9,
+          e9a6c1: read only as a fallback when the profile has no
+          measurement_unit; no longer written)
       The prompt is a PURE function (measurementPromptFor): `due` when the newest
       valid entry is at least 28 days old; `baseline` when nothing was ever
       measured and onboarding was at least 7 days ago; a dismissal silences both
@@ -18504,10 +18685,13 @@ concepts:
           only with a session owner (without one the key would land in the shared
           configBox). Each ends with ref.invalidateSelf().
       - file: lib/features/profile/providers/body_measurements_provider.dart
-        line_range: 97-132
+        line_range: 100-154
         method: MeasurementWriteNotifier.save
         notes: |
-          The sheet's unit key, written only when shouldRememberUnit holds; the
+          The sheet's unit, written only when shouldRememberUnit holds, as the
+          profile field measurement_unit (OI-348 B9, e9a6c1: patchProfileWith with
+          the owner captured, no write without a profile; concept
+          unit_preference_sync); the
           history provider is invalidated AFTER the awaited write (before it, a
           held day lock lets the refresh read a box that lacks this write).
     readers:
@@ -18529,16 +18713,16 @@ concepts:
           stamp is a UTC ISO string read through a type test, never its first ten
           characters.
       - file: lib/features/profile/providers/body_measurements_provider.dart
-        line_range: 140-148
+        line_range: 162-176
         method: lastUnitInches
         semantic: hive-read
-        fields_read: [body_measurement_sheet_unit]
-        notes: MeasurementWriteNotifier.lastUnitInches. The remembered unit; null falls back to the device units_metric setting (in preferredInches).
+        fields_read: [profile.measurement_unit, body_measurement_sheet_unit]
+        notes: MeasurementWriteNotifier.lastUnitInches. The profile's measurement_unit (OI-348 B9, e9a6c1), else the legacy per-user key; null falls back to the units setting (UserRepository.getUnitsMetric, in preferredInches).
       - file: lib/features/profile/providers/body_measurements_provider.dart
-        line_range: 150-165
+        line_range: 178-193
         method: preferredInches
         semantic: hive-read
-        fields_read: [body_measurement_sheet_unit, units_metric]
+        fields_read: [profile.measurement_unit, body_measurement_sheet_unit, profile.units_system]
         notes: |
           L2b Landing C. The ONE expression for "inches or centimetres" that the
           sheet (initState) and the Progress comparison card (tiles branch only)
@@ -18658,11 +18842,11 @@ concepts:
       measurements surfaces and what each is allowed to do.
     writers:
       - file: lib/features/home/screens/home_screen.dart
-        line_range: 148-183
+        line_range: 155-191
         method: invalidateOnRetry
         notes: Invalidates bodyMeasurementsProvider exactly once; never reads, watches or refreshes a measurements provider (that would build it with the flag OFF).
       - file: lib/features/home/screens/home_screen.dart
-        line_range: 487-495
+        line_range: 504-507
         method: MeasurementDueSlot (the mount line in _buildContent)
         notes: One const line after the repeat nudge; the slot owns its own flag and prompt checks.
       - file: lib/features/home/widgets/weight_log_sheet.dart

@@ -541,6 +541,13 @@ paths:
   - { glob: "lib/core/utils/diet_supplements_rule.dart", tier: platform }   # dietSupplementsPushEntry: the diet_supplements push rule (and the one active rule)
   - { glob: "lib/features/nutrition/services/diet_supplements_flags.dart", tier: platform }   # DietSupplementsFlags (kill switch, gates the push key)
 
+  # OI-348 Landing 2 B9 (2026-11-23, diagnose e9a6c1): the same shape for the two unit preferences. sync_profile.dart
+  # calls unitPrefsPushEntries (which of `units_system` / `measurement_unit` is sent, valid values only), and
+  # UnitPrefFlags gates it. Push rules, so engine code (listed in _engine of the sync-engine completeness test).
+  # Declared ABOVE the lib/core/** catch-alls (first match wins).
+  - { glob: "lib/core/utils/unit_prefs_rule.dart", tier: platform }   # unitPrefsPushEntries: the unit-preference push rule
+  - { glob: "lib/core/services/unit_pref_flags.dart", tier: platform }   # UnitPrefFlags (kill switch, gates the push keys)
+
   # ----- feature (explicit overrides over default) -----
   - { glob: "lib/features/profile/**", tier: feature }
   - { glob: "lib/features/train/**", tier: feature }
@@ -583,6 +590,8 @@ paths:
   # movement_pattern record decides what the seed migration's rollback restores. Both sit at account above scripts/**.
   - { glob: "scripts/data/library_overlay_copy_v27.json", tier: account }
   - { glob: "scripts/data/library_f2_movement_pattern.json", tier: account }
+  # OI-523 (2026-11-23): the lunge-alias record decides what the seed migration's rollback restores for G3470's name_aliases.
+  - { glob: "scripts/data/library_v28_lunge_alias.json", tier: account }
   - { glob: "docs/**", tier: feature }
   - { glob: "scripts/**", tier: feature }
   - { glob: "test/**", tier: feature }

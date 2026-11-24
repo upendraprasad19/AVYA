@@ -116,6 +116,21 @@ double _contrast(Color a, Color b) {
 const _empty = BodyMeasurementsState(loaded: true);
 const _unreadable = BodyMeasurementsState();
 
+/// OI-348 B9 (e9a6c1): the units setting is the profile field `units_system`
+/// (per user, synced), not the shared device key.
+Future<void> _seedImperialProfile() => HiveService.instance.userBox.put(
+      'profile',
+      <String, dynamic>{'full_name': 'T', 'units_system': 'imperial'},
+    );
+
+/// A profile with no unit fields, so `setUnitsMetric` has something to patch
+/// (it never creates a profile stub).
+Future<void> _seedBareProfile() => HiveService.instance.userBox
+    .put('profile', <String, dynamic>{'full_name': 'T'});
+
+Object? _storedUnitsSystem() =>
+    (HiveService.instance.userBox.get('profile') as Map?)?['units_system'];
+
 void main() {
   testWidgets('typography warmup - GoogleFonts caches before any Hive mock', (
     tester,
@@ -448,7 +463,7 @@ void main() {
     testWidgets('nothing remembered and an imperial device: the sheet opens in '
         'inches', (tester) async {
       await tester.runAsync(
-        () => HiveService.instance.configBox.put('units_metric', false),
+        () => _seedImperialProfile(),
       );
       await open(tester, host([_empty], w: _FakeWrite()));
       expect(find.text('in'), findsNWidgets(4));
@@ -464,7 +479,7 @@ void main() {
 
     testWidgets('a remembered unit beats the device setting', (tester) async {
       await tester.runAsync(
-        () => HiveService.instance.configBox.put('units_metric', false),
+        () => _seedImperialProfile(),
       );
       await open(tester, host([_empty], w: _FakeWrite(unit: false)));
       expect(find.text('cm'), findsNWidgets(4));
@@ -475,7 +490,7 @@ void main() {
       'in centimetres, even on an imperial device',
       (tester) async {
         await tester.runAsync(
-          () => HiveService.instance.configBox.put('units_metric', false),
+          () => _seedImperialProfile(),
         );
         await open(tester, host([_empty], w: _ThrowingUnitWrite()));
         expect(find.byType(BodyMeasurementsSheet), findsOneWidget);
@@ -784,16 +799,22 @@ void main() {
 
     testWidgets('default unit: a remembered inches choice wins over a metric '
         'device setting', (tester) async {
-      await tester.runAsync(() => UserRepository.instance.setUnitsMetric(true));
+      await tester.runAsync(() async {
+        await _seedBareProfile();
+        await UserRepository.instance.setUnitsMetric(true);
+      });
+      expect(_storedUnitsSystem(), 'metric');
       await open(tester, host([_empty], w: _FakeWrite(unit: true)));
       expect(find.text('in'), findsNWidgets(4));
     });
 
     testWidgets('default unit: a remembered centimetres choice wins over an '
         'imperial device setting', (tester) async {
-      await tester.runAsync(
-        () => UserRepository.instance.setUnitsMetric(false),
-      );
+      await tester.runAsync(() async {
+        await _seedBareProfile();
+        await UserRepository.instance.setUnitsMetric(false);
+      });
+      expect(_storedUnitsSystem(), 'imperial');
       await open(tester, host([_empty], w: _FakeWrite(unit: false)));
       expect(find.text('cm'), findsNWidgets(4));
     });
@@ -801,9 +822,12 @@ void main() {
     testWidgets('default unit: nothing remembered follows the device setting', (
       tester,
     ) async {
-      await tester.runAsync(
-        () => UserRepository.instance.setUnitsMetric(false),
-      );
+      await tester.runAsync(() async {
+        await _seedBareProfile();
+        await UserRepository.instance.setUnitsMetric(false);
+      });
+      expect(_storedUnitsSystem(), 'imperial',
+          reason: 'the setter writes the synced profile field');
       await open(tester, host([_empty], w: _FakeWrite(unit: null)));
       expect(find.text('in'), findsNWidgets(4), reason: 'imperial device');
     });

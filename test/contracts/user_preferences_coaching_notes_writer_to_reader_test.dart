@@ -32,7 +32,8 @@ void main() {
           .readAsStringSync();
   final assessBodyComp = _strip(assessBodyCompRaw);
   final restoreSnapshot = _strip(
-      File('supabase/functions/restore-user-snapshot/index.ts')
+      // OI-348 B10 (a0d5f7): the restore's reads moved to restore_reads.ts READS.
+      File('supabase/functions/restore-user-snapshot/restore_reads.ts')
           .readAsStringSync());
   final syncProfileRaw =
       File('lib/core/services/sync/sync_profile.dart').readAsStringSync();
