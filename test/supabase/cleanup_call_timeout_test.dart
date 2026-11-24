@@ -40,8 +40,9 @@ void main() {
 
     await SupabaseTestHelper.cleanup();
 
-    // 12 tables + exactly one retry of the first.
-    expect(calls.length, 13);
+    // 13 tables (nutrition_slot_tombstones added, diagnose c7f4e2) + exactly
+    // one retry of the first.
+    expect(calls.length, 14);
     expect(calls.first, calls[1], reason: 'the stuck table is retried at once');
   });
 
@@ -66,6 +67,22 @@ void main() {
 
     await SupabaseTestHelper.cleanup();
 
-    expect(calls.length, 12, reason: 'no retry, no abort on a non-timeout');
+    expect(calls.length, 13, reason: 'no retry, no abort on a non-timeout');
+  });
+
+  // Diagnose c7f4e2: deleting a nutrition_logs row writes a tombstone
+  // (migration 181), so the tombstones must be deleted AFTER it, or the
+  // cleanup leaves one behind that wins the next run's re-baseline.
+  test('the slot tombstones are deleted after nutrition_logs', () async {
+    SupabaseTestHelper.deleteRows = (table, uid) async {
+      calls.add(table);
+    };
+
+    await SupabaseTestHelper.cleanup();
+
+    final logs = calls.indexOf('nutrition_logs');
+    final tombs = calls.indexOf('nutrition_slot_tombstones');
+    expect(logs, greaterThanOrEqualTo(0));
+    expect(tombs, greaterThan(logs));
   });
 }

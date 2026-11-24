@@ -390,6 +390,11 @@ class SupabaseTestHelper {
       'streaks',
       'weight_logs',
       'nutrition_logs',
+      // AFTER nutrition_logs: every direct delete of a nutrition_logs row
+      // writes a tombstone (migration 181 `trg_zz_nutrition_tombstone`), and a
+      // tombstone left behind wins the next run's re-baseline for that slot,
+      // which then REMOVES the seeded local row (diagnose c7f4e2).
+      'nutrition_slot_tombstones',
       'workout_logs',
       'body_measurements',
       'sleep_logs',

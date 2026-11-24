@@ -247,6 +247,15 @@ void main() {
     // the writer `continue`s (sync_nutrition.dart:326-328), dropping the
     // children with the parent already landed. No parent-only assertion can
     // see that.
+    //
+    // OI-348 1a-ii (a6c4e2) made the nutrition push the slot engine, and it
+    // sends nothing until the device's first PULL has re-baselined it
+    // (`nslot_push_gated_not_rebaselined`): the re-baseline stamps an
+    // `entry_id` on every id-less row (this seed has none) and only id rows
+    // are pushed. So the test runs the launch order: pull, then push. The
+    // pull's own follow-up push is NOT awaited by anyone (`_release` ->
+    // `schedulePush`), and while it holds the slot our push only marks itself
+    // owed, so the cloud row is awaited with a bounded poll (diagnose c7f4e2).
     test('T4: nutrition logs sync to nutrition_logs table', () async {
       await HiveService.instance.nutritionBox.put('nlog_${seedDate}_lunch_qa', {
         'date': seedDate,
@@ -263,9 +272,23 @@ void main() {
         ],
       });
 
+      await SyncService.instance.pullNutritionSlots(userId);
+      final stamped =
+          HiveService.instance.nutritionBox.get('nlog_${seedDate}_lunch_qa');
+      expect(stamped, isA<Map>(),
+          reason: 'the re-baseline must keep the local row (no cloud winner: '
+              'setUp clears nutrition_logs AND nutrition_slot_tombstones)');
+      expect((stamped as Map)['entry_id'], isA<String>(),
+          reason: 'the re-baseline stamps an entry_id on an id-less row');
+
       await SyncService.instance.pushNutritionLogsForSyncDomain();
 
-      final rows = await SupabaseTestHelper.queryTable('nutrition_logs');
+      var rows = await SupabaseTestHelper.queryTable('nutrition_logs');
+      final deadline = DateTime.now().add(const Duration(seconds: 30));
+      while (rows.isEmpty && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        rows = await SupabaseTestHelper.queryTable('nutrition_logs');
+      }
       final parent = rows.single;
       expect(parent['meal_type'], 'lunch');
       expect(parent['date'], seedDate);
