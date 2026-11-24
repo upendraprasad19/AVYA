@@ -24,6 +24,8 @@ import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/diet_plan_provider.dart';
+import 'package:icanbefitter/features/nutrition/providers/diet_supplements_active_provider.dart';
+import 'package:icanbefitter/features/nutrition/services/diet_supplements_flags.dart';
 import 'package:icanbefitter/features/nutrition/screens/diet_plan_screen.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_catalog.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_plan_flags.dart';
@@ -629,6 +631,101 @@ void main() {
       await _settle(tester);
       expect(debugDietPlanGenerations, 1,
           reason: 'the real value returning is not a change either');
+    });
+
+    testWidgets('a2d9f4: the supplements listener and the heal ignore the '
+        'signed-out window too (no regeneration, no heal event)',
+        (tester) async {
+      DietSupplementsFlags.debugEnabledOverride = true;
+      addTearDown(() => DietSupplementsFlags.debugEnabledOverride = null);
+      final ops = <String>[];
+      ErrorTelemetry.debugOnLogEventForTests = (op, {message}) => ops.add(op);
+      await seed(tester,
+          extra: {'diet_supplements': true, 'date_of_birth': '1990-01-01'});
+      tester.view.physicalSize = const Size(1080, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          authUserIdTokenProvider
+              .overrideWith((ref) => ref.watch(_tokenSourceProvider)),
+        ],
+        child: const MaterialApp(home: DietPlanScreen()),
+      ));
+      await _settle(tester);
+      final c = ProviderScope.containerOf(
+          tester.element(find.byType(DietPlanScreen)));
+      expect(c.read(dietSupplementsActiveProvider), isTrue,
+          reason: 'precondition: supplements active');
+      expect(debugDietPlanGenerations, 1);
+
+      c.read(_tokenSourceProvider.notifier).set('<anon>');
+      await _settle(tester);
+      expect(debugDietPlanGenerations, 1,
+          reason: 'active reads false while signed out: not a user change');
+      expect(ops, isNot(contains('diet_supplements_plan_healed')),
+          reason: 'the heal must not run on the value served while signed out');
+
+      c.read(_tokenSourceProvider.notifier).set(kTestUserId);
+      await _settle(tester);
+      expect(debugDietPlanGenerations, 1);
+      expect(ops, isNot(contains('diet_supplements_plan_healed')));
+    });
+
+    testWidgets('a2d9f4: the strategy that is Balanced after the window equals '
+        'the empty value, so no select event follows: the token returning '
+        're-decides and regenerates once', (tester) async {
+      await seed(tester, extra: {'diet_strategy': 'keto'});
+      tester.view.physicalSize = const Size(1080, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          authUserIdTokenProvider
+              .overrideWith((ref) => ref.watch(_tokenSourceProvider)),
+        ],
+        child: const MaterialApp(home: DietPlanScreen()),
+      ));
+      await _settle(tester);
+      final c = ProviderScope.containerOf(
+          tester.element(find.byType(DietPlanScreen)));
+      expect(debugDietPlanGenerations, 1);
+
+      c.read(_tokenSourceProvider.notifier).set('<anon>');
+      await _settle(tester);
+      // The account behind the screen changes to a Balanced one while the
+      // session is closed.
+      await tester.runAsync(() async {
+        await c.read(userProfileProvider.notifier)
+            .setDietStrategy(DietStrategy.balanced);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await _settle(tester);
+      expect(debugDietPlanGenerations, 1, reason: 'nothing during the window');
+
+      c.read(_tokenSourceProvider.notifier).set(kTestUserId);
+      await _settle(tester);
+      expect(debugDietPlanGenerations, 2,
+          reason: 'back signed in the effective strategy is Balanced while '
+              'the plan was asked for Keto: one regeneration');
+    });
+
+    test('a2d9f4: both signed-out guards sit BEFORE the first state change of '
+        'their listener (source order; presence of the guard is behavioural '
+        'above)', () {
+      final src = File('lib/features/nutrition/screens/diet_plan_screen.dart')
+          .readAsStringSync();
+      for (final name in const ['_onEffectiveStrategy', '_onSupplementsActive']) {
+        final start = src.indexOf('void $name(');
+        expect(start, greaterThan(0), reason: name);
+        final end = src.indexOf('\n  }\n', start);
+        final body = src.substring(start, end);
+        final guard = body.indexOf("authUserIdTokenProvider) == '<anon>'");
+        final mutation = body.indexOf('_checkedSaved = false');
+        expect(guard, greaterThan(0), reason: '$name has the guard');
+        expect(guard, lessThan(mutation),
+            reason: '$name: the guard comes before _checkedSaved = false');
+      }
     });
 
     testWidgets('vegan: Keto -> Low carb asks for the same Low carb plan, '

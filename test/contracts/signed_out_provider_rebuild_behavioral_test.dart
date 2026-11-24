@@ -138,7 +138,7 @@ const _kTokenWatchSites = <String, int>{
   'lib/features/nutrition/providers/diet_serving_view_provider.dart': 1,
   'lib/features/nutrition/providers/diet_supplements_active_provider.dart': 1,
   'lib/features/nutrition/providers/nutrition_provider.dart': 11,
-  'lib/features/nutrition/screens/diet_plan_screen.dart': 2,
+  'lib/features/nutrition/screens/diet_plan_screen.dart': 4,
   'lib/features/onboarding/providers/onboarding_provider.dart': 1,
   'lib/features/profile/providers/body_measurements_provider.dart': 3,
   'lib/features/profile/providers/measurement_flag_provider.dart': 1,
@@ -156,6 +156,7 @@ const _kTokenWatchSites = <String, int>{
   'lib/features/train/providers/preview_plan_provider.dart': 1,
   'lib/features/train/providers/train_provider.dart': 6,
   'lib/features/train/providers/video_render_provider.dart': 1,
+  'lib/features/train/widgets/swap_confirm_sheet.dart': 1,
   'lib/shared/mixins/hive_tab_scaffold.dart': 1,
 };
 
