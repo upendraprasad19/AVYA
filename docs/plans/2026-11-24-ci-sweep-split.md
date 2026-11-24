@@ -68,7 +68,7 @@ Pure Dart, no package imports (it runs as plain `dart scripts/ci_sweep_scope.dar
 - **"Green because skipped" is made visible where a reader decides on it.** `scripts/land_pr_lib.dart` needs ONE NEW `gh` call for this (`scripts/land_pr.dart:444` fetches only `commits/<sha>/check-runs`, which carry job conclusions, not step conclusions): the jobs of the workflow run, with their steps. It prints `sweeps: ran`, `sweeps: skipped (out of scope)` or `sweeps: unknown` on a line BEFORE `result:` (`parseResultWord`, `land_pr_lib.dart:57-72`, accepts the result only as the LAST non-empty line). A failed or unparseable call prints `sweeps: unknown` and never changes the result word or exit code. The fake `gh` in `test/helpers/land_pr_fixture.dart:108` exits 99 on an unknown argv, so it gains a fixture kind for the new call and every `land_pr` e2e test is re-run. CLAUDE.md §4.12.8 and §4.3 are reworded in this batch: on a PR, `ci-green` means "every test whose inputs the PR changed", and the full suite is what `main` runs. CLAUDE.md §4.4 rule 20 gains the sentence that a sweep red on `main` after an out-of-scope PR is a scope miss (P0 as before; the fix adds the missing input). No force switch is added: a PR that is out of scope has, by construction, nothing for the sweeps to say, and a scope miss is not something a reviewer would know to force.
 - Commit order on the branch: B first (U2, U3 without the scope step, U4), then A (U1 and the scope step) as its own commit, so A can be reverted alone.
 
-### U4. Split the heavy sweep files: DROPPED at execution (2026-11-24), `verified_clean`
+### U4. Split the heavy sweep files: titration gate DONE (2026-11-24, founder go, §6e); first dropped for a wrong reason, see §6d
 
 Measured before touching a file: packed longest-first into 5 legs, the committed table (`scripts/data/ci_sweep_durations.json`, per-file median of the three runs in §1.2) gives leg loads of 649 / 651 / 644 / 644 / 651 s. The heaviest file (367 s median, 587 s on the slowest runner) is below one leg's load, so a split would not shorten any leg; it would only add harness setup and move about a dozen cited file names. This is the plan's own drop rule ((b) below). No sweep file is split or renamed. The original text is kept for the record:
 
@@ -133,6 +133,49 @@ Baseline, measured 2026-11-24: **20.95 min** median end-to-end wall clock of the
 - Replay of the REAL script over the last 80 first-parent merges on `main`: 28 skip, 52 run (35%; the prototype in §1.8 estimated 30 to 37).
 - Mutation, option B: 8 mutants, 8 red (1 to 9 tests each). Option A: 26 mutants, 23 red on the first run. The 3 survivors and what was done: (1) directives read without comment stripping: a new test (an import at line start inside a block comment), now red; (2) "the CLI's catch says skip": the catch no longer assigns `run` at all, so the mutant has no line to change; (3) the `{ ...; } || RUN=true` shell wrapper: an equivalent mutant (`-e` does not apply inside an `if` condition or a non-final `&&` command), so the wrapper was removed and the step's behaviour tests now run under both `sh` and `bash`.
 - `land_pr` reads each sweep leg's job (`repos/{repo}/actions/jobs/{id}`, the check-run id) instead of one call per run: no run id has to be parsed out of a URL.
+
+## 6d. First CI run (PR #338, run 45361275474, 2026-11-24) and a correction to U4
+
+| leg | job (min) | test phase (s) | longest file in the leg (s) |
+|---|---|---|---|
+| core 1 / 2 / 3 / 4 | 7.5 / 6.2 (red, flake OI-528) / 7.4 / 9.4 | | |
+| sweep 1 | 9.6 | 522 | `day_floor_gate_pairs_p1` 522 |
+| sweep 2 | 13.8 | 780 | `titration_plateau_gate` 595 |
+| sweep 3 | 6.5 | 342 | `day_floor_gate_pairs_p4` 282 |
+| sweep 4 | 7.2 | 383 | `day_floor_gate_rep30` 299 |
+| sweep 5 | 8.8 | 474 | `r6_removed_runs_ext_build_muscle` 246 |
+
+No job waited more than 3 s to start. The slowest leg is 13.8 min, against the 16.8 min limit of abort condition 2 (one run; the condition is a median of three).
+
+**The reason given for dropping U4 was WRONG.** It said a split "would not shorten any leg" because the heaviest file is below one leg's load. The run shows a leg's wall clock is set by its LONGEST FILE (files in a leg run side by side; sweep 1 ended the second its 522 s file ended), not by the leg's total. Splitting `titration_plateau_gate_test.dart` and `day_floor_gate_pairs_p1_test.dart` WOULD shorten the two slowest legs. U4 stays not done for a different, real reason: the titration gate is ONE test whose positive pins are totals over all three goals (`decline leads trimmed` 685, `mixed groups with both` 1612, the under-bottom pairs), so a per-goal split needs those pins re-measured per goal (about 16 min locally) and changes the recorded numbers of a plan-engine gate. That is a founder scope call, not a mechanical move.
+
+**Abort condition 4 is at risk and was badly designed.** Sweep-leg skew on this run is 13.8 / 6.5 = 2.1x, over the 1.6x limit (one run; the condition is a median of three, after one re-pack). The skew comes from one file plus runner speed (the same file took 367 s on another runner), so no re-pack of the table can remove it. Reported to the founder instead of rewriting the condition.
+
+## 6e. U4, the titration gate split (2026-11-24, founder: "split now")
+
+Done as §3 U4 described it: the body is `test/helpers/titration_plateau_gate_lib.dart` (`defineTitrationPlateauGate(goal)`), run by `test/plan_generator/titration_plateau_gate_{build_muscle,lose_fat,general_fitness}_test.dart`. The plan generator is untouched; the checks are the same code, moved.
+
+**The pins.** Every profile calls `sim.clearHistory()` first, so a goal's counters do not depend on the other goals. Measured by running the three files on the unchanged generator (all three: zero hard-zero failures):
+
+| counter | build_muscle | lose_fat | general_fitness | sum | single file pinned |
+|---|---|---|---|---|---|
+| progress plans | 192 | 192 | 192 | 576 | 576 |
+| sore3 plans | 64 | 64 | 64 | 192 | 192 |
+| flat focus rows above lead + 1 that gained | 36 | 3 | 9 | 48 | 48 |
+| decline leads trimmed | 147 | 146 | 392 | 685 | 685 |
+| mixed groups with both | 676 | 466 | 470 | 1612 | 1612 |
+| sore2 plans changed | 16 | 15 | 17 | 48 | 48 |
+| progress plans changed | 43 | 47 | 36 | 126 | 126 |
+| decline plans changed | 132 | 119 | 122 | 373 | 373 |
+| flat plans changed | 158 | 144 | 144 | 446 | 446 |
+| flat under-bottom OFF / ON | 4009 / 3930 | 3321 / 3291 | 2626 / 2609 | 9956 / 9830 | 9956 / 9830 |
+| mixed under-bottom OFF / ON | 3998 / 3965 | 3330 / 3345 | 2611 / 2646 | 9939 / 9956 | 9939 / 9956 |
+
+All 13 sums equal what the single file pinned. The pins are now stricter: a change in one goal can no longer be hidden by the opposite change in another, and the d82 "flat ON <= OFF" check holds for each goal on its own. `lose_fat`'s T1 pin is 3 rows, a thin positive pin, but still above zero.
+
+**What guards the split.** `test/contracts/titration_gate_split_test.dart` (core set, runs on every PR): the per-goal pins sum to the old totals (kept in the lib as `titrationGateTotals`), and exactly one gate file exists per pinned goal, calling the lib for its own goal. On a generator change that moves a pin, the totals are re-measured with the pins, as before.
+
+**Duration table.** The one 367 s row became three rows, 130 / 119 / 117 s (367 s shared out by this machine's measured ratio; to be replaced by CI's own numbers). By the table the five legs are 612 to 672 s, and the longest single file is now `day_floor_gate_pairs_p1_test.dart` (450 s in the table, 522 s on run 45361275474), so that file sets the slowest sweep leg from here on. It already has one `test()` per equipment tier, so a split by tier would need no new pins; it was not asked for.
 
 ## 7. Closure
 

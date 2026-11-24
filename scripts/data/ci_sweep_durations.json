@@ -35,6 +35,8 @@
   "test/plan_generator/repeat_minutes_gate_test.dart": 80,
   "test/plan_generator/same_movement_day_gate_test.dart": 21,
   "test/plan_generator/session_set_budget_gate_test.dart": 59,
-  "test/plan_generator/titration_plateau_gate_test.dart": 367,
+  "test/plan_generator/titration_plateau_gate_build_muscle_test.dart": 130,
+  "test/plan_generator/titration_plateau_gate_general_fitness_test.dart": 117,
+  "test/plan_generator/titration_plateau_gate_lose_fat_test.dart": 119,
   "test/plan_generator/weekly_minimum_gate_test.dart": 166
 }

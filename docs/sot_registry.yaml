@@ -12611,7 +12611,7 @@ concepts:
       rows; T1 a +1 on a non-lead row crediting no focus group needs current(row) <= current(lead); T2 a -1 takes rows
       at 3+ sets, most sets first, ties to the latest day then slot (d65), never below 2, the lead only when R2 still
       holds (every other non-focus row of the day, budgeted or not, R5's set); T3 a stash-less deload row is skipped; T4 _recovered() needs readinessEnabled. applyToWeeks(leadFirst:)
-      (null reads disable_lead_first). Gate titration_plateau_gate_test.dart over a simulated history.
+      (null reads disable_lead_first). Gate titration_plateau_gate_<goal>_test.dart (three per-goal files) over a simulated history.
     writers:
       - file: lib/shared/repositories/plan_engine/volume_titration.dart
         method: VolumeTitration.resolveDeltas / applyToWeeks
@@ -12648,8 +12648,8 @@ concepts:
           dedup, deload workingSets symmetry; resolveDeltas — flag/phase gates, −1 on
           decline, +1 only with recovery evidence (0/sparse/systemic-sore readiness → hold),
           deterministic. e1rm_test.dart pins the shared Epley helper.
-      - file: test/plan_generator/titration_plateau_gate_test.dart
-        method_or_widget: the step 4 gate (OFF / IDENTITY / KILLED / ON over a simulated history, plan_audit/history_sim_lib.dart)
+      - file: test/helpers/titration_plateau_gate_lib.dart
+        method_or_widget: defineTitrationPlateauGate, run per goal by test/plan_generator/titration_plateau_gate_{build_muscle,lose_fat,general_fitness}_test.dart; the step 4 gate (OFF / IDENTITY / KILLED / ON over a simulated history, plan_audit/history_sim_lib.dart)
         semantic: >
           hard zeros on the ON plan's final rows (R2 / R5, 1-set rows, time, the oracle ceiling, raw top in same-pick
           weeks), the opt-in and kill-switch identities, mixed's merge, sore / readiness-off ON == OFF, the d82 net.

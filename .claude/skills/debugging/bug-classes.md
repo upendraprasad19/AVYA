@@ -2242,7 +2242,7 @@ added, false of the flip being performed.
 - **Why it survives review:** the carve-out is honest and recorded, and no gate exercises a feature that needs user HISTORY (the plan audit has none), so nothing measures the post-pass at all.
 - **Fix pattern:** before flipping a ship-dark post-pass, grep the engine docs for every invariant later units added ("lead", "never below", "top", "cap") and every recorded carve-out, then measure the switched-on pass over a SIMULATED history (`test/plan_generator/plan_audit/history_sim_lib.dart`) on the FINAL rows, with the generator's own focus groups (at phase >= 2 `weakMuscles()` supplies them from the history) and the oracle's excuses. Give the post-pass the same rule in the same words (here R5's `current(row) <= current(lead)` and d65's trim order) rather than a weaker local guard.
 - **Test shape:** a gate with four worlds (OFF, opt-in only, kill switch with opt-in, ON) whose two identity worlds prove the switches, hard zeros on the final rows, and exact positive pins so a stricter rule cannot pass silently.
-- **Regression test:** `test/contracts/volume_titration_behavioral_test.dart` (step 4 group), `test/plan_generator/titration_plateau_gate_test.dart` (diagnose 7c4e2a).
+- **Regression test:** `test/contracts/volume_titration_behavioral_test.dart` (step 4 group), `test/plan_generator/titration_plateau_gate_<goal>_test.dart` (three per-goal files since 2026-11-24; diagnose 7c4e2a).
 
 ### 2.166 A two-device sync suite whose helper always pulls before it pushes never reaches the conflict path (NEW 2026-11-23)
 

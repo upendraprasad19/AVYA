@@ -213,10 +213,13 @@ jobs:
   # 9.84). So `unit-test` above now runs only the CORE set (`--set core`: every test
   # file NOT under test/plan_generator/), and this matrix runs the SWEEP set, packed
   # longest-first by the measured table scripts/data/ci_sweep_durations.json (five legs
-  # of 644-651 s by that table). The steps are the same as a core shard's on purpose:
+  # of 612-672 s by that table). The steps are the same as a core shard's on purpose:
   # the same empty-list and stray-line guards, `flutter test` last and unpiped.
-  # Splitting the heavy files was planned and DROPPED: the heaviest file (587 s on a
-  # slow runner) is below the per-leg load, so the packing balances without it.
+  # A leg's wall clock is set by its LONGEST FILE (files in a leg run side by side):
+  # on the first run (45361275474) the leg holding the then single 3-goal file
+  # titration_plateau_gate_test.dart (595 s there, 367 s on a faster runner) took
+  # 13.8 min while the others took 6.5-9.6. That file is now three per-goal files
+  # (test/helpers/titration_plateau_gate_lib.dart; plan section 6d).
   #
   # PRE-COMMITTED ABORT CONDITIONS (plan section 5; any one reverts the batch):
   #   (1) a PR that skips the sweeps takes more than 11.5 min (median of 3 runs);
