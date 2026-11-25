@@ -24,7 +24,7 @@ import '../providers/diet_plan_provider.dart';
 import '../services/meal_slot_inference.dart';
 import '../widgets/food_type_tag.dart';
 import '../widgets/todays_meals_card.dart';
-import '../widgets/weekly_chart_card.dart';
+import '../widgets/insights_section.dart';
 import '../widgets/hydration_sheet.dart';
 import 'package:icanbefitter/features/onboarding/target_weight_check.dart';
 import '../widgets/log_action_row.dart';
@@ -40,8 +40,6 @@ class NutritionScreen extends ConsumerStatefulWidget {
 
 class _NutritionScreenState extends ConsumerState<NutritionScreen>
     with HiveTabScaffoldMixin<NutritionScreen> {
-  bool _isInsightsExpanded = false;
-
   @override
   void invalidateOnRetry(WidgetRef ref) {
     ref.invalidate(dailyNutritionProvider);
@@ -240,7 +238,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
     final nutrition = ref.watch(dailyNutritionProvider);
     final targets = ref.watch(macroTargetsProvider);
     final profile = ref.watch(userProfileProvider);
-    final weeklyData = ref.watch(weeklyNutritionProvider);
 
     // APK Test #3 / Plan D layout. Top → bottom:
     //   1. TODAY'S SUMMARY (existing — calorie ring + macro bars +
@@ -249,7 +246,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
     //      showHydrationSheet; the hydration card + urine status live in that
     //      sheet since 2026-11-01 so the logged meals stay in view)
     //   3. TODAY'S MEALS (existing TodaysMealsCard, hoisted up)
-    //   4. INSIGHTS & TRENDS (existing WeeklyChartCard pair)
+    //   4. INSIGHTS & TRENDS (NutritionInsightsSection: history row + the weekly pair)
     //   5. YOUR FOODS (new YourFoodsSection)
     return ListView(
       padding: EdgeInsets.zero,
@@ -302,7 +299,7 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
         Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.screenPadding),
-          child: _buildInsightsSection(weeklyData),
+          child: const NutritionInsightsSection(),
         ),
         const SizedBox(height: 14),
 
@@ -1203,75 +1200,6 @@ class _NutritionScreenState extends ConsumerState<NutritionScreen>
 
 
   // ── Insights Section (collapsed by default) ──────────────────
-
-  Widget _buildInsightsSection(WeeklyNutritionData weeklyData) {
-    return WardCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: () => setState(
-                () => _isInsightsExpanded = !_isInsightsExpanded),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 14),
-              child: Row(
-                children: [
-                  Text(
-                    'INSIGHTS & TRENDS',
-                    style: AppTypography.mono.copyWith(
-                      color: AppColors.textMute,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    _isInsightsExpanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    color: AppColors.textDim,
-                    size: 18,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_isInsightsExpanded) ...[
-            const WardRule(margin: EdgeInsets.zero),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-              child: WeeklyChartCard(
-                title: 'This Week \u2014 Calories',
-                emoji: '\u{1F4CA}',
-                data: weeklyData.calories,
-                barColor: AppColors.accent,
-                avgLabel:
-                    'Avg: ${weeklyData.avgCalories.round()} kcal/day',
-                targetLabel:
-                    'Target: ${weeklyData.calorieTarget.round()}',
-                targetColor: AppColors.accent,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: WeeklyChartCard(
-                title: 'This Week \u2014 Protein',
-                emoji: '\u{1F4AA}',
-                data: weeklyData.protein,
-                barColor: AppColors.warn,
-                avgLabel:
-                    'Avg: ${weeklyData.avgProtein.round()}g/day',
-                targetLabel:
-                    'Target: ${weeklyData.proteinTarget.round()}g',
-                targetColor: AppColors.warn,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 
   /// APK Test #12.6 / Obs 7 — derive a meal display title from the
   /// canonical nutrition contract. Mirrors

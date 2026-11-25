@@ -6,7 +6,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart'
     show nutritionSummaryProvider;
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart'
-    show dailyNutritionProvider, macroTargetsProvider;
+    show dailyNutritionProvider, macroTargetsProvider, weeklyNutritionProvider;
 
 import 'profile_completeness_provider.dart';
 import 'profile_provider.dart' show userProfileProvider, userStatsProvider;
@@ -25,6 +25,10 @@ final List<ProviderOrFamily> profileDerivedSurfaceProviders = [
   nutritionSummaryProvider,
   dailyNutritionProvider,
   macroTargetsProvider,
+  // Diagnose a9d5c3: the weekly Insights cards read the targets straight from
+  // the profile and were in no refresh list, so their target line stayed on
+  // the old number after a goal change.
+  weeklyNutritionProvider,
   profileCompletenessProvider,
 ];
 

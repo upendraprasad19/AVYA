@@ -6,6 +6,7 @@ import '../../../core/services/error_telemetry.dart';
 import '../../../core/services/hive_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/sync_service.dart';
+import '../../../core/services/target_history_service.dart';
 import '../../../core/utils/ist_date.dart';
 
 /// Single canonical writer for the `userBox['profile']` map.
@@ -66,6 +67,7 @@ class ProfileWriteService {
         final stamped = Map<String, dynamic>.from(profile);
         stamped['updated_at'] = nowWall().toUtc().toIso8601String();
         await HiveService.instance.userBox.put('profile', stamped);
+        _afterPut();
         if (!skipSync) _fireSync();
       } catch (e, st) {
         debugPrint('[ProfileWriteService.updateProfile] $e\n$st');
@@ -94,6 +96,7 @@ class ProfileWriteService {
         final merged = <String, dynamic>{...base, ...patch};
         merged['updated_at'] = nowWall().toUtc().toIso8601String();
         await box.put('profile', merged);
+        _afterPut();
         _fireSync();
       } catch (e, st) {
         debugPrint('[ProfileWriteService.patchProfile] $e\n$st');
@@ -134,6 +137,7 @@ class ProfileWriteService {
         final merged = <String, dynamic>{...base, ...patch};
         merged['updated_at'] = nowWall().toUtc().toIso8601String();
         await box.put('profile', merged);
+        _afterPut();
         wrote = true;
       } catch (e, st) {
         debugPrint('[ProfileWriteService.patchProfileWith] $e\n$st');
@@ -174,6 +178,13 @@ class ProfileWriteService {
   /// seam clears itself. Production never sets it.
   @visibleForTesting
   Object? debugFailNextPatchWith;
+
+  /// Runs after EVERY profile put (restore-class `skipSync` writes included):
+  /// records the nutrition targets now in force in the target history
+  /// (`TargetHistoryService`, plan nutrition-history T1). Synchronous and
+  /// self-guarded: it never throws, so it can neither fail this write nor
+  /// hold the profile lock.
+  void _afterPut() => TargetHistoryService.reconcile();
 
   /// Fire SyncService.syncProfileNow if we have a logged-in user.
   /// Fire-and-forget per docs/architecture/sync.md — Hive write already succeeded

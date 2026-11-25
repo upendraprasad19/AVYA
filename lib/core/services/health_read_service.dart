@@ -85,6 +85,23 @@ class HealthReadService {
     return 0;
   }
 
+  /// Every day with water logged: IST day -> ml (> 0). One pass over the
+  /// `water_ml_<istDate>` keys [waterMlForDate] reads one at a time; the
+  /// Nutrition History screen needs them all.
+  Map<String, int> waterMlByDay() {
+    const prefix = 'water_ml_';
+    final box = HiveService.instance.healthBox;
+    final out = <String, int>{};
+    for (final key in box.keys) {
+      final k = key.toString();
+      if (!k.startsWith(prefix)) continue;
+      final raw = box.get(key);
+      final ml = raw is num ? raw.toInt() : 0;
+      if (ml > 0) out[k.substring(prefix.length)] = ml;
+    }
+    return out;
+  }
+
   /// ⑥ Batch 6 (W2.3) — the readiness check-in for the IST date containing
   /// [date], or null if none logged that day. Drives the active-workout
   /// re-entry gate (skip the sheet + re-apply the SAME mode on resume — never
