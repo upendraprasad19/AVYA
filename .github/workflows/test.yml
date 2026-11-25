@@ -630,11 +630,35 @@ jobs:
   #
   # ⚠ ADDING THE SECRETS IS A FOUNDER-ONLY ACTION. Until then this job verifies
   # NOTHING and says so on every run.
+  #
+  # ON PULL REQUESTS TOO, ONE AT A TIME (OI-527, plan docs/plans/2026-11-25-ci-integration-on-pr.md).
+  # Until 2026-11-25 this job ran only on a push to main, so a break was found AFTER the
+  # merge: PR #328 broke sync_service_test T4 and main stayed red for 14 hours across six
+  # merges. It now also runs on every pull request of this repository.
+  #   - `if:`: a Dependabot run and a fork run get no Actions secrets, so they are SKIPPED
+  #     (the merge wrapper accepts `skipped` for this job) instead of green-with-nothing.
+  #     `github.actor`, not the PR author: a human commit on a dependabot/* branch has
+  #     secrets and must run.
+  #   - `concurrency`: every step signs in as ONE shared QA account and deletes its rows,
+  #     so two jobs at once wipe each other. ONE literal group for every pull request AND
+  #     main (two back-to-back main merges could overlap before this). `queue: max` is
+  #     load-bearing: the default keeps a single pending job and a newer arrival CANCELS
+  #     it, which on main would lose the run's result. Never `cancel-in-progress: true`.
+  #   - What it proves: this pull request's CLIENT and TEST code against the LIVE backend
+  #     (deployed Edge Functions, applied migrations), not the pull request's own backend.
+  #     A pull request that needs an additive migration is red until that migration is
+  #     applied (supabase/migrations/CLAUDE.md).
+  #   - scripts/safe_pr_merge_lib.dart lists the job in prTimeSkippableJobs: no result on
+  #     the head SHA means no merge. Pinned by test/contracts/ci_integration_job_on_pr_test.dart.
   supabase-tests:
     name: Supabase Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository)
+    concurrency:
+      group: supabase-integration-shared-qa-account
+      cancel-in-progress: false
+      queue: max
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -655,7 +679,13 @@ jobs:
           [ -z "$SUPABASE_ANON_KEY" ]      && MISSING="$MISSING SUPABASE_ANON_KEY"
           [ -z "$SUPABASE_TEST_EMAIL" ]    && MISSING="$MISSING SUPABASE_TEST_EMAIL"
           [ -z "$SUPABASE_TEST_PASSWORD" ] && MISSING="$MISSING SUPABASE_TEST_PASSWORD"
-          if [ -n "$MISSING" ]; then
+          if [ -n "$MISSING" ] && [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            # The job-level `if:` already skips the runs that legitimately have no
+            # secrets (Dependabot, forks), so here a missing secret is a broken
+            # setup, and a green job would let a pull request merge untested.
+            echo "::error title=Supabase integration tests cannot run::Missing secret(s):$MISSING on a pull request of this repository."
+            exit 1
+          elif [ -n "$MISSING" ]; then
             echo "::warning title=Supabase integration tests did not run::Missing secret(s):$MISSING. This job verifies NOTHING. It is green because there is nothing to fail, not because integration tests passed."
           else
             echo "All four Supabase test secrets are configured — integration tests will run."

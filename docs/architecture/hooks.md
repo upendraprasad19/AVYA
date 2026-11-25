@@ -403,6 +403,18 @@ Tests: `test/scripts/local_indexes_e2e_test.dart`, `test/scripts/bug_index_stric
 | **Tests and proofs** | `test/contracts/ci_lockfile_enforced_test.dart` pins the shape of the two steps and of the job around them (71 cases: 61 in-memory mutants, each of which must report its own `[token]`, and 7 controls that must stay green; the Flutter pin is read from the file, so route (2) above needs no test edit; `requiredSuccessJobs` is read by import); real-runner red runs on throwaway PRs 319 (the flag), 320 (an `sdks` floor edit) and 321 (a deleted lock), all closed unmerged. |
 | **Pitfall it fixed** | A guard that compares a REGENERATED file with the committed one is blind to the file being absent, and a hand-written reader that merges a line it cannot parse into its neighbour is blind to every spelling it does not know: fail closed (agent memory `feedback_mistake_guard_without_its_mirror.md`, the 2026-11-22 instance; not tracked in this repo). |
 
+### Integration tests on pull requests — `Supabase Integration Tests` runs on every PR, one job at a time (OI-527, 2026-11-25)
+
+Before this the job ran only on a push to `main`, so a break showed after the merge: PR #328 broke `sync_service_test` T4 and `main` stayed red for 14 hours across six merges. Plan `docs/plans/2026-11-25-ci-integration-on-pr.md`.
+
+| Topic | Rule |
+|---|---|
+| **When it runs** | A push to `main`, and every pull request of this repository. A Dependabot run and a fork run get no Actions secrets, so the job-level `if:` SKIPS them (keyed on `github.actor`, so a human commit on a `dependabot/*` branch runs). On a pull request a missing secret FAILS the job; on a push to `main` it is still the old warning. |
+| **One at a time** | Every step signs in as one shared QA account and deletes its rows. The job has ONE literal concurrency group for all pull requests and `main`, `cancel-in-progress: false`, `queue: max` (the default queue keeps a single waiting job and a newer arrival cancels it). A job waits its turn, about 3 minutes per job ahead of it. |
+| **What it proves** | The pull request's CLIENT and TEST code against the LIVE backend: deployed Edge Functions and applied migrations, not the pull request's own. A changed Edge Function is tested against the old deployed version (the Deno job covers the function). A pull request that needs an ADDITIVE migration is red until the migration is applied, with its own founder go (`supabase/migrations/CLAUDE.md`). |
+| **The merge** | `scripts/safe_pr_merge_lib.dart` lists the job in `prTimeSkippableJobs`: `success` or `skipped` pass; a failure refuses; a MISSING check-run or a job with only cancelled runs is "not finished" (a head that predates this change has no run: sync the branch). There is no override flag, as for every required job. An outage of Supabase blocks landing while it lasts; the AI tests accept a capped or hard-failure reply. The bare version-bump landing waits for it too. |
+| **Pins** | `test/contracts/ci_integration_job_on_pr_test.dart` (the `if:`, the group, the queue, the secret check, the lists), `test/scripts/safe_pr_merge_lib_test.dart`, `test/scripts/land_pr_e2e_test.dart`. |
+
 ## Pre-shortening root text (verbatim, formerly root CLAUDE.md)
 
 > The sections below were tightened in root during the context-lean batch. This is their text exactly as it stood on 2026-09-28 (headings demoted two levels). Sections already preserved in full elsewhere (§4.3/4.4/4.10/4.12/4.13 in `process-invariants-detail.md`, §4.9 rows in `common-pitfalls.md`) are not repeated.

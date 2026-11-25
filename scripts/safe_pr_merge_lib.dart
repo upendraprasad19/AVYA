@@ -30,12 +30,24 @@ const List<String> requiredSuccessJobs = <String>[
 
 /// Jobs that run only on a push to main (`if: github.event_name == 'push' &&
 /// github.ref == 'refs/heads/main'`), so they are `skipped` on a pull_request
-/// run. `success` or `skipped` both pass; failure/cancelled/pending refuse; a
-/// missing check-run is tolerated (it is not a PR-time job).
+/// run. `success` or `skipped` both pass; failure/pending refuse; a missing
+/// check-run is tolerated (it is not a PR-time job).
 const List<String> skippedOkJobs = <String>[
   'Plan-review record (>=account merge-to-main)',
+];
+
+/// Jobs that run on EVERY pull request but may be `skipped` by their own `if:`
+/// (the integration job skips a Dependabot or fork run, which gets no secrets;
+/// OI-527). `success` or `skipped` pass. Unlike [skippedOkJobs] a MISSING
+/// check-run and a job with ONLY cancelled runs refuse, as "not finished": the
+/// job waits its turn in a concurrency group shared by every pull request, and
+/// a head with no result for it has not been tested against the live backend.
+const List<String> prTimeSkippableJobs = <String>[
   'Supabase Integration Tests',
 ];
+
+/// Every job name that has its own rule in [evaluateCheckRuns].
+const List<String> _namedJobs = <String>[...requiredSuccessJobs, ...skippedOkJobs, ...prTimeSkippableJobs];
 
 /// Matrix jobs, listed by the `name:` TEMPLATE they carry in test.yml. A matrix
 /// leg's check-run is named after the expanded template (`Unit Tests shard 1/4`),
@@ -249,12 +261,25 @@ CiJudgement classifyCheckRuns(List<Map<String, dynamic>>? runs) {
     }
   }
 
+  for (final n in prTimeSkippableJobs) {
+    final r = latest[n];
+    if (r == null) {
+      add(
+          onlyCancelled.contains(n)
+              ? '"$n" has only cancelled runs'
+              : '"$n" has no check-run (it runs on every pull request: sync the branch or re-run the job)',
+          isRed: false);
+    } else if (!_completed(r) || (_conclusion(r) != 'success' && _conclusion(r) != 'skipped')) {
+      add('"$n" ${describe(r)} (allowed: success or skipped)', isRed: _completed(r));
+    }
+  }
+
   // Any OTHER GitHub-Actions check (a matrix shard, a job added later) must not
   // be red or still running either -- the five names above are a floor, not a
   // ceiling.
   for (final entry in latest.entries) {
     final n = entry.key;
-    if (requiredSuccessJobs.contains(n) || skippedOkJobs.contains(n)) continue;
+    if (_namedJobs.contains(n)) continue;
     final r = entry.value;
     final c = _conclusion(r);
     final fine = _completed(r) && (c == 'success' || c == 'skipped' || c == 'neutral');
@@ -265,7 +290,7 @@ CiJudgement classifyCheckRuns(List<Map<String, dynamic>>? runs) {
   // as cancelled -- is not a result either. `latest` excludes cancelled runs, so
   // the loop above never sees such a job; without this it would be ignored.
   for (final n in onlyCancelled) {
-    if (requiredSuccessJobs.contains(n) || skippedOkJobs.contains(n)) continue;
+    if (_namedJobs.contains(n)) continue;
     add('"$n" has only cancelled runs', isRed: false);
   }
 

@@ -706,4 +706,124 @@ Future<void> main(List<String> a) async {
       }
     });
   });
+
+  group('OI-528: the lost-status counter and the fixture rebuild', () {
+    for (final (name, drive) in [('sync', _driveSync), ('async', _driveAsync)]) {
+      test('$name loop: each lost-status retry moves the counter by one, a native-assets retry does not', () async {
+        var before = lostStatusRetriesSeen;
+        await drive((n) => n == 1 ? _lost() : _r(0), exe: 'git', isWindows: false);
+        expect(lostStatusRetriesSeen - before, 1);
+
+        before = lostStatusRetriesSeen;
+        await drive((n) => n <= 2 ? _race() : _r(0), isWindows: false);
+        expect(lostStatusRetriesSeen - before, 0, reason: 'a retried dart start is idempotent');
+
+        before = lostStatusRetriesSeen;
+        await drive((_) => _r(1), exe: 'git', isWindows: false);
+        expect(lostStatusRetriesSeen - before, 0, reason: 'an ordinary failure is not a retry');
+      });
+    }
+
+    /// Drives [rebuildOnLostStatus] with a fake counter that moves by `moveDuring[i]` WHILE
+    /// build i+1 runs, and builds that return a value or throw as scripted.
+    ({Object? value, Object? error, StackTrace? stack, int builds, List<String> notes}) rebuild(
+      List<int> moveDuring,
+      List<Object> outcomes,
+    ) {
+      var counter = 7;
+      var builds = 0;
+      final notes = <String>[];
+      Object? value;
+      Object? error;
+      StackTrace? stack;
+      try {
+        value = rebuildOnLostStatus<Object>(
+          () {
+            final i = builds++;
+            if (i >= outcomes.length) throw StateError('a build the script does not allow');
+            counter += moveDuring[i];
+            final o = outcomes[i];
+            if (o is Error) throw o;
+            return o;
+          },
+          what: 'F',
+          lostCount: () => counter,
+          note: notes.add,
+        );
+      } catch (e, s) {
+        error = e;
+        stack = s;
+      }
+      return (value: value, error: error, stack: stack, builds: builds, notes: notes);
+    }
+
+    test('no status lost: the value comes back from ONE build, silently', () {
+      final r = rebuild([0], ['v1', 'v2']);
+      expect((r.value, r.error, r.builds), ('v1', null, 1));
+      expect(r.notes, isEmpty);
+    });
+
+    test('no status lost: a failing build fails unchanged (the same object, the build\'s own stack), not rebuilt', () {
+      final boom = StateError('real failure');
+      final r = rebuild([0], [boom, 'v2']);
+      expect(identical(r.error, boom), isTrue);
+      expect(r.stack.toString(), startsWith('#0      main.<anonymous closure>.rebuild.<anonymous closure>'),
+          reason: 'the stack is the build\'s, not a rethrow site');
+      expect((r.value, r.builds), (null, 1));
+      expect(r.notes, isEmpty);
+    });
+
+    test('status lost and the build failed (an Error, as a failed expect is): rebuilt once, the second value wins', () {
+      final r = rebuild([1, 0], [StateError("fatal: a branch named 'feature' already exists"), 'v2']);
+      expect((r.value, r.error, r.builds), ('v2', null, 2));
+      expect(r.notes, ['[fixture-rebuild] F: a child status was lost while it was being built (that build failed); building it again, once']);
+    });
+
+    test('status lost and the build "succeeded" (a duplicated commit is silent): rebuilt anyway', () {
+      final r = rebuild([1, 0], ['v1', 'v2']);
+      expect((r.value, r.error, r.builds), ('v2', null, 2));
+      expect(r.notes.single, contains('(that build completed)'));
+    });
+
+    test('status lost in BOTH builds: exactly two builds, the second outcome is final and the line says so', () {
+      final ok = rebuild([1, 1], ['v1', 'v2', 'v3']);
+      expect((ok.value, ok.builds, ok.notes.length), ('v2', 2, 2));
+      expect(ok.notes.last, '[fixture-rebuild] F: a child status was lost during the rebuild too; no third build');
+      final boom = StateError('second');
+      final bad = rebuild([2, 1], ['v1', boom, 'v3']);
+      expect(identical(bad.error, boom), isTrue);
+      expect((bad.builds, bad.notes.length), (2, 2));
+    });
+
+    test('the rebuild failing for a real reason fails, with one line only', () {
+      final boom = StateError('second');
+      final r = rebuild([1, 0], ['v1', boom]);
+      expect(identical(r.error, boom), isTrue);
+      expect((r.builds, r.notes.length), (2, 1));
+    });
+
+    test('the default counter is the helper\'s own: a real lost-status retry inside the build triggers the rebuild', () async {
+      var builds = 0;
+      final notes = <String>[];
+      final v = rebuildOnLostStatus<int>(
+        () {
+          builds++;
+          if (builds == 1) {
+            var n = 0;
+            retryingSpawn(() => ++n == 1 ? _lost() : _r(128), exe: 'git', why: 'w', report: (_) {}, note: (_) {}, isWindows: false);
+          }
+          return builds;
+        },
+        what: 'G',
+        note: notes.add,
+      );
+      expect((v, builds, notes.length), (2, 2, 1));
+    });
+
+    test('wiring (PRESENCE): SyncCli.create builds through rebuildOnLostStatus', () {
+      final src = File('test/helpers/sync_cli_fixture.dart').readAsStringSync();
+      expect(src, contains("rebuildOnLostStatus(() => _build(files), what: 'SyncCli.create')"));
+      expect(RegExp(r'static SyncCli create\(').allMatches(src).length, 1);
+    });
+  });
 }

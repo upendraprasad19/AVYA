@@ -52,6 +52,7 @@ Map<String, String> allGreen() => <String, String>{
       for (final j in requiredJobs) j: 'completed/success',
       'Unit Tests shard 1/4': 'completed/success',
       'Plan-review record (>=account merge-to-main)': 'completed/skipped',
+      'Supabase Integration Tests': 'completed/success',
     };
 
 const String _lib = r'''
