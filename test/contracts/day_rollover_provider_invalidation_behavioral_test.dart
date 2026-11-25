@@ -442,7 +442,9 @@ void main() {
       // orthogonal to the invalidation gap this test targets.
       await tester.runAsync(() async {
         await nutritionBox.put('nlog_test_today', {
-          'date': DateTime.now().toIso8601String(),
+          // The shape every writer stores: an IST day key (a full timestamp
+          // is not a day key and is counted nowhere since nutrition-history).
+          'date': istDateStr(DateTime.now()),
           'total_calories': 850,
           'total_protein': 40,
         });

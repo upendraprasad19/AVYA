@@ -9,6 +9,7 @@ diagnose_docs:
   - docs/diagnoses/2026-11-25-weekly-cards-stale-after-target-change-a9d5c3.md
   - docs/diagnoses/2026-11-25-home-nutrition-fallback-targets-differ-c2a4e8.md
   - docs/diagnoses/2026-11-25-weekly-cards-day-on-wrong-bar-d7b3f1.md
+  - docs/diagnoses/2026-11-26-sync-source-test-depends-on-directory-order-e4b7a9.md
 
 findings:
   - id: A1
@@ -110,6 +111,19 @@ findings:
       protein reads under (1), N8 countedRow accepts any date string (1). Finding 1's
       catchError is presence only (no harness makes a put fail late).
 
+  - id: CI2
+    title: "CI on the B-pass commit: two red tests in Unit Tests shard 2/4"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      (1) day_rollover_provider_invalidation_behavioral_test seeded a meal row with a full
+      timestamp as `date`; the strict day-key rule (B-pass finding 3) counts it nowhere, as the
+      day reader always did. The fixture now uses istDateStr (the shape every writer stores).
+      My miss: that file was not re-run after the review fixes. (2)
+      sync_template_before_schedule_order_test depended on the directory listing order
+      (diagnose e4b7a9, pre-existing, not caused by this branch): 90 of 300 random part-file
+      orders failed the old pattern, 0 of 300 the new one.
+
   - id: B
     title: "Landing B: cloud backup of the target history (user_profile.target_history + merge RPC + push + restore)"
     terminal_state: blocked_on_user
@@ -120,4 +134,4 @@ findings:
       a reinstall or a second device; the screen then judges earlier days against the earliest
       target it has and says so.
 
-closed_count: 11
+closed_count: 12
