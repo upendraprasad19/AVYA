@@ -8,6 +8,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/core/services/target_history_service.dart';
 import 'package:icanbefitter/core/services/usage_counter_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/services/pro_phase_advance.dart';
@@ -148,6 +149,9 @@ class DayRolloverObserver with WidgetsBindingObserver {
   /// Kill switch `disable_streak_reckon_user_gate`: only the bump (the pre-fix
   /// heal), because the gate is then the tick this call is about to bump.
   void reckonAndNotifyAfterRestore() {
+    // Target history (plan nutrition-history T3), BEFORE the tick below so
+    // every surface the tick refreshes reads the reconciled list.
+    TargetHistoryService.reconcile();
     if (SyncFlags.streakReckonUserGateEnabled) {
       try {
         WorkoutRepository.instance.reckonStreakDecayAndPersist();
@@ -244,6 +248,11 @@ class DayRolloverObserver with WidgetsBindingObserver {
 
     // 2. Store new date
     await HiveService.instance.configBox.put(_hiveKey, today);
+
+    // Target history (plan nutrition-history T2): a target change that came
+    // with no profile write (a PRO start or lapse under a diet strategy, the
+    // strategy flag) is dated here. Self-guarded: never throws.
+    TargetHistoryService.reconcile();
 
     // ⑥ Batch 7-B-2 (W2.4) — triggered-deload eval. Ship-dark (no-op unless BOTH
     // triggered-deload + readiness are live; disable_* kills them). Placed BEFORE the

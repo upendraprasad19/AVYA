@@ -3,7 +3,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -19,8 +18,8 @@ import 'package:icanbefitter/core/services/write_result.dart';
 // and is now invoked from DayRolloverObserver / splash, not from
 // StreakFreezeNotifier.build().
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
-import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/utils/nutrition_targets_resolver.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
@@ -638,61 +637,25 @@ class NutritionSummaryNotifier extends Notifier<NutritionSummaryData> {
     final today = DateTime.now();
     final macros = NutritionRepository.instance.dailyMacros(today);
 
+    // ONE resolver with the Nutrition tab (diagnose c2a4e8): stored pack, else
+    // the recompute from the profile's inputs, else the shared last resort;
+    // then the diet strategy (docs/plans/diet-strategy.md §3.3). The PRO and
+    // restore-tick watches exist ONLY with the flag on, so a flag-off build
+    // keeps this provider's dependency set.
     final profile = UserRepository.instance.getProfile();
-    final baseCalorieTarget =
-        (profile?['daily_calories'] as num?)?.toDouble() ?? 2000;
-    final proteinTarget =
-        (profile?['protein_grams'] as num?)?.toDouble() ?? 120;
-    // OBS-11 — dual-name read; a restored profile carries the plural
-    // `carbs_grams` (cloud/restore name), not `carb_grams`. Without this Home's
-    // carb target silently fell to the 250 default. (See nutrition_provider.)
-    final storedCarbs =
-        (profile?['carb_grams'] ?? profile?['carbs_grams']) as num?;
-    var carbTarget = storedCarbs?.toDouble() ?? 250;
-    final storedFat = profile?['fat_grams'] as num?;
-    var fatTarget = storedFat?.toDouble() ?? 65;
-
-    // Diet plan Unit 3a (docs/plans/diet-strategy.md §3.3): a PRO user's
-    // non-Balanced strategy changes the carb/fat targets, applied to the
-    // stored pack only when it is complete (the defaults are Balanced). The
-    // watches exist ONLY with the flag on, so a flag-off build keeps this
-    // provider's pre-3a dependency set.
+    var strategyEnabled = false;
+    var pro = false;
     if (DietStrategyFlags.enabled) {
-      final pro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
+      strategyEnabled = true;
+      pro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
       ref.watch(restoreCompletedTickProvider);
-      final storedCalories = profile?['daily_calories'] as num?;
-      final storedProtein = profile?['protein_grams'] as num?;
-      if (storedCalories != null &&
-          storedProtein != null &&
-          storedCarbs != null &&
-          storedFat != null) {
-        final effective = effectiveMacroTargets(
-          (
-            calories: storedCalories.toDouble(),
-            protein: storedProtein.toDouble(),
-            carbs: storedCarbs.toDouble(),
-            fat: storedFat.toDouble(),
-          ),
-          profile?['diet_strategy'],
-          pro: pro,
-          enabled: true,
-        )!;
-        if (effective.strategy != DietStrategy.balanced) {
-          carbTarget = effective.carbs;
-          fatTarget = effective.fat;
-        }
-      }
     }
-
-    // Apply AI-coach calorie target override for today (clamped 800..6000).
-    // Macros are not scaled — overrides ship a kcal delta only.
-    final override =
-        NutritionRepository.instance.getActiveTargetOverride(today);
-    final calorieTarget = override == null
-        ? baseCalorieTarget
-        : (baseCalorieTarget + ((override['delta_kcal'] as num?) ?? 0))
-            .clamp(800, 6000)
-            .toDouble();
+    final targets = resolveNutritionTargets(profile,
+        strategyEnabled: strategyEnabled, pro: pro);
+    final calorieTarget = targets.calories;
+    final proteinTarget = targets.protein;
+    final carbTarget = targets.carbs;
+    final fatTarget = targets.fat;
 
     return NutritionSummaryData(
       calories: (macros['calories'] as num?)?.toDouble() ?? 0.0,

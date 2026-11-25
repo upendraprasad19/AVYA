@@ -84,7 +84,11 @@ void main() {
           'weeklyFullSync Future.wait does NOT contain _syncWorkoutTemplates',
           () {
         final futureWaitMatch = RegExp(
-          r'Future\.wait\s*\(\s*\[([\s\S]*?)\]\s*,\s*eagerError:\s*false',
+          // The list may not run into ANOTHER `Future.wait(`: a wait with no
+          // `eagerError` (nutrition_slot_engine.dart has four) otherwise
+          // matched on to the next file's list, whichever file the directory
+          // listing put next (diagnose e4b7a9).
+          r'Future\.wait\s*\(\s*\[((?:(?!Future\.wait)[\s\S])*?)\]\s*,\s*eagerError:\s*false',
           multiLine: true,
         ).allMatches(src);
         expect(futureWaitMatch, isNotEmpty);

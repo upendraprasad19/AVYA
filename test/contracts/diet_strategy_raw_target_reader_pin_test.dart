@@ -25,10 +25,13 @@ final _rawRead = RegExp(
 /// Files allowed to index the raw keys, and why.
 const _allowed = <String, String>{
   // The three strategy-aware readers (plan §3.3).
+  // The ONE resolver of shown targets (nutrition-history plan 5.1): it holds
+  // the stored-pack read and runs the helper for Nutrition, Home, the weekly
+  // cards and the target history.
+  'lib/core/utils/nutrition_targets_resolver.dart':
+      'resolveBaseMacroTargets / resolveNutritionTargets (the helper runs here)',
   'lib/features/nutrition/providers/nutrition_provider.dart':
-      '_resolveNutritionTargets / resolveBaseMacroPack (the helper runs here)',
-  'lib/features/home/providers/home_provider.dart':
-      'NutritionSummaryNotifier (the helper on a complete pack)',
+      'reads the RESOLVED map only (resolveBaseMacroPack, the targets map)',
   'lib/features/ai_coach/services/ai_snapshot_builder.dart':
       'daily_targets (the helper via _dietStrategyTargets)',
   // Writers, sync and restore: they move the stored Balanced pack, never show it.

@@ -42,6 +42,7 @@ import 'package:icanbefitter/features/home/providers/pr_series_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/diet_plan_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/diet_serving_view_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/diet_supplements_active_provider.dart';
+import 'package:icanbefitter/features/nutrition/providers/nutrition_history_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_serving_label.dart';
 import 'package:icanbefitter/features/onboarding/providers/onboarding_provider.dart';
@@ -139,6 +140,7 @@ const _kTokenWatchSites = <String, int>{
   'lib/features/nutrition/providers/diet_plan_provider.dart': 1,
   'lib/features/nutrition/providers/diet_serving_view_provider.dart': 1,
   'lib/features/nutrition/providers/diet_supplements_active_provider.dart': 1,
+  'lib/features/nutrition/providers/nutrition_history_provider.dart': 1,
   'lib/features/nutrition/providers/nutrition_provider.dart': 11,
   'lib/features/nutrition/screens/diet_plan_screen.dart': 4,
   'lib/features/onboarding/providers/onboarding_provider.dart': 1,
@@ -388,6 +390,19 @@ List<_Case> _cases() => <_Case>[
       'logging_type': 'weight_reps',
     }),
     isSeeded: (v) => v is List && v.isNotEmpty,
+  ),
+  _Case(
+    // Reads nutritionBox / healthBox / workoutBox / userBox in one pass; its
+    // own guard keeps all of them out of every sign-out window.
+    'nutritionHistoryProvider',
+    nutritionHistoryProvider,
+    isEmpty: (v) => v is NutritionHistoryData && v.isEmpty && v.days.isEmpty,
+    seed: () => HiveService.instance.nutritionBox.put('nlog_${_today}_lunch_aaaa0003', {
+      'date': _today,
+      'meal_type': 'lunch',
+      'total_calories': 500.0,
+    }),
+    isSeeded: (v) => v is NutritionHistoryData && v.daysLogged == 1,
   ),
   _Case(
     // Derived from the PR list; its own guard keeps the exlog read out of

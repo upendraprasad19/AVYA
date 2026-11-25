@@ -488,7 +488,11 @@ void main() {
       expect(dietStrategyOfTargets(m), DietStrategy.balanced);
       expect(m['carbs'], 280, reason: 'the hard-coded Balanced default');
       final h = c.read(nutritionSummaryProvider);
-      expect(h.carbTarget, 250, reason: "Home's own Balanced default");
+      // Diagnose c2a4e8: Home resolves through the SAME resolver as Nutrition,
+      // so an incomplete pack gives the same numbers on both (was Home's own
+      // 250 default).
+      expect(h.carbTarget, 280, reason: 'the shared Balanced default');
+      expect(h.calorieTarget, m['calories']);
       final dt = AiSnapshotBuilder.instance.buildAiContext()['daily_targets']
           as Map;
       expect(dt['carbs'], 0, reason: "the snapshot's own 0 default");

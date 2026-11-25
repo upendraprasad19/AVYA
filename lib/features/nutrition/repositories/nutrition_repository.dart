@@ -1,8 +1,17 @@
+import 'package:icanbefitter/core/services/health_read_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/nutrition_read_service.dart';
-import 'package:icanbefitter/core/utils/bmr_calculator.dart';
+import 'package:icanbefitter/core/services/target_history_service.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
-import 'package:icanbefitter/shared/repositories/user_repository.dart';
+
+typedef NutritionHistoryInputs = ({
+  List<Object?> rows,
+  Map<String, int> waterByDay,
+  Set<String> trainingDays,
+  String? onboardingDay,
+  List<TargetEntry> targets,
+});
 
 /// Repository for all nutrition-related Hive reads/writes.
 ///
@@ -14,6 +23,57 @@ class NutritionRepository {
   static NutritionRepository get instance => _instance;
 
   final HiveService _hive = HiveService.instance;
+
+  // ── Nutrition History (plan docs/plans/nutrition-history.md) ──
+
+  /// Everything the History screen derives its series from, read in one go:
+  /// every nutritionBox value (the pure builder applies the day predicate of
+  /// [dailyMacros]), water per day, the days with a logged workout, the
+  /// onboarding day and the recorded target history.
+  NutritionHistoryInputs loadHistoryInputs() {
+    final profile = _hive.userBox.get('profile');
+    final onboarded = DateTime.tryParse(
+        (profile is Map ? profile['onboarding_completed_at'] as String? : null) ??
+            '');
+    return (
+      rows: _hive.nutritionBox.values.toList(growable: false),
+      waterByDay: HealthReadService.instance.waterMlByDay(),
+      trainingDays: WorkoutReadService.instance.datesWithExerciseLogs(),
+      onboardingDay: onboarded == null ? null : istDateStr(onboarded),
+      targets: TargetHistoryService.read(),
+    );
+  }
+
+  /// The meal rows of one IST day (`yyyy-MM-dd`), in slot order: the rows
+  /// [dailyMacros] sums for that day that carry a `meal_type`.
+  List<Map<String, dynamic>> mealsForDay(String dayKey) {
+    const order = ['breakfast', 'lunch', 'dinner', 'snacks'];
+    final out = <Map<String, dynamic>>[];
+    final Iterable<dynamic> values;
+    try {
+      values = _hive.nutritionBox.values;
+    } catch (_) {
+      // No session to read (sign-out / account-swap window, class a2d9f4).
+      return out;
+    }
+    for (final raw in values) {
+      if (raw is! Map) continue;
+      if (raw['is_saved_meal'] == true) continue;
+      if (raw['date'] != dayKey || raw['meal_type'] is! String) continue;
+      out.add(Map<String, dynamic>.from(raw));
+    }
+    int rank(Map<String, dynamic> m) {
+      final i = order.indexOf((m['meal_type'] as String).toLowerCase());
+      return i < 0 ? order.length - 1 : i;
+    }
+
+    out.sort((a, b) => rank(a).compareTo(rank(b)));
+    return out;
+  }
+
+  /// Records today's targets in the target history when they changed
+  /// (`TargetHistoryService.reconcile`). Returns whether it wrote.
+  bool reconcileTargetHistory() => TargetHistoryService.reconcile();
 
   // ── Daily Macros (single source of truth, F7) ─────────────────
 
@@ -87,72 +147,6 @@ class NutritionRepository {
     }
 
     return loggedDates.length;
-  }
-
-  // ── Weekly Report Data ────────────────────────────────────────
-
-  /// Computes weekly nutrition report data from the last 7 days of logs.
-  ///
-  /// Returns a map with keys: avgCalories, calTarget, proteinDays, bestDay.
-  Map<String, String> computeWeeklyReportData() {
-    final now = DateTime.now();
-    double totalCalories = 0;
-    double totalProtein = 0;
-    final loggedDates = <String>{};
-    String bestDay = '--';
-    double bestDayCal = 0;
-
-    for (final raw in _hive.nutritionBox.values) {
-      if (raw is! Map) continue;
-      final log = Map<String, dynamic>.from(raw);
-      final date = log['date'] as String?;
-      if (date == null) continue;
-      final d = DateTime.tryParse(date);
-      if (d == null || now.difference(d).inDays >= 7) continue;
-
-      loggedDates.add(date);
-      final cal = (log['total_calories'] as num?)?.toDouble() ?? 0;
-      final prot = (log['total_protein'] as num?)?.toDouble() ?? 0;
-      totalCalories += cal;
-      totalProtein += prot;
-
-      if (cal > bestDayCal) {
-        bestDayCal = cal;
-        final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        bestDay = weekdays[d.weekday - 1];
-      }
-    }
-
-    final daysLogged = loggedDates.length;
-    final avgCal = daysLogged > 0
-        ? (totalCalories / daysLogged).toStringAsFixed(0)
-        : '--';
-
-    // Get target from profile
-    final profile = _hive.userBox.get('profile');
-    String calTarget = '--';
-    int proteinTarget = 0;
-    if (profile is Map) {
-      final tdee = (profile['tdee'] as num?)?.toInt();
-      proteinTarget = (profile['protein_target'] as num?)?.toInt() ?? 0;
-      if (tdee != null) calTarget = '$tdee';
-    }
-
-    // Count days protein was on target (within 20%)
-    int proteinOnTarget = 0;
-    if (proteinTarget > 0 && daysLogged > 0) {
-      final avgProt = totalProtein / daysLogged;
-      if (avgProt >= proteinTarget * 0.8) {
-        proteinOnTarget = daysLogged;
-      }
-    }
-
-    return {
-      'avgCalories': avgCal,
-      'calTarget': calTarget,
-      'proteinDays': '$proteinOnTarget/$daysLogged',
-      'bestDay': bestDay,
-    };
   }
 
   // ── Daily Macros ─────────────────────────────────────────────────
@@ -474,117 +468,6 @@ class NutritionRepository {
           0;
     }
     return total;
-  }
-
-  // ── Daily Calorie Target Override (read-only / legacy drain) ─────────
-  //
-  // The AI `adjustCaloricTarget` tool (the only writer of `target_override_*`)
-  // was removed 2026-05-31 — the calorie target is DERIVED, not AI-settable
-  // (derive-only tool surface; see ADR). The reader below is retained so any
-  // in-flight overrides written before the removal drain gracefully via their
-  // `expires_at` TTL; no new overrides are ever written.
-
-  /// Returns the active calorie target override for [date], or null if none
-  /// is in effect (no override key, or the override has expired).
-  ///
-  /// Used by [getDailyCalorieTargetWithOverrides] and by the dashboard /
-  /// AI snapshot builders to display "Override active until X" hints.
-  Map<String, dynamic>? getActiveTargetOverride(DateTime date) {
-    final dateStr = _formatDate(date);
-    final raw = _hive.nutritionBox.get('target_override_$dateStr');
-    if (raw is! Map) return null;
-    final map = Map<String, dynamic>.from(raw);
-    final expiresAtStr = map['expires_at'] as String?;
-    if (expiresAtStr != null) {
-      final expiresAt = DateTime.tryParse(expiresAtStr);
-      if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
-        return null; // expired — ignore
-      }
-    }
-    return map;
-  }
-
-  /// Returns the daily calorie target for [date], applying any active
-  /// `target_override_<date>` override. Falls back to the base BMR-derived
-  /// target from the user profile (or BmrCalculator-recomputed if the
-  /// profile is missing the cached macros). Result is clamped to
-  /// `[800, 6000]` for safety against absurd writes.
-  ///
-  /// This is the SOURCE OF TRUTH for "today's calorie target" once the
-  /// AI coach can adjust it. Provider/widget code that previously read
-  /// `profile['daily_calories']` directly should call this method instead
-  /// when the displayed date matters (today's dashboard, day-detail view).
-  ///
-  /// Pure computation — does NOT trigger any sync.
-  ///
-  /// TODO(c2-cleanup): add a periodic sweep of expired
-  ///   `target_override_*` keys on app launch. Skipped for v1 — overrides
-  ///   are tiny, and the read-time check filters expired ones already.
-  double getDailyCalorieTargetWithOverrides(DateTime date) {
-    final profile = UserRepository.instance.getProfile();
-    final base = _resolveBaseDailyCalories(profile);
-
-    final override = getActiveTargetOverride(date);
-    if (override == null) return base;
-
-    final delta = (override['delta_kcal'] as num?)?.toDouble() ?? 0;
-    return (base + delta).clamp(800, 6000).toDouble();
-  }
-
-  /// Resolves the user's BASELINE daily calorie target from the profile,
-  /// without any override applied. Mirrors the fallback chain in
-  /// `nutrition_provider._resolveNutritionTargets` (cached → recomputed →
-  /// hardcoded), kept private here so the override-aware reader has one
-  /// place to read the base from.
-  double _resolveBaseDailyCalories(Map<String, dynamic>? profile) {
-    if (profile != null && profile['daily_calories'] != null) {
-      return (profile['daily_calories'] as num).toDouble();
-    }
-    if (profile != null) {
-      final weightKg = (profile['current_weight_kg'] as num?)?.toDouble();
-      final heightCm = (profile['height_cm'] as num?)?.toDouble();
-      final gender = profile['gender'] as String?;
-      if (weightKg != null &&
-          weightKg > 0 &&
-          heightCm != null &&
-          heightCm > 0 &&
-          gender != null) {
-        final goal =
-            profile['primary_goal'] as String? ?? 'general_fitness';
-        final activityLevel =
-            profile['activity_level'] as String? ?? 'moderate';
-        final dob = profile['date_of_birth'] as String?;
-        int age = 25;
-        if (dob != null) {
-          final birthDate = DateTime.tryParse(dob);
-          if (birthDate != null) {
-            final now = DateTime.now();
-            age = now.year - birthDate.year;
-            if (now.month < birthDate.month ||
-                (now.month == birthDate.month && now.day < birthDate.day)) {
-              age--;
-            }
-            if (age <= 0) age = 25;
-          }
-        }
-        final bodyFat = (profile['body_fat_percent'] as num?)?.toDouble();
-        final targets = BmrCalculator.calculateTargets(
-          weightKg: weightKg,
-          heightCm: heightCm,
-          age: age,
-          gender: gender,
-          activityLevel: activityLevel,
-          goal: goal,
-          pacePreference:
-              (profile['pace_preference'] as String?) ?? 'balanced',
-          bodyFatPercent: bodyFat,
-          targetWeightKg: (profile['target_weight_kg'] as num?)?.toDouble(),
-        );
-        return targets.dailyCalories.toDouble();
-      }
-    }
-    // Last-resort hardcoded default (matches _resolveNutritionTargets).
-    return 2400;
   }
 
   // ── Helpers ──────────────────────────────────────────────────────

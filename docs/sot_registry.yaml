@@ -622,17 +622,17 @@ concepts:
           against stale `completed_at` mismatching the requested date
           (Test #13 Bug 5.3 — do NOT call .toLocal() before _dateKey).
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 84-146
+        line_range: 83-145
         method: calendarWeekProvider per-day fetch
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(date)]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 584-603
+        line_range: 583-602
         method: todayWorkoutProvider
         semantic: pass-through
         fields_read: [via WorkoutScheduleService.getScheduleForDate(DateTime.now())]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 758-798
+        line_range: 721-761
         method: aiInsightProvider (next-workout consistency hint)
         semantic: pass-through
         fields_read: [via ref.watch(todayWorkoutProvider) — derives from the Today card's row (c7e3a9, test/contracts/ai_insight_follows_today_row_test.dart)]
@@ -734,28 +734,23 @@ concepts:
           lowercased name, top 8); relogs the stored item (0 g -> 100 g).
           Was a read of a top-level food_name the writer never writes.
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 653-751
+        line_range: 650-748
         method: _confirmAndDeleteLog (delete confirmation chip)
         semantic: display-only
         fields_read: [total_calories, total_protein]
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 923-1088
+        line_range: 920-1085
         method: _showEditMacrosSheet (edit macros bottom sheet)
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber]
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 28-50
+        line_range: 80-105
         method: dailyMacros
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date, is_saved_meal]
         notes: Sums daily totals; skips is_saved_meal=true template rows.
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 92-115
-        method: computeWeeklyReportData
-        semantic: aggregated
-        fields_read: [total_calories, total_protein, date]
-      - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 196-245
+        line_range: 154-207
         method: getDailyMacros (last-N-days bucketing)
         semantic: historical-series
         fields_read: [total_calories, total_protein, total_carbs, total_fat, date]
@@ -763,17 +758,17 @@ concepts:
           Per-day map; also accepts legacy top-level 'calories' /
           'protein' / 'carbs' / 'fat' fallback for restored rows.
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 461-485
+        line_range: 459-471
         method: getCaloriesForDate
         semantic: aggregated
         fields_read: [total_calories, date]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1807-1870
+        line_range: 1669-1729
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1241-1265
+        line_range: 1103-1127
         method: FoodLogNotifier.deleteFoodLog (delegates to NutritionWriteService.deleteLog, OI-36)
         semantic: display-only
         fields_read: [total_calories, calories, items[], food_name (legacy flat row), name, meal_type, date]
@@ -781,7 +776,7 @@ concepts:
           Reads pre-delete log entry to stash audit row in
           'recent_deletes' bucket; falls back to legacy 'calories' key.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 818-868
+        line_range: 781-831
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, items[] (names via deriveMealDisplayName, 8b3d4e), meal_type, date]
@@ -893,14 +888,14 @@ concepts:
       directly from a widget.
     writers:
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 854-919
+        line_range: 851-916
         method: _confirmAndDeleteFoodLog
         notes: |
           Legacy 5s-undo path. Reads the Hive row before delete, stashes
           it locally, then calls FoodLogNotifier.deleteFoodLog and shows
           a 5-second SnackBar with UNDO → FoodLogNotifier.restoreFoodLog.
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 653-751
+        line_range: 650-748
         method: _confirmAndDeleteLog
         notes: |
           Plan C-14 path. Confirm sheet → NutritionWriteService.deleteLog
@@ -929,7 +924,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1241-1278
+        line_range: 1103-1140
         method: FoodLogNotifier.deleteFoodLog + restoreFoodLog
         semantic: pass-through
         fields_read: [via box.get(logId), Hive nlog_* full map]
@@ -939,7 +934,7 @@ concepts:
           to NutritionWriteService.restoreFoodLog. Same provider also
           delegates DeleteNutritionLogNotifier.delete to WriteService.deleteLog.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1879-1894
+        line_range: 1738-1753
         method: DeleteNutritionLogNotifier.delete
         semantic: pass-through
         fields_read: [via NutritionWriteService.deleteLog(allowUndo: true)]
@@ -1238,7 +1233,7 @@ concepts:
           razorpay_service.dart:749 (_invalidateSubscriptionProviders). Its build() MUST use proStateSnapshot(),
           never isPro() — pinned by subscription_cqrs_behavioral_test group E.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 578-581
+        line_range: 577-580
         method: subscriptionExpiryBannerProvider
         semantic: derived
         fields_read: [isPro, daysUntilExpiry, proLapsedAt]
@@ -1444,7 +1439,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1908-1915
+        line_range: 1767-1774
         method: waterTargetProvider (Provider<int>)
         semantic: pass-through
         fields_read: [via WaterTargetService.instance.currentTargetMl()]
@@ -1457,7 +1452,7 @@ concepts:
         semantic: display-only
         fields_read: [waterTargetProvider]
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 343-344
+        line_range: 340-341
         method: self-contained
         semantic: display-only
         fields_read: [waterTargetProvider]
@@ -1552,7 +1547,7 @@ concepts:
           planStrategyFor(effective, foodType) (savedPlanMatchesStrategy;
           unstamped = Balanced). No watch, no check with the flag off.
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 280-292
+        line_range: 277-289
         method: nutrition tab (TODAY'S MEALS section)
         semantic: pass-through
         fields_read: [via ref.watch(dietPlanProvider)]
@@ -1889,13 +1884,14 @@ concepts:
       map, DailyNutritionData.strategy, the snapshot's own call), so a label
       never sits over numbers made for another strategy. Never read by
       workout generation; never set by the coach extraction.
-      Stated limit (plan §3.3, B-pass seat A finding 1): Home and the
-      snapshot apply the strategy only to a COMPLETE stored four-pack, while
-      _resolveNutritionTargets also applies it to its recompute fallback. A
-      profile with recompute inputs but no stored pack (never seen after
-      onboarding, which writes all four) already disagrees between Home's
-      250/65 defaults, the snapshot's zeros and Nutrition's recompute before
-      3a; the strategy keeps that pre-existing split, it does not add one.
+      Since nutrition-history (2026-11-25, diagnose c2a4e8) Nutrition, Home,
+      the weekly cards and the target history resolve the shown targets
+      through ONE function, resolveNutritionTargets
+      (lib/core/utils/nutrition_targets_resolver.dart): stored pack, else the
+      recompute from the profile's inputs, else the hard-coded last resort,
+      then the helper. Home and Nutrition therefore agree for every profile.
+      Remaining stated limit: the coach snapshot applies the strategy only to
+      a COMPLETE stored four-pack and keeps its own zeros otherwise.
     writers:
       - file: lib/features/profile/providers/profile_provider.dart
         line_range: 154-194
@@ -1927,16 +1923,21 @@ concepts:
         line_range: 160-240
         method: _syncUserProfile (push via dietStrategyPushEntry; flag-gated, canonical key)
     readers:
+      - file: lib/core/utils/nutrition_targets_resolver.dart
+        line_range: 1-9999
+        method: resolveBaseMacroTargets + resolveNutritionTargets (the ONE resolver of shown targets; runs the helper)
+        semantic: transformed
+        fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 46-229
-        method: _resolveNutritionTargets + resolveBaseMacroPack + _applyDietStrategy + _watchDietStrategyInputs (feeds macroTargetsProvider with strategy_index, DailyNutritionData.strategy)
+        line_range: 1-9999
+        method: _resolveNutritionTargets (adapter over the resolver) + nutritionTargetsMap + resolveBaseMacroPack + _watchDietStrategyInputs (feeds macroTargetsProvider with strategy_index, DailyNutritionData.strategy)
         semantic: transformed
-        fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
+        fields_read: [via resolveNutritionTargets]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 628-710
-        method: NutritionSummaryNotifier.build (helper on a complete stored pack only; watches only with the flag on)
+        line_range: 1-9999
+        method: NutritionSummaryNotifier.build (calls resolveNutritionTargets; PRO and restore-tick watches only with the flag on)
         semantic: transformed
-        fields_read: [diet_strategy, daily_calories, protein_grams, carb_grams, carbs_grams, fat_grams]
+        fields_read: [via resolveNutritionTargets]
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
         line_range: 72-237
         method: _dietStrategyTargets + buildAiContext (daily_targets carbs/fat, profile.diet_strategy / diet_strategy_label; no new key with the flag off)
@@ -2279,13 +2280,13 @@ concepts:
       truth for which providers must rebuild when the date flips.
     writers:
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 116-125
+        line_range: 117-126
         method: runRolloverNow
         notes: "Class is DayRolloverObserver (not DayRolloverService — stale name in registry)"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 193-347
+        line_range: 197-356
         method: _doRolloverWithRef (self-contained)
         semantic: pass-through
         fields_read: [<provider invalidation only — no Hive read>]
@@ -2356,7 +2357,7 @@ concepts:
       - usageWeeksProvider  # bug ff3131, 2026-09-28 — had write-time invalidation, missing rollover leg only
       - bodyMeasurementsProvider  # L2b Landing B, 2026-10-12 — "due" reads the clock; a no-op until built (flag OFF)
     ist_sites:
-      - { file: lib/core/services/day_rollover_service.dart, line: 120, fn: runRolloverNow }
+      - { file: lib/core/services/day_rollover_service.dart, line: 121, fn: runRolloverNow }
     class_constraints: |
       All "today"-derived providers (todayWorkoutProvider,
       dailyNutritionProvider, streakProvider, aiInsightProvider,
@@ -2767,22 +2768,22 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, total_protein, items[], meal_type, log_key, id, created_at]
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 45-509
-        method: dailyMacros, getDailyMacros, computeWeeklyReportData, getCaloriesForDate, getNutritionDaysLoggedThisWeek
+        line_range: 80-471
+        method: dailyMacros, getDailyMacros, getCaloriesForDate, getNutritionDaysLoggedThisWeek
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date, is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 418-484
+        line_range: 284-346
         method: DailyNutritionNotifier.build (per-slot bucketing)
         semantic: aggregated
         fields_read: [date, meal_type, is_saved_meal, items[]]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1807-1870
+        line_range: 1669-1729
         method: WeeklyNutritionNotifier.build
         semantic: historical-series
         fields_read: [total_calories, total_protein, date, is_saved_meal]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 818-868
+        line_range: 781-831
         method: RecentFoodLogsNotifier.build
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, items[] (names via deriveMealDisplayName, 8b3d4e), meal_type, date]
@@ -2862,7 +2863,7 @@ concepts:
       food-search (custom foods appear alongside the bundled DB).
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1438-1504
+        line_range: 1300-1366
         method: addCustomFood
         semantic: hive-write + immediate sync
         notes: |
@@ -2870,7 +2871,7 @@ concepts:
           + foodBox[<v5>], then unawaited(SyncService.instance.syncCustomItemsNow()).
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1507-1508
+        line_range: 1369-1370
         method: customFoodProvider
         semantic: hive-read
         notes: |
@@ -3633,7 +3634,7 @@ concepts:
         semantic: latest
         fields_read: [user_id, date, meal_type, items, is_saved_meal, source]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 444-444
+        line_range: 310-310
         method: whole-box walk by date (the day total that doubled)
         semantic: latest
         fields_read: [date, total_calories]
@@ -3712,7 +3713,7 @@ concepts:
         semantic: latest
         fields_read: [id, date, meal_type, rev, legacy_rev, updated_at, created_at, entries, items]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 444-444
+        line_range: 310-310
         method: whole-box walk by date (day total; nslot_ store values carry no date/meal_type, so the walk is unaffected: store_readers test)
         semantic: latest
         fields_read: [date, total_calories]
@@ -4631,7 +4632,7 @@ concepts:
         semantic: flag-check
         fields_read: [onboarding_completed]
       - file: lib/core/router/app_router.dart
-        line_range: 551-560
+        line_range: 557-566
         method: _authRedirect (onboarding gate)
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -4958,12 +4959,12 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 84-146
+        line_range: 83-145
         method: calendarWeekProvider per-day status check
         semantic: flag-check
         fields_read: [status, completed_at]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 584-603
+        line_range: 583-602
         method: todayWorkoutProvider
         semantic: flag-check
         fields_read: [status, completed_at, exercises]
@@ -5368,7 +5369,7 @@ concepts:
           the PR date is the first day the best was achieved. Pinned by
           test/contracts/load_all_exercise_prs_preservation_test.dart.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 1097-1113
+        line_range: 1060-1076
         method: AllExercisePRsNotifier.build (wraps loadAllExercisePRs)
         semantic: pass-through
         fields_read: [via loadAllExercisePRs]
@@ -5442,6 +5443,103 @@ concepts:
       are SUM (Test #6 writer contract) and must NEVER be surfaced as
       "best per-set" value.
 
+  - concept: nutrition_target_history
+    domain: nutrition
+    behavioral_test_path: test/contracts/nutrition_target_history_writer_to_reader_test.dart
+    description: |
+      Which nutrition targets were in force from which IST day, so the
+      Nutrition History screen judges a past day against the target of THAT
+      day (plan docs/plans/nutrition-history.md 5.2, U1-U10). Stored at
+      userBox['target_history']: a list, oldest first, of
+      {from, calories, protein, carbs, fat, strategy, at_ms} holding the
+      EFFECTIVE numbers (the diet strategy applied). Water is not recorded.
+      A day before the first entry reads the first entry as "assumed".
+      LOCAL ONLY until Landing B adds user_profile.target_history.
+    writers:
+      - file: lib/core/services/target_history_service.dart
+        line_range: 1-9999
+        method: TargetHistoryService.reconcile (pure step: reconciled)
+        notes: The ONE writer. Reads the profile from and writes the list to the same per-owner userBox; synchronous (no await between read and put); never throws; writes nothing with no open session, the kill switch configBox['disable_target_history'], or a profile that only resolves to the hard-coded fallback. Same-day entry replaced; removed when it equals the entry before it; capped at 400.
+      - file: lib/features/profile/services/profile_write_service.dart
+        line_range: 1-9999
+        method: _afterPut (after each of the three profile puts, skipSync restore writes included)
+        notes: trigger T1
+      - file: lib/core/services/day_rollover_service.dart
+        line_range: 1-9999
+        method: _doRolloverWithRef (after the new date is stored) / reckonAndNotifyAfterRestore (before the tick bump)
+        notes: triggers T2 and T3
+      - file: lib/features/nutrition/repositories/nutrition_repository.dart
+        line_range: 1-9999
+        method: reconcileTargetHistory (called by NutritionHistoryScreen.initState)
+        notes: trigger T4
+    readers:
+      - file: lib/core/services/target_history_service.dart
+        line_range: 1-9999
+        method: TargetHistoryService.read / parse / targetFor
+        semantic: historical-series
+        fields_read: [from, calories, protein, carbs, fat, strategy, at_ms]
+      - file: lib/features/nutrition/repositories/nutrition_repository.dart
+        line_range: 1-9999
+        method: loadHistoryInputs
+        semantic: pass-through
+        fields_read: [via TargetHistoryService.read]
+      - file: lib/features/nutrition/providers/nutrition_history_provider.dart
+        line_range: 1-9999
+        method: buildNutritionHistoryData (targetOf) / nutritionHistoryProvider
+        semantic: historical-series
+        fields_read: [via TargetHistoryService.targetFor]
+    regression_test: test/contracts/day_rollover_provider_invalidation_behavioral_test.dart
+
+  - concept: nutrition_history
+    domain: nutrition
+    behavioral_test_path: test/contracts/nutrition_history_writer_to_reader_test.dart
+    description: |
+      The since-day-one daily series (calories, protein, carbs, fat, fibre,
+      water per IST day) and its aggregates behind the Nutrition History
+      screen. DERIVED, no writer of its own and nothing stored: one pass over
+      the nutritionBox values with the SAME row predicate as
+      NutritionReadService.totalMacrosForDate (a Map with a String date, not
+      a saved meal), so a day here always equals the day the rest of the app
+      shows. Only COMPLETE days (logged, not today, at 25 % of the day's
+      calorie target or more) enter averages, hit-rates, runs, patterns and
+      insights. Different on purpose from NutritionRepository.getDailyMacros /
+      getWeeklyAverages / getWeekdayVsWeekendCalories, which serve the coach
+      snapshot over a fixed recent window and count every logged day.
+    writers:
+      - file: lib/core/services/nutrition_write_service.dart
+        line_range: 1-9999
+        method: logMeal
+        notes: the meal rows; this concept adds no write
+    readers:
+      - file: lib/features/nutrition/services/nutrition_history.dart
+        line_range: 1-9999
+        method: buildNutritionDays / dayStatusOf / judgeDays / rollingAverage / weeklyBuckets / hitStats / weekdayWeekend / trainingVsRest / slotAverages / topFoods / nutritionInsights / weekIndexOfDateKey
+        semantic: historical-series
+        fields_read: [date, is_saved_meal, meal_type, total_calories, total_protein, total_carbs, total_fat, total_fiber, items]
+        notes: Pure. All calendar maths on IST date keys parsed as UTC calendar dates.
+      - file: lib/features/nutrition/repositories/nutrition_repository.dart
+        line_range: 1-9999
+        method: loadHistoryInputs / mealsForDay
+        semantic: pass-through
+        fields_read: [nutritionBox values, water_ml_<date>, exlog dates, onboarding_completed_at]
+      - file: lib/core/services/health_read_service.dart
+        line_range: 1-9999
+        method: waterMlByDay
+        semantic: aggregated
+        fields_read: [water_ml_<istDate>]
+      - file: lib/features/nutrition/providers/nutrition_history_provider.dart
+        line_range: 1-9999
+        method: nutritionHistoryProvider / buildNutritionHistoryData
+        semantic: historical-series
+        fields_read: [via buildNutritionDays]
+        notes: Watches the auth token (own '<anon>' guard), the restore tick, dailyNutritionProvider, macroTargetsProvider, waterIntakeProvider, weightHistoryProvider, waterTargetProvider.
+      - file: lib/features/nutrition/screens/nutrition_history_screen.dart
+        line_range: 1-9999
+        method: NutritionHistoryScreen (widgets/history/*)
+        semantic: display-only
+        fields_read: [via nutritionHistoryProvider]
+    regression_test: test/features/nutrition/nutrition_history_screen_test.dart
+
   - concept: exercise_pr_series
     domain: workout
     behavioral_test_path: test/contracts/exercise_pr_series_writer_to_reader_test.dart
@@ -5503,7 +5601,7 @@ concepts:
       the same key. Synced to water_logs cloud table with UNIQUE(user_id, date).
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 551-574
+        line_range: 413-436
         method: WaterIntakeNotifier.addWater + increment + decrement
         notes: Routes through HealthWriteService.setWaterMl (audit-2026-05-16 E.7).
       - file: lib/core/services/health_write_service.dart
@@ -5521,7 +5619,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 535-578
+        line_range: 397-440
         method: WaterIntakeNotifier.build (waterIntakeProvider)
         semantic: latest
         fields_read: [healthBox['water_ml_<istToday>'] (raw int)]
@@ -5534,7 +5632,7 @@ concepts:
         semantic: pass-through
         fields_read: [via waterIntakeProvider]
       - file: lib/features/nutrition/screens/nutrition_screen.dart
-        line_range: 343-343
+        line_range: 340-340
         method: self-contained
         semantic: pass-through
         fields_read: [via waterIntakeProvider]
@@ -5554,7 +5652,7 @@ concepts:
         semantic: pass-through
         fields_read: [via waterIntakeProvider]
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 438-460
+        line_range: 434-455
         method: getHydrationDeficitStreak
         semantic: historical-series
         fields_read: [healthBox['water_ml_<date>'] for each of last 90 days]
@@ -5581,7 +5679,7 @@ concepts:
         semantic: pass-through
         fields_read: [healthBox keys starting with 'water_ml_']
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 155-160
+        line_range: 159-164
         method: runRolloverNow (invalidate waterIntakeProvider at IST midnight)
         semantic: pass-through
         fields_read: [waterIntakeProvider (invalidate only — no value read)]
@@ -5609,7 +5707,7 @@ concepts:
     sync_methods: [_syncWaterLogs]
     restore_methods: [_restoreWaterLogs]
     ist_sites:
-      - { file: lib/features/nutrition/providers/nutrition_provider.dart, line: 535, fn: WaterIntakeNotifier.build }
+      - { file: lib/features/nutrition/providers/nutrition_provider.dart, line: 397, fn: WaterIntakeNotifier.build }
       - { file: lib/core/services/health_write_service.dart, line: 336, fn: setWaterMl }
     telemetry:
       failure_op_types: [upsert_water_log]
@@ -5626,7 +5724,7 @@ concepts:
       Hive restore uses same hash key so cross-device restores don't duplicate.
     writers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1354-1424
+        line_range: 1216-1286
         method: SavedMealsNotifier.saveMealPreset + relogSavedMeal + deleteSavedMeal (delegators — relogSavedMeal no longer bumps times_used, a8e3f1)
       - file: lib/core/services/nutrition_write_service.dart
         line_range: 861-1011
@@ -5648,7 +5746,7 @@ concepts:
       - { file: lib/features/auth/screens/restoring_screen.dart, reason: "checks SavedMealKeyMigrator flag (config.get('saved_meal_key_migration_v1')) — not a saved_meal_* row reader; diagnose b8d5c2" }
     readers:
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1316-1351
+        line_range: 1178-1213
         method: SavedMealsNotifier.build (savedMealsProvider)
         semantic: aggregated
         fields_read: [nutritionBox entries with is_saved_meal=true OR meal_*+is_template=true, times_used]
@@ -5661,7 +5759,7 @@ concepts:
         semantic: pass-through
         fields_read: [via savedMealsProvider — name, total_calories, items[], id, times_used]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 418-484
+        line_range: 284-346
         method: DailyNutritionNotifier.build (skip-filter)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -5669,12 +5767,12 @@ concepts:
           Skips template rows from the per-day meal aggregation so
           presets don't double-count.
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 56-67
+        line_range: 80-105
         method: dailyMacros (skip is_saved_meal)
         semantic: flag-check
         fields_read: [is_saved_meal]
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1831-1831
+        line_range: 1693-1693
         method: WeeklyNutritionNotifier (skip is_saved_meal)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -5735,7 +5833,7 @@ concepts:
         method: HealthWriteService.logWeight
         canonical: true
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 956-1063
+        line_range: 919-1026
         method: WeightLogNotifier.logWeight
         delegate: true
         notes: |
@@ -5764,7 +5862,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 717-753
+        line_range: 680-716
         method: WeightHistoryNotifier.build (weightHistoryProvider)
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -5873,7 +5971,7 @@ concepts:
         line_range: 1-9999
         method: reckonStreakDecayAndPersist (D2 f9d2e7 — single gated consume site; rollover + every completion door through WorkoutCompletionBookkeeping.afterCompletion + the post-restore reckon; gated on SyncService.restoreSettledForCurrentUser (per-account marker, b4e7a1) + non-empty-schedule)
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 253-280
+        line_range: 252-279
         method: restoreCompletedTickProvider (restore-tick bridge; both chip notifiers watch it)
     reader_manifest_complete: true
     readers:
@@ -5899,14 +5997,14 @@ concepts:
           INTEND to consume a freeze should use it. Never trust a cached
           streak number for rank gates.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 282-315
+        line_range: 281-314
         method: StreakNotifier.build (streakProvider)
         semantic: pass-through
         fields_read: []
         notes: |
           Pure delegating provider. Returns WorkoutRepository.instance.currentStreak().
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 319-360
+        line_range: 318-359
         method: StreakFreezeNotifier.build (streakFreezeProvider)
         semantic: pass-through
         fields_read: [streak_freezes_available, streak_freezes_last_refill]
@@ -6193,7 +6291,7 @@ concepts:
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 149-167
+        line_range: 150-171
         method: reckonAndNotifyAfterRestore
         notes: |
           Post-restore: reckon + persist (gated by the marker), ONE best-effort LOW
@@ -6723,7 +6821,7 @@ concepts:
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
-        line_range: 1-195
+        line_range: 1-206
         method: "updateProfile / patchProfile / patchProfileWith / updateField"
         notes: |
           Canonical writer scaffolded in audit 2026-05-20 / A4. All 7
@@ -6807,7 +6905,7 @@ concepts:
           independent getProfile() read in no invalidateOnRetry list, so it
           cached the pre-restore map for the whole session.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 152-179
+        line_range: 151-178
         method: UserGreetingNotifier.build (userGreetingProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -6816,7 +6914,7 @@ concepts:
           first space; fallback "there". b3c9d4 — DERIVED from
           userProfileProvider; does not read Hive itself.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 203-235
+        line_range: 202-234
         method: UserFirstNameNotifier.build (userFirstNameProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -6828,7 +6926,7 @@ concepts:
           hasProfile field reports profile.isNotEmpty (the source maps an
           absent map to {}, where getProfile() returned null).
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 239-251
+        line_range: 238-250
         method: UserInitialNotifier.build (userInitialProvider)
         semantic: display-only
         fields_read: [full_name]
@@ -7139,7 +7237,7 @@ concepts:
           (restoring_screen.dart:113-114, started in parallel with resolveDestination and not awaited before it; this read sync_service.dart:454, a doc comment, until 2026-09-28) is a race.
           Kill-switch disable_local_onboarded_evidence.
       - file: lib/core/router/app_router.dart
-        line_range: 549-560
+        line_range: 555-566
         method: _authRedirect (onboarding gate)
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -7796,7 +7894,7 @@ concepts:
           plan-less day (total_planned == 0) — consistent with the dispatcher no
           longer vacuously auto-completing a plan-less day.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 146-601
+        line_range: 145-600
         method: calendarWeekProvider (~132) + todayWorkoutProvider (~518)
         semantic: flag-check
         fields_read: [status, completed_at_ms]
@@ -8265,7 +8363,7 @@ concepts:
         semantic: pass-through
         fields_read: []
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 1126-1140
+        line_range: 988-1002
         method: "AiBreakdownNotifier.saveMeal catch block"
         semantic: pass-through
         fields_read: []
@@ -9047,7 +9145,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 717-1094
+        line_range: 680-1057
         method: WeightHistoryNotifier + WeightLogNotifier + todayWeightLoggedProvider
         semantic: historical-series
         fields_read: [type, weight_kg, date]
@@ -9065,7 +9163,7 @@ concepts:
           legacy list — see sleep_logs concept dual-key hazard). Save
           path delegates to HealthWriteService.logSleep at line 502.
       - file: lib/features/nutrition/providers/nutrition_provider.dart
-        line_range: 535-669
+        line_range: 397-531
         method: WaterIntakeNotifier + UrineColorNotifier + HydrationSaveNotifier
         semantic: latest
         fields_read: [water_ml, urine_color, hydration]
@@ -9264,7 +9362,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 8-30
+        line_range: 16-105
         method: NutritionRepository.dailyMacros
         semantic: aggregated
         fields_read: [via NutritionReadService.totalMacrosForDate]
@@ -14700,12 +14798,12 @@ concepts:
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 791-802
+        line_range: 797-808
         method: postSessionRedirect
         semantic: branch-order-is-the-fix
         notes: signOutInProgress MUST be tested BEFORE the onboarding read. Shifted +8 by profile-share-grow-order (the `photos` GoRoute inserted above, in the Profile branch) — repointed per the parity gate's minimum-fix convention.
       - file: lib/core/router/app_router.dart
-        line_range: 610-702
+        line_range: 616-708
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
@@ -15201,7 +15299,7 @@ concepts:
         semantic: captures-Uri.base-before-GoRouter-boots
     readers:
       - file: lib/core/router/app_router.dart
-        line_range: 137-157
+        line_range: 138-158
         method: "/confirm GoRoute pageBuilder"
         semantic: falls-back-to-pendingConfirmTokenHash-when-query-params-empty
     hive:
@@ -16778,7 +16876,7 @@ concepts:
         fields_read: [type]
         notes: "Task 29 (wave-3 carry item 2) re-derived this as a METHOD-SPANNING range (signature to closing brace, confirmed by direct read) rather than the previous 5-line window -- needsHeal was repointed 3 times this batch (T21, T22, T21-fix1: T22 added an import + the L2 write-only-if-differs block inside mergeScheduleBundleIntoHive; T21-fix1 shortened _mondayOfIsoWeek to delegate to DaySwapRules.mondayOf; all three land ABOVE needsHeal in the same file, so the method body itself is unchanged but every narrow line_range citing it goes stale on each shift). A method-spanning range absorbs future shifts of code ABOVE it without going stale again for this reason; only a change to needsHeal's OWN body would require re-deriving this citation."
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 110-798
+        line_range: 109-761
         method: "calendar week status classifier feeding streak-banner remaining-count / StreakWarningEligibility / AI-insight quick-text (3 sites)"
         semantic: flag-check
         fields_read: [type]
@@ -19911,8 +20009,8 @@ concepts:
       - file: lib/features/profile/screens/profile/journey_timeline.dart
         method: _buildJourneyTimelineInner
         semantic: journeyEtaAllowed gates the ETA line only
-      - file: lib/features/nutrition/providers/nutrition_provider.dart
-        method: _resolveBaseTargets
+      - file: lib/core/utils/nutrition_targets_resolver.dart
+        method: resolveBaseMacroTargets
         semantic: the stored daily_calories / protein / carbs / fat win over a recompute
       - file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart
         method: _compute / build
@@ -20642,7 +20740,7 @@ concepts:
         semantic: flag-check
         fields_read: [showsRazorpay]
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 526-543
+        line_range: 525-542
         method: SubscriptionExpiryBannerNotifier
         semantic: flag-check
         fields_read: [showsPurchaseUi]
