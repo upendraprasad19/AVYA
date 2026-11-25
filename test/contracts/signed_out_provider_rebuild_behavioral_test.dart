@@ -38,6 +38,7 @@ import 'package:icanbefitter/features/ai_coach/providers/pending_tool_intents_pr
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
+import 'package:icanbefitter/features/home/providers/pr_series_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/diet_plan_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/diet_serving_view_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/diet_supplements_active_provider.dart';
@@ -133,6 +134,7 @@ const _kTokenWatchSites = <String, int>{
   'lib/features/ai_coach/providers/pending_tool_intents_provider.dart': 1,
   'lib/features/auth/providers/auth_invalidation_provider.dart': 1,
   'lib/features/home/providers/home_provider.dart': 18,
+  'lib/features/home/providers/pr_series_provider.dart': 1,
   'lib/features/home/widgets/insight_card.dart': 1,
   'lib/features/nutrition/providers/diet_plan_provider.dart': 1,
   'lib/features/nutrition/providers/diet_serving_view_provider.dart': 1,
@@ -386,6 +388,22 @@ List<_Case> _cases() => <_Case>[
       'logging_type': 'weight_reps',
     }),
     isSeeded: (v) => v is List && v.isNotEmpty,
+  ),
+  _Case(
+    // Derived from the PR list; its own guard keeps the exlog read out of
+    // every sign-out window.
+    'exercisePrSeriesProvider',
+    exercisePrSeriesProvider,
+    isEmpty: (v) => v is Map && v.isEmpty,
+    seed: () => HiveService.instance.workoutBox.put('exlog_${_today}_aaaa0002', {
+      'exercise_name': 'Squat',
+      'weight_kg': 100.0,
+      'reps_completed': 5,
+      'set_number': 1,
+      'date': _today,
+      'logging_type': 'weight_reps',
+    }),
+    isSeeded: (v) => v is Map && v.isNotEmpty,
   ),
   _Case(
     'macroTargetsProvider',
