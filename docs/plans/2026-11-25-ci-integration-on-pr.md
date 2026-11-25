@@ -197,3 +197,19 @@ Both P1 are completeness, not mechanism; the plan is converged with these amendm
    `GITHUB_EVENT_NAME`; a push to `main` with missing secrets stays a warning (accepted, unchanged); no other
    script names the job; the order rule contradicts no migration rule (a DESTRUCTIVE migration still merges its
    code half first, `supabase/migrations/CLAUDE.md`); building `SyncCli` twice in one test is legal.
+
+## 8. Results (2026-11-25)
+
+- Commit `37adbd98`, PR #341. First CI run 45531579264: all green; GitHub ACCEPTED `queue: max`; the integration
+  job ran on a pull request (job 138927938137, 2 min 47 s), `flutter test test/supabase/` +38 and
+  `flutter test test/edge_functions/` +31, both passed.
+- Mutation: 26 mutants on the first commit, 26 red (two real-workflow mutants first failed the test file at LOAD,
+  red for the wrong reason; the mutation helper was changed and the rerun is red through the assertions).
+- Code review (`docs/reviews/ci-integration-on-pr-bpass.md`): 0 P0, 0 P1, 2 P2, 5 P3. The contract test now also
+  pins step-level weakening (`continue-on-error`, `||`, a step `if:`, the two test commands, the secret mapping),
+  refuses a repeated key and pins the secret check line for line.
+- The measurement of section 4 (a waiting job's check-run) could NOT be made before the merge: every other run
+  still uses the old workflow, which has no group. What the attempt did show: the job re-run on this pull request
+  and on `main` run 45471562759 in the same minute BOTH failed, on different profile tests (`auth_restore_test`
+  T10; `sync_service_test` T1), which is fact 4's collision observed live. `main`'s job was re-run alone
+  afterwards. The open point is in the closure ledger (`QUEUE-HONOURED`).

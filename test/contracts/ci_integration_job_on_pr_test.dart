@@ -14,6 +14,12 @@ import '../../scripts/safe_pr_merge_lib.dart';
 const jobKey = 'supabase-tests';
 const jobName = 'Supabase Integration Tests';
 
+/// The only step-level `if:` the job may carry: the four-secret guard of its two test steps.
+const stepGuard = "if: env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' && env.SUPABASE_TEST_EMAIL != '' && "
+    "env.SUPABASE_TEST_PASSWORD != ''";
+
+const secretNames = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_TEST_EMAIL', 'SUPABASE_TEST_PASSWORD'];
+
 /// The one `if:` the job may carry (single spaces).
 const wantedIf = "(github.event_name == 'push' && github.ref == 'refs/heads/main') || "
     "(github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && "
@@ -34,6 +40,11 @@ List<String> jobBlock(String workflow, String key) {
   return out;
 }
 
+String _uncommented(String workflow) => [
+      for (final l in workflow.split(RegExp(r'\r\n|\r|\n')))
+        if (!l.trimLeft().startsWith('#')) l,
+    ].join('\n');
+
 /// The value of the job-level scalar `    <name>: value` (indent 4), or null.
 String? _scalar(List<String> block, String name) {
   final hits = [
@@ -51,7 +62,9 @@ Map<String, String>? _concurrency(List<String> block) {
   for (final l in block.skip(at + 1)) {
     final m = RegExp(r'^      ([a-z-]+):\s*(.*?)\s*$').firstMatch(l);
     if (m == null) break;
-    out[m.group(1)!] = m.group(2)!;
+    // A repeated key is reported under its own name, so the caller refuses it (B-pass finding 2).
+    final key = out.containsKey(m.group(1)!) ? 'duplicate ${m.group(1)!}' : m.group(1)!;
+    out[key] = m.group(2)!;
   }
   return out;
 }
@@ -78,7 +91,8 @@ List<String> integrationJobProblems(
     final group = c['group'] ?? '';
     if (group.isEmpty || group.contains(r'${{') || group.contains(r'$')) {
       problems.add('[group] the group must be ONE literal shared by every pull request and main: "$group"');
-    } else if (RegExp('group:\\s*${RegExp.escape(group)}\\s*\$', multiLine: true).allMatches(workflow).length != 1) {
+    } else if (group.allMatches(_uncommented(workflow)).length != 1) {
+      // Counted as plain text, so a quoted spelling in another job is seen too (B-pass finding 2).
       problems.add('[group] "$group" is used by more than one job');
     }
     if (c['cancel-in-progress'] != 'false') problems.add('[cancel] `cancel-in-progress` must be the literal false');
@@ -90,10 +104,35 @@ List<String> integrationJobProblems(
 
   // The announce step must FAIL on a pull request with a missing secret, before the guarded test steps.
   final text = block.join('\n');
-  final failAt = text.indexOf(RegExp(r'if \[ -n "\$MISSING" \] && \[ "\$GITHUB_EVENT_NAME" = "pull_request" \]; then\n(?:.*\n)*?\s+exit 1\n\s+elif \[ -n "\$MISSING" \]; then'));
+  // Line for line (comment lines are already gone): the branch, its one message, `exit 1`, the old warning branch.
+  final failAt = text.indexOf(RegExp(r'\n +if \[ -n "\$MISSING" \] && \[ "\$GITHUB_EVENT_NAME" = "pull_request" \]; then\n'
+      r' +echo "::error [^\n]*\n +exit 1\n +elif \[ -n "\$MISSING" \]; then\n'));
   final firstTestStep = text.indexOf('flutter test ');
   if (failAt < 0 || firstTestStep < 0 || failAt > firstTestStep) {
     problems.add('[secrets] the announce step does not `exit 1` on a pull request with a missing secret');
+  }
+
+  // A job that gates merges must not be able to pass with a failing test (B-pass finding 1).
+  if (text.contains('continue-on-error')) problems.add('[soft] `continue-on-error` in the job');
+  final ors = [
+    for (final l in block)
+      if (l.contains('||') && !l.startsWith('    if:')) l.trim(),
+  ];
+  if (ors.isNotEmpty) problems.add('[soft] a `||` outside the job-level `if:` can swallow a failure: $ors');
+  final stepIfs = [
+    for (final l in block)
+      if (RegExp(r'^ {6,}(- )?if:').hasMatch(l)) l.trim().replaceFirst(RegExp(r'^- '), ''),
+  ];
+  if (stepIfs.length != 2 || stepIfs.any((s) => s != stepGuard)) {
+    problems.add('[steps] the only step-level `if:` allowed is the four-secret guard, on the two test steps: $stepIfs');
+  }
+  if ('flutter test '.allMatches(text).length != 2 ||
+      !text.contains('flutter test test/supabase/ ') ||
+      !text.contains('flutter test test/edge_functions/ ')) {
+    problems.add('[steps] the job must run exactly `flutter test test/supabase/` and `flutter test test/edge_functions/`');
+  }
+  for (final s in secretNames) {
+    if (!block.contains('      $s: \${{ secrets.$s }}')) problems.add('[env] $s is not mapped from secrets.$s');
   }
 
   if (!prTime.contains(jobName)) problems.add('[lists] "$jobName" is not in prTimeSkippableJobs');
@@ -166,6 +205,26 @@ void main() {
         '[secrets]',
         sub('if [ -n "\$MISSING" ] && [ "\$GITHUB_EVENT_NAME" = "pull_request" ]; then', 'if false; then')
       ),
+      'a duplicate queue key (the last one would win)': (
+        '[concurrency]',
+        sub('      queue: max\n', '      queue: single\n      queue: max\n')
+      ),
+      'the test step may fail softly': (
+        '[soft]',
+        sub('      - name: Run Supabase tests\n', '      - name: Run Supabase tests\n        continue-on-error: true\n')
+      ),
+      'the job may fail softly': ('[soft]', sub('    timeout-minutes: 15\n    if: (', '    continue-on-error: true\n    timeout-minutes: 15\n    if: (')),
+      'a swallowed test failure': ('[soft]', sub('          flutter test test/supabase/ \\\n', '          true || flutter test test/supabase/ \\\n')),
+      'the announce step disabled': (
+        '[steps]',
+        sub('      - name: Announce whether this job verifies anything\n', '      - name: Announce whether this job verifies anything\n        if: false\n')
+      ),
+      'a test step no longer runs the tests': ('[steps]', sub('          flutter test test/edge_functions/ \\\n', '          echo test/edge_functions/ \\\n')),
+      'a secret no longer mapped': ('[env]', sub('      SUPABASE_TEST_PASSWORD: \${{ secrets.SUPABASE_TEST_PASSWORD }}\n', "      SUPABASE_TEST_PASSWORD: ''\n")),
+      'exit 1 behind another branch': (
+        '[secrets]',
+        sub('            exit 1\n          elif [ -n "\$MISSING" ]; then', '            true\n          elif false; then\n            exit 1\n          elif [ -n "\$MISSING" ]; then')
+      ),
       'the job renamed': ('[name]', sub('    name: $jobName\n', '    name: Supabase Tests\n')),
     };
     for (final e in mutants.entries) {
@@ -176,8 +235,10 @@ void main() {
     }
 
     test('a second job in the same group', () {
-      final wf = '$workflow\n  other-job:\n    concurrency:\n      group: supabase-integration-shared-qa-account\n';
-      expect(problems(wf).single, startsWith('[group]'));
+      for (final g in ['supabase-integration-shared-qa-account', '"supabase-integration-shared-qa-account"']) {
+        final wf = '$workflow\n  other-job:\n    concurrency:\n      group: $g\n';
+        expect(problems(wf).single, startsWith('[group]'), reason: g);
+      }
     });
     test('the job removed', () {
       expect(problems(workflow.replaceFirst('  $jobKey:\n', '  supabase-tests-old:\n')).single, startsWith('[job]'));
