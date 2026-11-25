@@ -1142,6 +1142,16 @@ class AuthNotifier extends Notifier<AuthState2> {
       } catch (e) {
         debugPrint('[auth/signOut] coach clear-marker push skipped: $e');
       }
+      // Target history entries written without a profile sync (day rollover,
+      // post-restore heal, History opened) would be wiped below. Same bounds:
+      // 2 s, never throws, session still live.
+      try {
+        await SyncService.instance
+            .pushTargetHistory(clearMarkerUid, fromSignOut: true)
+            .timeout(const Duration(seconds: 2));
+      } catch (e) {
+        debugPrint('[auth/signOut] target-history push skipped: $e');
+      }
     }
     try {
       await UserRepository.instance.clearAllData();

@@ -313,7 +313,12 @@ extension SyncServiceProfile on SyncService {
             initialError: err,
           );
         }
+        // No target-history push: the row may not exist yet.
+        return;
       }
+      // Target history rides the profile sync, AFTER the upsert that creates
+      // the row (the merge function never inserts one). Never throws.
+      await pushTargetHistory(userId);
       return;
     }
 
@@ -324,6 +329,62 @@ extension SyncServiceProfile on SyncService {
         .upsert(payload, onConflict: 'user_id')
         .select()
         .single();
+    // Reached only when the upsert returned (a throw skips it). Never throws,
+    // so it cannot fail a queue drain.
+    await pushTargetHistory(userId);
+  }
+
+  /// Pushes `userBox['target_history']` through the `merge_target_history`
+  /// function (migration 190; docs/plans/target-history-cloud.md): a merge by
+  /// day, never an assignment, so a device holding a short list cannot delete
+  /// a longer cloud one (class e4a1b7).
+  ///
+  /// Sends nothing under the kill switch, for another account's session, for
+  /// an empty list, or when [TargetHistoryService.pushedKey] says this exact
+  /// list was confirmed today (the day bound re-sends once a day, which heals
+  /// a cloud value lost out of band). The memory is written ONLY when the
+  /// function returned true: false means no `user_profile` row took it.
+  ///
+  /// Never throws. A failure is reported as `upsert_target_history` (the sweep
+  /// re-sends it through [_syncUserProfile]); after an owner change or during
+  /// sign-out it is only logged, so the retry is never armed for the NEXT
+  /// user.
+  Future<void> pushTargetHistory(String userId,
+      {bool fromSignOut = false}) async {
+    try {
+      if (!TargetHistoryService.cloudEnabled) return;
+      // The list read below must be THIS user's (the live-account check
+      // follows the token refresh, right before the call).
+      if (HiveUserSession.currentOwnerFullId != userId) return;
+      final entries = TargetHistoryService.read();
+      if (entries.isEmpty) return;
+      final list = [for (final e in entries) e.toMap()];
+      final memory = '${SyncFingerprint.of(list)}|${istDateStr(nowWall())}';
+      if (_hive.userBox.get(TargetHistoryService.pushedKey) == memory) return;
+      await _supabase.ensureFreshToken();
+      if (ownerChangedSince(userId)) return;
+      final updated = await _supabase.client
+          .rpc('merge_target_history', params: {'p_entries': list});
+      if (fromSignOut || ownerChangedSince(userId)) return;
+      if (updated != true) {
+        unawaited(ErrorTelemetry.logEvent('target_history_push_no_row',
+            message: 'userId=${_shortUserId(userId)}'));
+        return;
+      }
+      await _hive.userBox.put(TargetHistoryService.pushedKey, memory);
+    } catch (e) {
+      if (fromSignOut || ownerChangedSince(userId)) {
+        unawaited(ErrorTelemetry.logEvent(
+          'target_history_push_failed',
+          message: 'fromSignOut=$fromSignOut: '
+              '${ErrorTelemetry.redactRowValues('$e')}',
+        ));
+        return;
+      }
+      try {
+        await _reportSyncFailure(opType: 'upsert_target_history', error: e);
+      } catch (_) {}
+    }
   }
 
   /// Builds the `update_user_progress_snapshot` RPC's field params (every
@@ -823,6 +884,16 @@ extension SyncServiceProfile on SyncService {
           ? <String, dynamic>{}
           : Map<String, dynamic>.from(rows.first as Map);
       cloud.remove('user_id'); // Don't store user_id inside the profile map
+      // Target history is its own userBox key, never a profile field (the
+      // merged map is stripped of it below). It is merged into the local
+      // list BEFORE the profile write, whose reconcile then sees it.
+      // `adoptFromCloud` never throws and writes nothing unless the open
+      // session is this user's.
+      if (!ownerChangedSince(userId)) {
+        TargetHistoryService.adoptFromCloud(
+            cloud[TargetHistoryService.cloudColumn],
+            ownerId: userId);
+      }
 
       // F2 · Merge semantics — cloud non-null fields overwrite Hive; cloud
       // nulls don't wipe Hive values (preserves local-only edits that
@@ -846,6 +917,9 @@ extension SyncServiceProfile on SyncService {
         // the `users` row was found.
         'id': userId,
       };
+      // The cloud row is read with no column list, so it carries the list;
+      // a client without this code also copied it into the local profile map.
+      TargetHistoryService.stripFromProfile(merged);
 
       // ── OI-150 Unit 2a: regenerate the DERIVED half ──────────────────────
       //

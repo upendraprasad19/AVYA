@@ -13,6 +13,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
+import 'package:icanbefitter/core/services/target_history_service.dart';
 import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
 import 'package:icanbefitter/features/profile/services/target_impact.dart'
     show derivationInputsChangedForDialog;
@@ -40,11 +41,11 @@ Map<String, dynamic> mergeCloudProfileWithTargets({
   required bool bodyFatCalcDisabled,
   required bool recomputeDisabled,
 }) {
-  final merged = <String, dynamic>{
+  final merged = TargetHistoryService.stripFromProfile(<String, dynamic>{
     ...?existing,
     for (final e in cloud.entries)
       if (e.value != null) e.key: e.value,
-  };
+  });
   if (recomputeDisabled || !_holdsRealProfile(existing)) return merged;
   try {
     if (!derivationInputsChangedForDialog(existing!, merged)) return merged;

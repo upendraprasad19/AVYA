@@ -1,0 +1,82 @@
+# Closure ledger — target-history-cloud (Nutrition History, Landing B). Gate 40
+# (validate_audit_closure.dart): one terminal_state per entry, no `deferred:`
+# key. `<branch>@branch` is the in-branch commit form.
+
+batch: target-history-cloud
+plan: docs/plans/target-history-cloud.md
+plan_review_record: docs/plan-reviews/target-history-cloud.md
+
+findings:
+  - id: M
+    title: "SQL: column user_profile.target_history + merge function merge_target_history (reviewed as test/sql/target_history_merge_draft.sql)"
+    terminal_state: closed_in_commit
+    commit: target-history-cloud@branch
+    verification: >
+      test/sql/target_history_merge_local.sh in a throwaway supabase/postgres 17.6 container
+      (fixture: the live own-row policies and the onboarding trigger): every case passes. 46 SQL
+      mutants run through it, all KILLED (two redundant type checks that could not be killed
+      were removed from the SQL). NOT applied to production: see entry APPLY.
+
+  - id: PUSH
+    title: "Client push: pushTargetHistory after a successful profile upsert and at sign-out"
+    terminal_state: closed_in_commit
+    commit: target-history-cloud@branch
+    verification: >
+      test/sync/target_history_cloud_sync_test.dart group P (real PostgREST calls against the
+      stub server): order after the upsert under both reliability modes, no push after a failed
+      upsert or with no profile, day-bound memory, `false` and failures keep no memory, owner
+      change during the call, sign-out. Mutants P1-P15, A1: all KILLED.
+
+  - id: ADOPT
+    title: "Client restore: adoptFromCloud merges the cloud list before the profile write"
+    terminal_state: closed_in_commit
+    commit: target-history-cloud@branch
+    verification: >
+      Same file, group R, and the pure mergedHistories cases in
+      test/contracts/nutrition_target_history_writer_to_reader_test.dart. Mutants D1-D19 and
+      R2-R5: all KILLED except D9 (`>` to `>=` on entries equal in every compared field:
+      equivalent, the replaced entry is identical).
+
+  - id: STRIP
+    title: "The list never becomes a field of userBox['profile'] (restore merge, bootstrapper merge, onboarding upsert)"
+    terminal_state: closed_in_commit
+    commit: target-history-cloud@branch
+    verification: >
+      Group R: cloud key and a stale local key both gone after a restore, under the kill switch
+      too; the bootstrapper merge case. Mutants D15, R3, B1 KILLED. The onboarding-upsert
+      removal in user_repository.dart is a no-op guard today (profileData never carries the
+      key) and has no test of its own.
+
+  - id: U1
+    title: "A same-day change back to the earlier targets keeps the day's entry (the merge cannot delete)"
+    terminal_state: closed_in_commit
+    commit: target-history-cloud@branch
+    verification: >
+      The pure and the behavioural revert cases of the contract test, rewritten. Mutants D16,
+      D17 (the old removal restored) KILLED.
+
+  - id: TIER
+    title: "target_history_service.dart is platform tier; the targets resolver is declined with a reason"
+    terminal_state: closed_in_commit
+    commit: target-history-cloud@branch
+    verification: >
+      test/contracts/blast_radius_sync_engine_platform_test.dart (it failed until both were
+      decided).
+
+  - id: R7
+    title: "Stated limit: a restore write before PRO is known can record Balanced carbs / fat for today over a cloud Keto entry"
+    terminal_state: verified_clean
+    evidence: >
+      Accepted in plan review (plan section 9 R7) and pinned by the 'stated limit' test in group
+      R, which documents the behaviour. Calories, protein, day statuses and hit-rates do not
+      depend on the strategy; the post-restore heal re-records the day.
+
+  - id: APPLY
+    title: "Apply migration 190 on production, then the ledger + schema snapshot commit and the merge"
+    terminal_state: blocked_on_user
+    reason: >
+      A production apply takes the founder's explicit per-action go (CLAUDE.md 4.3). The client
+      must not reach main before the function exists, so the PR waits for it. Nothing has been
+      applied.
+
+closed_count: 8

@@ -73,12 +73,29 @@ void main() {
       expect(next.map((e) => e.calories), [2400, 2600]);
     });
 
-    test('changing back to the previous targets the same day removes the entry',
-        () {
+    test(
+        'changing back to the previous targets the same day KEEPS the day, '
+        'with the reverted numbers and the newer at_ms', () {
+      // The cloud merge cannot delete: a removed entry would leave the
+      // reverted numbers (2500) in the cloud for good.
       final entries = [_e('2026-11-01', 2400), _e('2026-11-25', 2500)];
-      final next =
-          TargetHistoryService.reconciled(entries, _e('2026-11-25', 2400));
-      expect(next.map((e) => e.from), ['2026-11-01']);
+      final back = TargetEntry(
+          from: '2026-11-25',
+          calories: 2400,
+          protein: 140,
+          carbs: 300,
+          fat: 70,
+          strategy: 'balanced',
+          atMs: 9);
+      final next = TargetHistoryService.reconciled(entries, back);
+      expect(next.map((e) => (e.from, e.calories, e.atMs)),
+          [('2026-11-01', 2400, 1), ('2026-11-25', 2400, 9)]);
+      // The day after, equal targets still write nothing.
+      expect(
+          identical(
+              TargetHistoryService.reconciled(next, _e('2026-11-26', 2400)),
+              next),
+          isTrue);
     });
 
     test('entries dated after today are dropped, never obeyed (B-pass F2)', () {
@@ -109,6 +126,96 @@ void main() {
       expect(next.length, TargetHistoryService.maxEntries);
       expect(next.first.calories, 1001);
       expect(next.last.calories, 2500);
+    });
+  });
+
+  group('mergedHistories (pure; the rule merge_target_history applies)', () {
+    TargetEntry at(String from, int cal, int atMs,
+            {int pro = 140, int carbs = 300, int fat = 70, String s = 'balanced'}) =>
+        TargetEntry(
+            from: from,
+            calories: cal,
+            protein: pro,
+            carbs: carbs,
+            fat: fat,
+            strategy: s,
+            atMs: atMs);
+    List<(String, int, int)> brief(List<TargetEntry> l) =>
+        [for (final e in l) (e.from, e.calories, e.atMs)];
+    const today = '2026-11-25';
+    final merge = TargetHistoryService.mergedHistories;
+
+    test('union by day, sorted; a short side deletes nothing', () {
+      final local = [at('2026-11-20', 2500, 5)];
+      final cloud = [at('2026-10-01', 2300, 1), at('2026-11-01', 2400, 2)];
+      expect(brief(merge(local, cloud, today)), [
+        ('2026-10-01', 2300, 1),
+        ('2026-11-01', 2400, 2),
+        ('2026-11-20', 2500, 5),
+      ]);
+      expect(brief(merge(cloud, local, today)), brief(merge(local, cloud, today)));
+    });
+
+    test('same day: the greater at_ms wins from either side', () {
+      final older = [at('2026-11-20', 2500, 5)];
+      final newer = [at('2026-11-20', 2600, 6)];
+      expect(brief(merge(older, newer, today)), [('2026-11-20', 2600, 6)]);
+      expect(brief(merge(newer, older, today)), [('2026-11-20', 2600, 6)]);
+    });
+
+    test('equal at_ms: each later field decides, the same way from both sides',
+        () {
+      final pairs = [
+        (at('2026-11-20', 2500, 5), at('2026-11-20', 2600, 5)),
+        (at('2026-11-20', 2500, 5, pro: 140), at('2026-11-20', 2500, 5, pro: 141)),
+        (at('2026-11-20', 2500, 5, carbs: 300), at('2026-11-20', 2500, 5, carbs: 301)),
+        (at('2026-11-20', 2500, 5, fat: 70), at('2026-11-20', 2500, 5, fat: 71)),
+        (at('2026-11-20', 2500, 5, s: 'balanced'), at('2026-11-20', 2500, 5, s: 'keto')),
+        (at('2026-11-20', 2500, 5, s: 'low_carb'), at('2026-11-20', 2500, 5, s: 'lowcarb')),
+      ];
+      for (final (lo, hi) in pairs) {
+        expect(merge([lo], [hi], today).single.toMap(), hi.toMap());
+        expect(merge([hi], [lo], today).single.toMap(), hi.toMap());
+      }
+      // A LOWER later field never beats a greater at_ms.
+      final late = at('2026-11-20', 2000, 6, pro: 1, carbs: 1, fat: 1, s: 'a');
+      final early = at('2026-11-20', 9000, 5, pro: 900, carbs: 900, fat: 900, s: 'z');
+      expect(merge([early], [late], today).single.toMap(), late.toMap());
+    });
+
+    test('entries dated after today are dropped from both sides; today is kept',
+        () {
+      final local = [at('2026-11-25', 2500, 5), at('2026-11-26', 2600, 6)];
+      final cloud = [at('2026-11-27', 2700, 7), at('2026-11-24', 2400, 4)];
+      expect(brief(merge(local, cloud, today)),
+          [('2026-11-24', 2400, 4), ('2026-11-25', 2500, 5)]);
+    });
+
+    test('the cap keeps the NEWEST days', () {
+      final cloud = [
+        for (var i = 0; i < TargetHistoryService.maxEntries; i++)
+          at('2024-${(1 + i ~/ 28).toString().padLeft(2, '0')}-'
+              '${(1 + i % 28).toString().padLeft(2, '0')}', 2000 + i, i),
+      ];
+      final next = merge([at('2026-11-20', 9999, 1)], cloud, today);
+      expect(next.length, TargetHistoryService.maxEntries);
+      expect(next.last.calories, 9999);
+      expect(next.first.calories, 2001, reason: 'the oldest day went');
+    });
+
+    test('nothing new returns the SAME local instance (no write)', () {
+      final local = [at('2026-11-01', 2400, 2), at('2026-11-20', 2500, 5)];
+      expect(identical(merge(local, const [], today), local), isTrue);
+      expect(identical(merge(local, [at('2026-11-20', 2500, 5)], today), local),
+          isTrue);
+      expect(identical(merge(local, [at('2026-11-20', 2400, 4)], today), local),
+          isTrue, reason: 'an older cloud entry for the day loses');
+      expect(identical(merge(local, [at('2026-11-20', 2500, 6)], today), local),
+          isFalse, reason: 'only at_ms differs: still a change');
+      expect(
+          identical(merge(local, [at('2026-11-20', 2500, 5, s: 'keto')], today),
+              local),
+          isFalse);
     });
   });
 
@@ -174,7 +281,7 @@ void main() {
       expect(entries.length, 1, reason: 'no target changed');
     });
 
-    test('a goal change after an older entry adds one; changing back removes it',
+    test('a goal change after an older entry adds one; changing back keeps the day',
         () async {
       await HiveService.instance.userBox
           .put(TargetHistoryService.boxKey, [_e('2026-01-05', 2540).toMap()]);
@@ -190,7 +297,9 @@ void main() {
           reason: 'second change the same day replaces');
 
       await svc.patchProfile({'daily_calories': 2540, 'protein_grams': 140});
-      expect(TargetHistoryService.read().map((e) => e.from), ['2026-01-05']);
+      expect(TargetHistoryService.read().map((e) => (e.from, e.calories)),
+          [('2026-01-05', 2540), (today, 2540)],
+          reason: 'the day keeps an entry with the reverted numbers');
     });
 
     test('patchProfileWith records too; a weigh-in that moves no target does not',
