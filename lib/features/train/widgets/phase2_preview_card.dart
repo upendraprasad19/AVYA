@@ -215,7 +215,7 @@ class Phase2BenefitsCard extends StatelessWidget {
       'Power + hypertrophy split for faster gains',
       'AI-personalised workout adjustments',
       'Advanced coaching cues and PRO tips',
-      'Phases 2-12 unlock full 48-week journey',
+      'All phases unlock, with no end point',
     ];
 
     return WardCard(

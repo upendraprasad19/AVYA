@@ -127,4 +127,45 @@ void main() {
       });
     },
   );
+  // OI-348 Landing 3a (B6): once the link is VERIFIED it is spent, so every
+  // failure except the cross-account StateError says so instead of
+  // "invalid or expired" / "check your connection". Only the ceiling says
+  // "taking longer" (B-pass Finding 3: a hard failure is not slow).
+  group('verified link (emailVerified = true)', () {
+    final verified = const AuthState2()
+        .copyWith(status: AuthStatus.loading, emailVerified: true);
+    for (final (label, error, message) in <(String, Object, String)>[
+      ('timeout', TimeoutException('ceiling'),
+          AuthNotifier.confirmedButSlowMessage),
+      ('AuthException', const AuthException('token gone'),
+          AuthNotifier.confirmedContinueMessage),
+      ('other', Exception('boom'), AuthNotifier.confirmedContinueMessage),
+    ]) {
+      test('$label -> ${message == AuthNotifier.confirmedButSlowMessage ? 'confirmedButSlowMessage' : 'confirmedContinueMessage'}',
+          () {
+        final r = AuthNotifier.confirmEmailErrorState(verified, error);
+        expect(r.status, AuthStatus.error);
+        expect(r.errorMessage, message);
+        expect(r.emailVerified, isFalse, reason: 'not sticky');
+      });
+    }
+    test('the two verified messages differ and both say confirmed', () {
+      expect(AuthNotifier.confirmedContinueMessage,
+          isNot(AuthNotifier.confirmedButSlowMessage));
+      expect(AuthNotifier.confirmedContinueMessage, startsWith('Email confirmed.'));
+      expect(AuthNotifier.confirmedContinueMessage, isNot(contains('longer')));
+    });
+    test('StateError keeps the cross-account message', () {
+      final r = AuthNotifier.confirmEmailErrorState(
+          verified, StateError('partial clear'));
+      expect(r.errorMessage,
+          'Couldn’t clean up the previous session. Please sign in again.');
+    });
+    test('not verified: timeout keeps the old message', () {
+      final r = AuthNotifier.confirmEmailErrorState(
+          loadingState, TimeoutException('ceiling'));
+      expect(r.errorMessage,
+          'Confirmation is taking longer than usual. Check your connection and try again.');
+    });
+  });
 }

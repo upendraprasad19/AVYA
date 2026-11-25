@@ -942,7 +942,7 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
 
     // Determine the actual number of weeks in the plan.
     // Phase 1 (Foundation) is always exactly 4 weeks.
-    // PRO phases (2-12) may have more weeks — scan Hive for the max.
+    // PRO phases (II onward) may have more weeks — scan Hive for the max.
     final int totalWeeks;
     if (phase <= 1) {
       totalWeeks = 4;

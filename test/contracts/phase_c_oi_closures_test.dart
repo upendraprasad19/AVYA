@@ -244,7 +244,8 @@ void main() {
 
     test('CTA calls showPaywallSheet with feature key', () {
       expect(
-        src.contains("showPaywallSheet(context, feature: 'Phases 2-12')"),
+        src.contains(
+            'showPaywallSheet(context, feature: PaywallSheet.phaseProgressionFeature)'),
         isTrue,
         reason:
             'phase variant CTA must escalate to the canonical '

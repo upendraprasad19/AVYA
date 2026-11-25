@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/cardio_format.dart';
+import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
@@ -985,15 +986,10 @@ class _ExerciseLine extends StatelessWidget {
   }
 }
 
-/// Roman numeral for phase 1-12. Matches the existing PHASE I/II/III
-/// label convention used by the forward-phase groups.
-String _phaseRoman(int phase) {
-  const map = {
-    1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI',
-    7: 'VII', 8: 'VIII', 9: 'IX', 10: 'X', 11: 'XI', 12: 'XII',
-  };
-  return map[phase] ?? '$phase';
-}
+/// Roman numeral for any phase (XIII and beyond too). A one-line delegate to
+/// the shared [phaseRoman]; the name stays because a gate and tests pin
+/// `_phaseRoman(widget.currentPhase` (OI-348 Landing 3a).
+String _phaseRoman(int phase) => phaseRoman(phase);
 
 // ── Phase group (label + 4 chips) ───────────────────────────────────────────
 

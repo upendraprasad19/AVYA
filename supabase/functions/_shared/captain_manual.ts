@@ -112,7 +112,7 @@ TIER FACTS:
 
 PRO unlocks (vs free):
 - Higher AI limits (free: ${FREE_CHAT_DAILY_CAP} messages/day, PRO: ${PRO_CHAT_DAILY_CAP}/day)
-- Phases II–XII auto-generated (free locks at Phase I after 4 weeks)
+- All phases after Phase I auto-generated, with no end point (free locks at Phase I after 4 weeks)
   ⚠ NOT TRUE OF A HOLDER — see HOLD WEEKS below before you say this to anyone.
 - Photo timeline + body composition tracking
 - Scan-meal and Cart Auditor share ONE daily budget: free ${FREE_VISION_DAILY_CAP}/day combined, PRO ${PRO_VISION_DAILY_CAP}/day combined

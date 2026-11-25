@@ -11,6 +11,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/play_billing_service.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/shared/widgets/paywall_sheet.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet_phase_variant.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/ward_button.dart';
 
@@ -102,7 +103,8 @@ void main() {
       expect(find.textContaining('₹'), findsNothing);
       expect(find.textContaining('UPGRADE TO PRO'), findsNothing);
       expect(find.textContaining('/ month'), findsNothing);
-      expect(find.text('Phases 2-12 is a PRO feature'), findsOneWidget);
+      expect(find.text('${PaywallSheet.phaseProgressionFeature} is a PRO feature'),
+          findsOneWidget);
     });
   }
 

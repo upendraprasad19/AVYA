@@ -96,6 +96,17 @@ class PaywallSheet extends ConsumerStatefulWidget {
   /// (c2b8e5) promised exactly this preservation; the first cut broke it.
   static const String genericUpgradeProfile = 'PRO Upgrade';
 
+  /// The feature token for every "phases after Phase I" gate (graduation,
+  /// phase unlock card, plan-expired card, the phase variant sheet). Letterhead:
+  /// "Phase Progression is a PRO feature".
+  ///
+  /// Was `'Phases 2-12'` until 2026-11-25 (OI-348 Landing 3a, P1: phases do
+  /// not stop at XII). The `paywall_shown feature=` funnel value changes with
+  /// it on purpose: pre-launch, testing accounts only (root CLAUDE.md §1), so
+  /// no real series is cut (see the [genericUpgradeProfile] note on why such
+  /// a change is otherwise not made silently).
+  static const String phaseProgressionFeature = 'Phase Progression';
+
   final String feature;
 
   const PaywallSheet({super.key, required this.feature});
@@ -136,7 +147,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
   static const List<String> _proBenefits = [
     'Dedicated AI coaching with higher daily limits',
     'AI food analysis & meal scanning (camera)',
-    'Generate new plans after Week 4 (phases 2-12)',
+    'Generate new plans after Week 4 (all phases, no end point)',
     'Weekly AI nutrition report',
     'Progress photos & body composition tracking',
     'Reasoning tab for advanced coaching',
@@ -152,7 +163,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
   /// Feature-specific compelling copy for the paywall subtitle.
   String get _featureSubtitle {
     switch (widget.feature) {
-      case 'Phases 2-12':
+      case PaywallSheet.phaseProgressionFeature:
         return 'You crushed Phase 1. Unlock progressive phases to keep building strength and muscle.';
       case 'Higher daily AI coach limit':
         return 'Dedicated coaching with higher daily limits.';
