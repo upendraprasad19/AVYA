@@ -5,7 +5,8 @@ blast_radius: platform
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/63e76b5fb9f0-review.md
 ---
 
 # Plan-review record — Target history cloud backup (Nutrition History, Landing B)
@@ -39,3 +40,15 @@ two stated limits; the ledger shape of the apply commit.
 ## Deviations from the plan while building
 - The strip helper is `TargetHistoryService.stripFromProfile` (core) instead of a function in
   `profile_cloud_merge.dart`: `sync_profile.dart` (core) must not import a feature for it.
+- Review round 2's V7 says "a short hash": `SyncFingerprint.of` (a v5 UUID of the canonical JSON).
+- Two redundant SQL type checks were removed after the mutation run could not kill them.
+- After the B-pass: the push request is bounded by `TargetHistoryService.pushTimeout` (15 s).
+
+## B-pass
+`docs/reviews/63e76b5fb9f0-review.md`: one fresh seat on the CI-green head, 0 P0/P1, 1 P2
+(production Postgres version, verified 17.6 by a read-only query), 4 P3, all closed in the branch.
+
+## What is still owed after this record
+The production apply of migration 190 (founder go), then one commit that moves the reviewed draft
+byte for byte to `supabase/migrations/190_target_history.sql` with the ledger entry and the
+schema snapshot. That delta is a file move plus records and is not re-reviewed.

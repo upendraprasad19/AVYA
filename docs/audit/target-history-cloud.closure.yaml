@@ -71,6 +71,15 @@ findings:
       R, which documents the behaviour. Calories, protein, day statuses and hit-rates do not
       depend on the strategy; the post-restore heal re-records the day.
 
+  - id: BP
+    title: "B-pass on 63e76b5f: 1 P2, 4 P3"
+    terminal_state: closed_in_commit
+    commit: target-history-cloud@branch
+    verification: >
+      docs/reviews/63e76b5fb9f0-review.md, each finding with its status. Production answers
+      PostgreSQL 17.6 and has pg_input_is_valid (read-only query, 2026-11-25). The push request
+      is bounded (mutant P16 KILLED, 1 red).
+
   - id: APPLY
     title: "Apply migration 190 on production, then the ledger + schema snapshot commit and the merge"
     terminal_state: blocked_on_user
@@ -79,4 +88,4 @@ findings:
       must not reach main before the function exists, so the PR waits for it. Nothing has been
       applied.
 
-closed_count: 8
+closed_count: 9

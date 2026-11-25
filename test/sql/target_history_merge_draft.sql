@@ -15,6 +15,8 @@
 --   union of the stored and the supplied entries keyed by `from`; for one
 --   `from` the greatest (at_ms, calories, protein, carbs, fat, strategy)
 --   wins; ordered by `from`; the newest 400 kept.
+-- (`strategy` is an ASCII storage key, 'balanced' / 'low_carb' / 'keto', so
+-- byte order here and code-unit order on the client agree.)
 -- There is no delete in the rule and the tie order does not depend on which
 -- side an entry came from, so every device converges on the same list.
 --

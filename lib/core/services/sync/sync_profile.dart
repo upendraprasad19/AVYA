@@ -363,8 +363,12 @@ extension SyncServiceProfile on SyncService {
       if (_hive.userBox.get(TargetHistoryService.pushedKey) == memory) return;
       await _supabase.ensureFreshToken();
       if (ownerChangedSince(userId)) return;
+      // Bounded: this is awaited by the profile sync, the queue drain and the
+      // sweep; a hung socket must not hold them. A timeout lands in the catch
+      // below like any other failure.
       final updated = await _supabase.client
-          .rpc('merge_target_history', params: {'p_entries': list});
+          .rpc('merge_target_history', params: {'p_entries': list})
+          .timeout(TargetHistoryService.pushTimeout);
       if (fromSignOut || ownerChangedSince(userId)) return;
       if (updated != true) {
         unawaited(ErrorTelemetry.logEvent('target_history_push_no_row',

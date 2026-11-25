@@ -137,6 +137,10 @@ class TargetHistoryService {
   /// `'<SyncFingerprint of the list>|<IST day>'`.
   static const String pushedKey = 'target_history_pushed';
 
+  /// Bound on the push's one request (`SyncService.pushTargetHistory`).
+  /// A variable only so a test can shorten it.
+  static Duration pushTimeout = const Duration(seconds: 15);
+
   /// The cloud column, and the key a cloud row carries it under.
   static const String cloudColumn = 'target_history';
 

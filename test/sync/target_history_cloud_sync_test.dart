@@ -151,6 +151,26 @@ void main() {
       expect(memory(), isNull);
     });
 
+    test('a request that does not answer is abandoned after pushTimeout',
+        () async {
+      final saved = TargetHistoryService.pushTimeout;
+      TargetHistoryService.pushTimeout = const Duration(milliseconds: 200);
+      addTearDown(() => TargetHistoryService.pushTimeout = saved);
+      h.server.rpcResponders[_rpc] = (_) async {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        return const StubRpcReply(200, true);
+      };
+      await setList([_entry('2026-01-05', 2400, 1)]);
+      final sw = Stopwatch()..start();
+      await push(kTestUserId);
+      expect(sw.elapsed, lessThan(const Duration(milliseconds: 1500)));
+      expect(memory(), isNull);
+      expect(sweepOwed(), isTrue, reason: 'a timeout is outage-shaped');
+      // Let the late reply land: it must not write the memory afterwards.
+      await Future<void>.delayed(const Duration(seconds: 2));
+      expect(memory(), isNull);
+    });
+
     test('from sign-out: a failure is only logged, a success keeps no memory',
         () async {
       rpcReturns({'message': 'Service Unavailable'}, 503);

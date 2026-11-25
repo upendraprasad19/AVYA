@@ -6500,7 +6500,7 @@ concepts:
         method: _mergeFreezeFamily
         notes: the post-pass; delegates to StreakProgressService.mergeFreezeProgress.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1019-1117
+        line_range: 1023-1121
         method: _restoreUserProgress
         notes: owner guard before the put, then `unawaited(syncFreezes())` when the merge scheduled a push.
       - file: lib/core/services/auth_session_bootstrapper.dart
@@ -6569,7 +6569,7 @@ concepts:
         method: mergeCloudProgress
         notes: the date branch inside the cloud-copy loop; laterIsoDate at 125.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1019-1117
+        line_range: 1023-1121
         method: _restoreUserProgress
         notes: passes istToday; the push sends p_last_workout_date.
       - file: lib/core/services/auth_session_bootstrapper.dart
@@ -6582,7 +6582,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1019-1117
+        line_range: 1023-1121
         method: _restoreUserProgress
         semantic: pass-through
         fields_read: [last_workout_date, current_streak_weeks]
@@ -6847,7 +6847,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 754-908
+        line_range: 834-1005
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [full_name, email]
@@ -7052,7 +7052,7 @@ concepts:
           after Unit 3b's own P1 fix (pushOnboardingProgressSnapshot, inserted
           earlier in the file) shifted both down ~80 lines each.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 754-908
+        line_range: 834-1005
         method: _restoreUserProfile
         semantic: pass-through
         fields_read: [avatar_url, banner_url]
@@ -7563,14 +7563,14 @@ concepts:
           The ONE local writer (max-wins, no await between read and put);
           CoachChatClear.clear stamps the device now and fires the push.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1176-1267
+        line_range: 1180-1271
         method: _restoreUserPreferences
         notes: |
           Removes the column before the generic merge (never lands in
           userBox['preferences']); adopts it max-wins, capped at device now,
           in its own block with a fresh ownerChangedSince.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1285-1313
+        line_range: 1289-1317
         method: pushCoachChatClearedAt
         notes: |
           Cloud push through raise_coach_chat_cleared_at; IST-day pushed-memory;
@@ -8229,7 +8229,7 @@ concepts:
       - { file: supabase/functions/assess-body-composition/index.ts, line_range: 86-224, method: "serve handler — 30-day rate-limit block", notes: "Also read-merge-write: selects existing coaching_notes, JSON.parse, sets last_bf_assessed_at, re-upserts onConflict user_id — never a blind overwrite of daily-snapshot's keys." }
     reader_manifest_complete: false
     readers:
-      - { file: lib/core/services/sync/sync_profile.dart, line_range: 1166-1257, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
+      - { file: lib/core/services/sync/sync_profile.dart, line_range: 1170-1261, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
       - { file: supabase/functions/restore-user-snapshot/restore_reads.ts, line: 56, method: "READS user_preferences tuple (OI-348 B10: moved from index.ts)", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
     cloud:
       table: user_preferences
@@ -14146,7 +14146,7 @@ concepts:
       the banner is week-model work, out of scope here.
     writers:
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 463-537
+        line_range: 467-541
         method: _syncUserProgress
         notes: |
           THE canonical writer. Projects the program week into the current_week
@@ -14441,7 +14441,7 @@ concepts:
           record, so an unrestored device can no longer assert an all-enabled
           default over the stored copy.
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 738-828
+        line_range: 742-832
         method: _syncUserPreferences
         semantic: latest
         notes: |
@@ -14479,7 +14479,7 @@ concepts:
           a corrupted or half-written value cannot silently darken a
           notification. Swallows storage errors and returns {} (=> all-enabled).
       - file: lib/core/services/sync/sync_profile.dart
-        line_range: 1176-1267
+        line_range: 1180-1271
         method: _restoreUserPreferences
         semantic: latest
         fields_read: [enabled]
@@ -18943,7 +18943,7 @@ concepts:
         line_range: 49-80
         method: _SwitchGoalDiffState initState (coach goal-change preview unit; was a raw configBox read)
       - file: lib/core/services/sync/sync_profile.dart
-        line: 834
+        line: 838
         method: _restoreUserProfile (per-key merge, cloud non-null wins, cloud null never wipes)
     additional_tests:
       - test/sync/unit_preference_push_restore_test.dart  # the real profile push (stub server) and the real restore merge
