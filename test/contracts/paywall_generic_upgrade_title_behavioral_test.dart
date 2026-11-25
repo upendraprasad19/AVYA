@@ -90,7 +90,7 @@ void main() {
       // Drawn from `_featureSubtitle`'s switch — these are real gate labels.
       const gated = <String>[
         'Progress Photos',
-        'Phases 2-12',
+        PaywallSheet.phaseProgressionFeature,
         'Higher daily AI coach limit',
         'Weekly AI Report',
         'Photo Analysis',

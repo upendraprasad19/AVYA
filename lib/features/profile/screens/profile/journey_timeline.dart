@@ -10,15 +10,8 @@ extension _JourneyTimeline on _ProfileScreenState {
     required double? targetWeightKg,
     required String goal,
   }) {
-    // Phase data
-    const phaseNames = [
-      'Foundation', 'Building', 'Progression', 'Strength',
-      'Endurance', 'Power', 'Conditioning', 'Peak',
-      'Mastery', 'Elite', 'Champion', 'Legend',
-    ];
-    final phaseName = stats.currentPhase <= phaseNames.length
-        ? phaseNames[stats.currentPhase - 1]
-        : 'Phase ${stats.currentPhase}';
+    // Phase name: cycles past the 12 names (OI-348 Landing 3a).
+    final phaseName = journeyPhaseName(stats.currentPhase);
 
     // Goal insights — sourced from userProfileProvider (single source of truth)
     final currentWeight = currentWeightKg ?? 0;
@@ -124,28 +117,10 @@ extension _JourneyTimeline on _ProfileScreenState {
           WardBar(pct: stats.currentWeek / 4.0, color: AppColors.accent, height: 4),
           const SizedBox(height: 10),
 
-          // Phase dots
-          Row(
-            children: List.generate(12, (phase) {
-              final isCompleted = phase + 1 < stats.currentPhase;
-              final isCurrent = phase + 1 == stats.currentPhase;
-              return Expanded(
-                child: Container(
-                  margin: EdgeInsets.only(right: phase < 11 ? 3 : 0),
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isCompleted
-                        ? AppColors.ok
-                        : isCurrent
-                            ? AppColors.accent
-                            : stats.isPro || phase == 0
-                                ? AppColors.bgRaise
-                                : AppColors.bgRaise.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(AppRadius.sharp),
-                  ),
-                ),
-              );
-            }),
+          // Phase dots: the 12-phase block holding the current phase.
+          JourneyPhaseDots(
+            currentPhase: stats.currentPhase,
+            isPro: stats.isPro,
           ),
           const SizedBox(height: 10),
 

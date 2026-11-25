@@ -20,7 +20,7 @@ Personalised fitness and nutrition platform for young professionals (22-35) in I
 - Weekly nutrition report — first report free
 
 ### PRO
-- Auto-generate new plans after Week 4 (phases 2–12)
+- Auto-generate new plans after Week 4 (all phases, no end point)
 - Dedicated AI coaching with higher daily limits (same Gemini 3.1 Flash Lite backend; 20 messages/day, server-side `isPro` gate)
 - Reasoning tab — deeper coaching via the thinking-on weekly report
 - Scan meal — 50 scans/day; Cart Auditor — 50 scans/day
@@ -220,7 +220,7 @@ The plan generator runs entirely in Dart on-device — no API calls, no latency.
 
 **Volume filter:** Compound-first ordering within each slot; isolation exercises only fill remaining capacity.
 
-**Output:** A `Phase` object with 4 weeks of progressive overload built in. Free users get Phase 1 only; PRO users can generate phases 2–12 after completing each 4-week block.
+**Output:** A `Phase` object with 4 weeks of progressive overload built in. Free users get Phase 1 only; PRO users generate every later phase (no end point) after completing each 4-week block.
 
 ---
 

@@ -7404,7 +7404,7 @@ concepts:
           failure -> upsert_coach_chat_cleared_at (a swept push), except
           fromSignOut, which only logs coach_chat_cleared_at_push_failed.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1026-1059
+        line_range: 1105-1138
         method: _teardown
         notes: |
           2 s best-effort push (fromSignOut) BEFORE clearAllData wipes userBox.
@@ -11656,7 +11656,7 @@ concepts:
           under the trimmer's insertion-order halving and a default for
           is_deload would be a fabricated value.
       - file: lib/core/utils/hold_week_labels.dart
-        line_range: 36-36
+        line_range: 38-38
         method: holdIdentityLabel
         notes: |
           The ONE place the `H` prefix is spelled. The snapshot's hold.label and
@@ -14595,7 +14595,7 @@ concepts:
         method: signOutInProgress
         semantic: teardown-window-flag
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 976-1013
+        line_range: 1055-1092
         method: signOut
         semantic: set-in-try-clear-in-finally
         notes: >-
@@ -20600,3 +20600,95 @@ concepts:
       columns: []
     sync_methods: []
     regression_test: test/contracts/purchase_surfaces_mode_none_test.dart
+
+  - concept: confirm_email_verified_stage
+    domain: auth_profile
+    behavioral_test_path: test/contracts/confirm_email_verified_stage_behavioral_test.dart
+    description: |
+      OI-348 Landing 3a, B6 (2026-11-25, diagnose 918045, walk A1). Once a sign-up confirmation
+      link is VERIFIED (verifyOTP returned a user), AuthNotifier emits status loading with
+      AuthState2.emailVerified = true while the account loads (~10 s on a phone), and the confirm
+      screen says "Email confirmed. Setting up your account...". Status stays loading, so the
+      success -> /restoring routing is unchanged. emailVerified is NOT sticky: copyWith resets it
+      like errorMessage. While it is true, every error except the cross-account StateError maps to
+      AuthNotifier.confirmedButSlowMessage (the link is spent). Kill switch configBox
+      disable_confirm_verified_stage (true = no stage, the pre-fix sequence; fails to the fix ON).
+      Companion telemetry (not a reader): one auth_ensure_timing event per _ensureLocalUser call via
+      runTimed + StepTimings (lib/core/utils/step_timings.dart), laps through hydrateFromCloud.
+    writers:
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 978-1003
+        method: AuthNotifier._performConfirmEmail (stage emit after verifyConfirmToken)
+        semantic: pass-through
+      - file: lib/features/auth/providers/auth_provider.dart
+        line_range: 898-929
+        method: AuthNotifier.confirmEmailErrorState (verified -> confirmedButSlowMessage)
+        semantic: pass-through
+    reader_manifest_complete: true
+    readers:
+      - file: lib/features/auth/screens/confirm_email_screen.dart
+        line_range: 129-138
+        method: ConfirmEmailScreen.build -> _buildLoadingState(emailVerified:)
+        semantic: display-only
+        fields_read: [emailVerified]
+    hive:
+      box: in_memory_only  # notifier state; the kill switch is a configBox flag, not data
+      key_prefix: ""
+    cloud:
+      table: ""
+      columns: []
+    sync_methods: []
+    regression_test: test/contracts/confirm_email_verified_stage_behavioral_test.dart
+
+  - concept: phase_roman_numeral
+    domain: workout
+    behavioral_test_path: test/core/roman_numeral_test.dart
+    description: |
+      OI-348 Landing 3a, P1 (2026-11-25, diagnose a2f144). Phases do not stop at XII (the generator
+      has been uncapped since 2026-05-31), so phase numerals come from ONE converter,
+      lib/core/utils/roman_numeral.dart (toRoman 1..3999, digits otherwise; fromRoman canonical
+      only). phaseRoman (hold_week_labels.dart) delegates to it; week_selector._phaseRoman and
+      hold_roadmap_strip._roman are one-line delegates kept by name (a gate pins
+      _phaseRoman(widget.currentPhase); the preview route parses with fromRoman ?? 1. No other
+      numeral table may exist under lib/ (phase_roman_single_source_test). The Profile journey card
+      shows the 12-phase block holding the current phase (JourneyPhaseDots, journeyPhaseName).
+    writers:
+      - file: lib/core/utils/roman_numeral.dart
+        line_range: 32-67
+        method: toRoman / fromRoman
+        semantic: pass-through
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/utils/hold_week_labels.dart
+        line_range: 157-157
+        method: phaseRoman
+        semantic: display-only
+        fields_read: [phase]
+      - file: lib/features/train/widgets/week_selector.dart
+        line_range: 992-992
+        method: _phaseRoman (labels current, +1, +2, past phases)
+        semantic: display-only
+        fields_read: [phase]
+      - file: lib/features/train/widgets/hold_roadmap_strip.dart
+        line_range: 30-30
+        method: _roman (HoldRoadmapStrip, a delegate)
+        semantic: display-only
+        fields_read: [phase]
+      - file: lib/features/train/providers/preview_plan_provider.dart
+        line_range: 185-185
+        method: _romanToInt (fromRoman ?? 1)
+        semantic: display-only
+        fields_read: [phase]
+      - file: lib/features/profile/widgets/journey_phase_dots.dart
+        line_range: 15-74
+        method: journeyDotBlockStart / journeyPhaseName / JourneyPhaseDots
+        semantic: display-only
+        fields_read: [current_phase]
+    hive:
+      box: in_memory_only  # pure display mapping
+      key_prefix: ""
+    cloud:
+      table: ""
+      columns: []
+    sync_methods: []
+    regression_test: test/core/roman_numeral_test.dart

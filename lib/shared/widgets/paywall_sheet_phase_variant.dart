@@ -23,7 +23,7 @@ void showPaywallSheetPhaseVariant(BuildContext context) {
   // a Play build routes there too (this pitch carries a Razorpay price line);
   // the paywall then draws its Play body.
   if (!PurchaseMode.current.showsRazorpay) {
-    showPaywallSheet(context, feature: 'Phases 2-12');
+    showPaywallSheet(context, feature: PaywallSheet.phaseProgressionFeature);
     return;
   }
   showModalBottomSheet<void>(
@@ -41,7 +41,7 @@ class _PaywallSheetPhaseBody extends StatelessWidget {
   const _PaywallSheetPhaseBody();
 
   static const _bullets = [
-    'Auto-generate Phases II–XII as you complete each block',
+    'Auto-generate all phases after Phase I as you complete each block',
     'Dedicated AI coaching with higher daily limits',
     'Weekly AI report powered by Gemini Pro reasoning',
     'Adaptive plans from your biometrics',
@@ -85,7 +85,7 @@ class _PaywallSheetPhaseBody extends StatelessWidget {
 
           // ── Body copy ─────────────────────────────────────────────────
           Text(
-            'Phases II–XII unlock automatically when you finish each '
+            'All phases after Phase I unlock automatically when you finish each '
             'block — your AI coach generates the next 4 weeks the '
             'moment you\'re ready.',
             style: AppTypography.bodyM.copyWith(color: AppColors.textPrimary),
@@ -135,9 +135,9 @@ class _PaywallSheetPhaseBody extends StatelessWidget {
                 // OI-40 — escalate to the canonical paywall sheet so the
                 // user actually reaches a purchase pipeline. Pre-fix this
                 // popped without ever calling SubscriptionService.startPurchase
-                // — a free user trying to unlock Phases 2-12 hit a dead end.
+                // — a free user trying to unlock the phases after Phase I hit a dead end.
                 Navigator.of(context).pop();
-                showPaywallSheet(context, feature: 'Phases 2-12');
+                showPaywallSheet(context, feature: PaywallSheet.phaseProgressionFeature);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent,

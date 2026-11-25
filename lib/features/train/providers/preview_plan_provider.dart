@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/utils/roman_numeral.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/repositories/plan_generator.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
@@ -178,10 +179,7 @@ final previewPlanProvider =
   };
 });
 
-int _romanToInt(String roman) {
-  const map = <String, int>{
-    'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6,
-    'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12,
-  };
-  return map[roman] ?? 1;
-}
+/// Phase number from the route's numeral (`?phase=II`). Any canonical numeral
+/// parses (XIII and beyond too, OI-348 Landing 3a); anything else falls back
+/// to Phase I as before.
+int _romanToInt(String roman) => fromRoman(roman) ?? 1;

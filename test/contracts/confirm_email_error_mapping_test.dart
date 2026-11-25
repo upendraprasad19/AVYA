@@ -127,4 +127,35 @@ void main() {
       });
     },
   );
+  // OI-348 Landing 3a (B6): once the link is VERIFIED it is spent, so every
+  // failure except the cross-account StateError says so instead of
+  // "invalid or expired" / "check your connection".
+  group('verified link (emailVerified = true)', () {
+    final verified = const AuthState2()
+        .copyWith(status: AuthStatus.loading, emailVerified: true);
+    for (final (label, error) in <(String, Object)>[
+      ('timeout', TimeoutException('ceiling')),
+      ('AuthException', const AuthException('token gone')),
+      ('other', Exception('boom')),
+    ]) {
+      test('$label -> confirmedButSlowMessage', () {
+        final r = AuthNotifier.confirmEmailErrorState(verified, error);
+        expect(r.status, AuthStatus.error);
+        expect(r.errorMessage, AuthNotifier.confirmedButSlowMessage);
+        expect(r.emailVerified, isFalse, reason: 'not sticky');
+      });
+    }
+    test('StateError keeps the cross-account message', () {
+      final r = AuthNotifier.confirmEmailErrorState(
+          verified, StateError('partial clear'));
+      expect(r.errorMessage,
+          'Couldn’t clean up the previous session. Please sign in again.');
+    });
+    test('not verified: timeout keeps the old message', () {
+      final r = AuthNotifier.confirmEmailErrorState(
+          loadingState, TimeoutException('ceiling'));
+      expect(r.errorMessage,
+          'Confirmation is taking longer than usual. Check your connection and try again.');
+    });
+  });
 }

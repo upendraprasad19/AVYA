@@ -5,7 +5,7 @@
 // the REAL phase-generation + rank-evaluation code, dating every write to
 // a simulated day via the clock seam (`setTestClock` in
 // `lib/core/utils/ist_date.dart`). Lets us watch a full free→PRO journey
-// (Phase 1 free, Phases 2-12 PRO) progress over ~1 simulated year without
+// (Phase 1 free, every later phase PRO) progress over ~1 simulated year without
 // waiting real time.
 //
 // Built 2026-05-31 for the "simulate the entire 12-week journey to one

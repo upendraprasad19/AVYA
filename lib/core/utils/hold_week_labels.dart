@@ -23,6 +23,8 @@
 // None of these projects `4 + ordinal`. That manufactures the value the UI ruled
 // dishonest and demotes a phase-2 holder from program week 8 to 5 (c9f4a2).
 
+import 'package:icanbefitter/core/utils/roman_numeral.dart';
+
 /// The bare hold identity — `H1`, `H2`, `H3`… — and the ONLY place the `H`
 /// prefix is spelled in this codebase.
 ///
@@ -147,19 +149,12 @@ String? dayDetailWeekLabel(Map<dynamic, dynamic>? scheduleRow) {
   return week > 0 ? 'WEEK $week' : null;
 }
 
-/// Roman numeral for phase 1-12. Shared home for the mapping already
-/// duplicated privately in `week_selector.dart`'s `_phaseRoman` — this copy
-/// is for NEW call sites (the phase-lock empty-state card, diagnose — see
-/// docs/diagnoses/); `week_selector.dart`'s own private copy is left
-/// untouched rather than migrated, to avoid touching a well-tested existing
-/// file for a purely cosmetic consolidation.
-String phaseRoman(int phase) {
-  const map = {
-    1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI',
-    7: 'VII', 8: 'VIII', 9: 'IX', 10: 'X', 11: 'XI', 12: 'XII',
-  };
-  return map[phase] ?? '$phase';
-}
+/// Roman numeral for a phase number: I, II, ... XII, XIII, ... (phases do not
+/// stop at XII). The ONE phase-label entry point: `week_selector.dart`'s
+/// `_phaseRoman` and `hold_roadmap_strip.dart`'s `_roman` are one-line
+/// delegates to it. 0 or a negative phase renders as its digits.
+/// OI-348 Landing 3a (P1); converter in `roman_numeral.dart`.
+String phaseRoman(int phase) => toRoman(phase);
 
 /// True when [selectedWeek] (a display-LOCAL week number within the Train
 /// screen's rolling 3-phase-group window — 1-4 current phase, 5-8 next,
