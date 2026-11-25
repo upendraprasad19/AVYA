@@ -1493,5 +1493,14 @@
     "diagnose": "c2e8a4",
     "slug": "issue_referral_code",
     "note": "OI-348 Landing 2 PR B (B2, walk A10; plan docs/plans/oi348-walk-fixes-landing2.md Unit B2): public.issue_referral_code() SECURITY DEFINER, search_path '', returns the caller's live referral code or mints a fresh 7-day AVYA- + 8 [A-Z0-9] code under a per-user advisory lock (DO UPDATE only when expired; code-key clash retried up to 5 times); EXECUTE revoked from PUBLIC and anon, granted to authenticated. Applied to project dedsavbjuwgarrhphgnl only, after the staged B-pass (docs/reviews, 18 findings fixed) and Hermes pass (11) accepted and the founder go (2026-11-24, 'Apply 186 now'), via MCP apply_migration with the file's statements (without the comment blocks; the sha256 above is of the whole file); registered as version 20261124080819. Pre-apply: function absent, referral_codes 3 rows; dry runs of file + live verify in one aborting request 11/11 then 13/13. Post-apply live: prosecdef true, proconfig {search_path=\"\"}, owner postgres, anon EXECUTE false, authenticated true, md5(prosrc) 967e0c89d4350a331e5dc9044b49ae3a equal to the file's body, 3 rows untouched. Rollback: roll forward with CREATE OR REPLACE restating SECURITY DEFINER and search_path; the inline DROP strands every build that calls it (see the file)."
+  },
+  {
+    "migration": "189",
+    "applied_at": "2026-11-25T08:01:44+05:30",
+    "hash": "sha256:eed14cf6b1def2b5042e1e64325d8385845ea236733a042609e4561718bc5da2",
+    "applier": "claude-via-mcp",
+    "diagnose": "c2e8a4",
+    "slug": "referral_codes_server_only_writes",
+    "note": "OI-348 Landing 2 PR C (B2 M2; plan docs/plans/oi348-walk-fixes-landing2.md Unit B2 step 2): referral_codes loses every client write path: DROP POLICY \"Users can insert own referral code\", REVOKE ALL from PUBLIC, anon, authenticated, GRANT SELECT to authenticated, then a self-check DO block; public.issue_referral_code() (186) is the only writer. Applied to project dedsavbjuwgarrhphgnl only, after the web build calling the RPC was live (main a0a7037c), the staged B-pass (7 findings fixed) and Hermes pass (4 P3) accepted, and the founder go (2026-11-25, 'Apply 189 now'), via MCP apply_migration with the whole file text; registered as version 20261125023144. Pre-apply live: relacl anon/authenticated/service_role/postgres arwdDxtm (grantor postgres), policies SELECT own + INSERT own, 3 rows; the live verify alone 3 ok / 9 fail (the hole); dry run file + verify in one aborting request 12/12. Post-apply live verify 12/12 (rolled back): relacl {postgres=arwdDxtm, service_role=arwdDxtm, authenticated=r}, only the SELECT policy, client writes 42501, own-row read kept, the function still renews and creates. Rollback: the inline commented block (re-create the policy, re-grant the platform defaults)."
   }
 ]

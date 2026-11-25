@@ -18655,18 +18655,19 @@ concepts:
     description: |
       OI-348 B2 (2026-11-24, diagnose c2e8a4, docs/plans/oi348-walk-fixes-landing2.md Unit B2). The
       SERVER mints referral codes: public.issue_referral_code() (migration 186, SECURITY DEFINER,
-      search_path '', EXECUTE for authenticated only) returns the caller's live code unchanged, or
+      search_path '', EXECUTE for authenticated and, by the platform default, service_role; never anon
+      or PUBLIC) returns the caller's live code unchanged, or
       writes a fresh 'AVYA-' + 8 [A-Z0-9] code expiring now() + 7 days (expiry exactly now() is
       expired), serialised per user by a transaction advisory lock, retrying a code collision up to 5
       times. Before: the client upserted referral_codes onConflict user_id, an UPDATE the table's
       policies refuse (SELECT + INSERT own only, migration 035), so every REGENERATE after the first
       code failed with 42501 and the sheet showed nothing. No client code in this build writes
-      referral_codes. TRANSITIONAL writers until migration M2 (PR C, after the web build is live):
-      builds before this change (cached web tabs, AAB +50) still INSERT a first code through the
-      INSERT-own policy (migration 035/100; any code text and expiry). Their UPDATE half stays refused,
-      so they never overwrite a function-issued code, and the function's DO UPDATE ... WHERE
-      expires_at <= now() never overwrites a live code they inserted. Expiry edge: the function, the
-      restore EF and the client restore treat expires_at = now() as expired (strict >); redeem-referral
+      referral_codes, and since migration 189 (PR C, 2026-11-25) no client role can: the INSERT-own
+      policy is dropped, anon holds no privilege, authenticated holds SELECT only (the own-row SELECT
+      policy stays for the restore read); builds before the RPC (cached web tabs, AAB +50) get 42501
+      on a first-code INSERT. The function writes as its owner postgres (RLS on, not forced).
+      Expiry edge: the function, the restore EF and the client restore treat expires_at = now() as
+      expired (strict >); redeem-referral
       refuses only when expires_at < now (accepts at exact equality, a sub-millisecond window).
     cloud:
       table: referral_codes
@@ -18711,8 +18712,11 @@ concepts:
       - test/contracts/issue_referral_code_function_pin_test.dart
       - test/profile/invite_friends_sheet_issue_failure_test.dart
       - test/sql/referral_code_issue_live_verify.sql
+      - test/contracts/referral_codes_server_only_writes_pin_test.dart
+      - test/sql/referral_codes_server_only_writes_live_verify.sql
     forbidden_legacy_patterns:
       - "a client upsert / insert / update / delete on referral_codes (the 42501 no-op of walk A10)"
+      - "a later migration that re-grants a write privilege on referral_codes, adds a write policy, or forces its row security (migration 189 tripwire)"
       - "a client-built code or expiry"
       - "REGENERATE that ignores a null result (no error, no retry)"
       - "CREATE OR REPLACE of issue_referral_code without SECURITY DEFINER and SET search_path = '' restated, or a signature change without re-revoking anon"

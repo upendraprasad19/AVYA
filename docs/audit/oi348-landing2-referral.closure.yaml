@@ -41,9 +41,9 @@ findings:
 
   - id: B2-M2-PR-C
     title: "Migration M2: drop the INSERT policy, REVOKE ALL on referral_codes from anon and authenticated, GRANT SELECT to authenticated"
-    terminal_state: upstream_blocked
-    blocker: "The live web app still ships the old first-code INSERT; M2 before the RPC build is live would break first codes on web."
-    reopen_when: "PR B is merged, the Vercel deployment for its merge SHA is READY and main.dart.js contains issue_referral_code; then founder go, PR C. PR C carries its own rollback (re-grant INSERT to authenticated and re-create the INSERT-own policy) and states the accepted breakage: builds before PR B (cached web tabs, AAB +50) can no longer create a first code after M2 (testing accounts only)."
+    terminal_state: closed_in_commit
+    commit: "oi348-landing2-m2@branch"
+    verification: "Migration 189 (PR C, branch oi348-landing2-m2), after PR B merged (main a0a7037c) and its Vercel production build went live with issue_referral_code. Staged B-pass (2 seats, 7 findings fixed) and Hermes L1/L2 (4 P3) accepted; founder go 2026-11-25 ('Apply 189 now'); applied as version 20261125023144. Live verify: 3 ok / 9 fail before (the hole), 12/12 in the dry run and after the apply. Self-check: 15 live mutants, 14 raise, M15 survives correctly (postgres inherits service_role). referral_codes_server_only_writes_pin_test.dart 49 green; 11 pin mutants red. Inline rollback in the file. Accepted breakage: builds before PR B (cached web tabs, AAB +50) cannot create a first code (testing accounts only)."
 
   - id: B2-DOCS
     title: "SoT referral_code_issue, naming row, profile CLAUDE.md, cqrs rationale, diagnose c2e8a4"
