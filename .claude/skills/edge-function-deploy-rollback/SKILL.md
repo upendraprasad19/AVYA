@@ -39,7 +39,8 @@ The deploy ships whatever is in `supabase/functions/<fn>/` on disk. Uncommitted 
 ### 1.3 Confirm token presence
 TWO token files exist on the VPS and ONE works (verified 2026-10-02, after a deploy session lost its time to a 401):
 - **WORKS (HTTP 200):** `<primary repo>/.supabase/supabase access token.txt`, dated 2026-09-23. `.claude/token_path.js` resolves it by default, including from a linked worktree (which has neither file, both are gitignored).
-- **REVOKED (HTTP 401):** `<primary repo>/supabase/.supabase/supabase access token.txt`, dated 2026-08-08: the token in it was revoked. On the VPS never use it, never debug it (the Windows clone's copy is unverified).
+- **REVOKED (HTTP 401):** `<primary repo>/supabase/.supabase/supabase access token.txt`, dated 2026-08-08: the token in it was revoked. On the VPS never use it, never debug it.
+- **The founder's Windows clone is different (measured 2026-11-25, ai-proxy v114 / weekly-report v45 deploys):** it has NO root `.supabase/` file, so `resolveTokenFile` returns the `supabase/.supabase/` file with `legacy: true`, and that copy holds a WORKING token (read-only `GET /v1/projects/dedsavbjuwgarrhphgnl/functions/ai-proxy` answered 200). On Windows, run that one GET first and deploy only on a 200; "legacy" there names the path, not a dead token.
 ```bash
 # one-shot check of whichever file the tools would use (prints only the HTTP code)
 curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(cat '<token file>')" \
