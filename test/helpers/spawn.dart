@@ -53,6 +53,10 @@
 // read, so that attempt is not retried (the same as before the retry existed; the payloads
 // of the callers are small).
 //
+// FIXTURE REBUILD (OI-528). A lost-status retry of a non-idempotent child inside a fixture
+// build is cured one level up: [rebuildOnLostStatus] repeats the whole build once when
+// [lostStatusRetriesSeen] moved during it. Used by `SyncCli.create`.
+//
 // WHAT THIS DOES NOT CLAIM. The child is not hermetic: variables an EXTERNAL tool
 // reads (git's HOME / ~/.gitconfig, XDG_*) still flow unless a scenario removes or
 // pins them. The completeness of the control-variable list is checked, two-way,
@@ -247,6 +251,61 @@ void _defaultNote(String line) {
   print(line);
 }
 
+int _lostStatusRetries = 0;
+
+/// How many lost-status retries the helpers of THIS isolate have started, from either retry
+/// loop. Read as a delta (before and after), never as an absolute: see [rebuildOnLostStatus].
+int get lostStatusRetriesSeen => _lostStatusRetries;
+
+void _countLostStatusRetry() => _lostStatusRetries++;
+
+/// Builds a fixture, and builds it ONCE more when a child's status was lost while it was
+/// being built (OI-528). The lost-status retry runs the child again without knowing whether
+/// the first attempt took effect, so a non-idempotent command (`git checkout -b`,
+/// `git remote add`, a commit) fails on its own earlier effect or silently applies twice.
+/// No single command can be made safe, but the whole build of a fresh temporary fixture can
+/// be thrown away and repeated. So: counter unchanged, the build's value or its error
+/// (the same object, the same stack) is the answer; counter moved, ONE `[fixture-rebuild]`
+/// line and a second build, whatever the first one's outcome, and that second outcome is
+/// final. [build] must be synchronous and must create everything it touches (nothing can
+/// interleave inside it, which is what makes a process-wide counter sound here; a stray
+/// async spawn from an earlier test costs at most one needless rebuild). [lostCount] and
+/// [note] are test seams. NOT covered: a status lost after the fixture is built.
+T rebuildOnLostStatus<T>(
+  T Function() build, {
+  required String what,
+  int Function()? lostCount,
+  void Function(String line)? note,
+}) {
+  final count = lostCount ?? () => lostStatusRetriesSeen;
+  final emit = note ?? _defaultNote;
+  final before = count();
+  late final T value;
+  Object? error;
+  StackTrace? stack;
+  try {
+    value = build();
+  } catch (e, s) {
+    error = e;
+    stack = s;
+  }
+  if (count() == before) {
+    if (error != null) Error.throwWithStackTrace(error, stack!);
+    return value;
+  }
+  final first = error == null ? 'completed' : 'failed';
+  emit('[fixture-rebuild] $what: a child status was lost while it was being built '
+      '(that build $first); building it again, once');
+  final mid = count();
+  try {
+    return build();
+  } finally {
+    if (count() != mid) {
+      emit('[fixture-rebuild] $what: a child status was lost during the rebuild too; no third build');
+    }
+  }
+}
+
 /// The retry loop of [runSpawn]: [once] performs ONE attempt (the raw spawn lives in the
 /// caller's closure). Each attempt is timed with [clock], reported whole through
 /// [reportSpawn] (attempt n>1 gets ` [attempt n]` on its label), then judged by
@@ -290,6 +349,7 @@ ProcessResult retryingSpawn(
       cap = spawnRaceRetryCap;
     } else {
       lost++;
+      _countLostStatusRetry();
       k = lost;
       cap = spawnLostStatusRetryCap;
     }
@@ -350,6 +410,7 @@ Future<T> retryingSpawnAsync<T>(
       cap = spawnRaceRetryCap;
     } else {
       lost++;
+      _countLostStatusRetry();
       k = lost;
       cap = spawnLostStatusRetryCap;
     }

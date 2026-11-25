@@ -270,6 +270,30 @@ void main() {
       expect(fx.calls, isNot(contains('merge')));
     });
 
+    test('OI-527: the integration job with NO check-run is waited for, not merged past and not red', () {
+      final fx = LandFixture.create();
+      fx.q('check-runs', 1, checkRunsBody(Map.of(allGreen())..remove('Supabase Integration Tests')));
+      final r = fx.land(ciTimeoutMs: 400, pollMs: 30);
+      expectResult(r, 3, 'ci-timeout');
+      expect(out(r), contains('"Supabase Integration Tests" has no check-run'));
+      expect(fx.calls, isNot(contains('merge')));
+    });
+
+    test('OI-527: the integration job skipped by its own `if:` (a Dependabot run) is green', () {
+      final fx = LandFixture.create();
+      fx.q('check-runs', 1, checkRunsBody({...allGreen(), 'Supabase Integration Tests': 'completed/skipped'}));
+      expectResult(fx.land(pollMs: 5, ciTimeoutMs: 60000), 0, 'merged');
+    });
+
+    test('OI-527: the integration job red refuses', () {
+      final fx = LandFixture.create();
+      fx.q('check-runs', 1, checkRunsBody({...allGreen(), 'Supabase Integration Tests': 'completed/failure'}));
+      final r = fx.land(pollMs: 5, ciTimeoutMs: 60000);
+      expect(r.exitCode, isNot(0));
+      expect(out(r), contains('"Supabase Integration Tests" concluded failure'));
+      expect(fx.calls, isNot(contains('merge')));
+    });
+
     test('no runs yet is pending, then the runs arrive: merged', () {
       final fx = LandFixture.create();
       fx.q('check-runs', 1, '{"total_count":0,"check_runs":[]}');

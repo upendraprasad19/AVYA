@@ -16,6 +16,7 @@ Map<String, dynamic> run(int id, String name, {String status = 'completed', Stri
 List<Map<String, dynamic>> green() => [
       for (final (i, n) in [...requiredSuccessJobs, 'Unit Tests shard 1/4'].indexed) run(10 + i, n),
       run(30, skippedOkJobs.first, conclusion: 'skipped'),
+      for (final (i, n) in prTimeSkippableJobs.indexed) run(40 + i, n),
     ];
 
 List<Map<String, dynamic>> without(List<Map<String, dynamic>> runs, String name) => runs.where((r) => r['name'] != name).toList();

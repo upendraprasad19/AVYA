@@ -106,6 +106,56 @@ void main() {
     }
   });
 
+  group('jobs that run on every pull request but may skip themselves', () {
+    Map<String, dynamic> extra(int id, String name, String conclusion) => {
+          'id': id,
+          'name': name,
+          'status': 'completed',
+          'conclusion': conclusion,
+          'app': {'slug': 'github-actions'},
+        };
+    test('the two skippable classes do not overlap, and neither holds a required job', () {
+      expect(prTimeSkippableJobs, isNotEmpty);
+      expect(prTimeSkippableJobs.toSet().intersection(skippedOkJobs.toSet()), isEmpty);
+      expect(prTimeSkippableJobs.toSet().intersection(requiredSuccessJobs.toSet()), isEmpty);
+    });
+    for (final job in prTimeSkippableJobs) {
+      List<Map<String, dynamic>> absent() => _fixture().where((r) => r['name'] != job).toList();
+      test('"$job": success or skipped pass; failed, odd conclusions and running refuse', () {
+        expect(evaluateCheckRuns(_with(job, conclusion: 'skipped')).ok, isTrue);
+        expect(evaluateCheckRuns(_with(job, conclusion: 'success')).ok, isTrue);
+        for (final c in ['failure', 'neutral', 'timed_out', 'action_required', 'stale']) {
+          final d = evaluateCheckRuns(_with(job, conclusion: c));
+          expect(d.ok, isFalse, reason: c);
+          expect(d.reasons.join(' '), contains('"$job" concluded $c'));
+          expect(classifyCheckRuns(_with(job, conclusion: c)).state, CiState.red);
+        }
+        final running = _with(job, status: 'in_progress', conclusion: null);
+        expect(evaluateCheckRuns(running).ok, isFalse);
+        expect(classifyCheckRuns(running).state, CiState.pending);
+      });
+      test('"$job" MISSING refuses as not finished (a push-only job would be tolerated)', () {
+        final d = evaluateCheckRuns(absent());
+        expect(d.ok, isFalse);
+        expect(d.reasons.single, contains('"$job" has no check-run (it runs on every pull request'));
+        expect(classifyCheckRuns(absent()).state, CiState.pending);
+      });
+      test('"$job" with ONLY cancelled runs refuses as not finished and is named as stuck', () {
+        final runs = [...absent(), extra(1, job, 'cancelled')];
+        final d = evaluateCheckRuns(runs);
+        expect(d.ok, isFalse);
+        expect(d.reasons.single, '"$job" has only cancelled runs');
+        final j = classifyCheckRuns(runs);
+        expect(j.state, CiState.pending);
+        expect(j.cancelledOnly, contains(job));
+      });
+      test('"$job" cancelled and then re-run green passes, in either order', () {
+        expect(evaluateCheckRuns([extra(1, job, 'cancelled'), ...absent(), extra(999999999999, job, 'success')]).ok, isTrue);
+        expect(evaluateCheckRuns([...absent(), extra(999999999999, job, 'success'), extra(1, job, 'cancelled')]).ok, isTrue);
+      });
+    }
+  });
+
   group('fail closed on anything unreadable', () {
     test('null (the lookup failed) refuses', () {
       final d = evaluateCheckRuns(null);
@@ -319,7 +369,7 @@ void main() {
 
     test('every name this evaluator relies on exists in test.yml', () {
       final names = workflowJobNames();
-      for (final n in [...requiredSuccessJobs, ...skippedOkJobs, ...matrixJobNameTemplates]) {
+      for (final n in [...requiredSuccessJobs, ...skippedOkJobs, ...prTimeSkippableJobs, ...matrixJobNameTemplates]) {
         expect(names, contains(n),
             reason: 'safe_pr_merge_lib.dart names "$n" but .github/workflows/test.yml has no job '
                 'with that name:. A renamed job would make every merge refuse (or, if the name '
@@ -328,12 +378,12 @@ void main() {
     });
 
     test('MIRROR: every job in test.yml is classified here (a new job must be a conscious decision)', () {
-      final classified = {...requiredSuccessJobs, ...skippedOkJobs, ...matrixJobNameTemplates};
+      final classified = {...requiredSuccessJobs, ...skippedOkJobs, ...prTimeSkippableJobs, ...matrixJobNameTemplates};
       final unclassified = workflowJobNames().difference(classified);
       expect(unclassified, isEmpty,
           reason: 'test.yml has job(s) $unclassified that safe_pr_merge_lib.dart does not name. '
               'Add each to requiredSuccessJobs (must be green to merge), skippedOkJobs '
-              '(push-only) or matrixJobNameTemplates (a matrix leg). Unnamed jobs are still judged by the "other checks" rule, but a '
+              '(push-only), prTimeSkippableJobs (runs on every pull request, may skip itself) or matrixJobNameTemplates (a matrix leg). Unnamed jobs are still judged by the "other checks" rule, but a '
               'job that gates quality should be listed on purpose.');
     });
   });

@@ -52,7 +52,15 @@ class SyncCli {
 
   /// A fixture on branch `feature`, cut from `main` at `base`, with `origin/main` fetched.
   /// Call inside a test or setUp (the teardown is registered on the current test).
-  static SyncCli create({Map<String, String>? files}) {
+  ///
+  /// The build runs through [rebuildOnLostStatus] (OI-528): it is repeated once, in a new
+  /// temporary directory, when a child's exit status was lost while it ran. The abandoned
+  /// repository is removed by the teardown `ScopeRepo.create` registered for it. Commands
+  /// run AFTER `create` returns are not covered.
+  static SyncCli create({Map<String, String>? files}) =>
+      rebuildOnLostStatus(() => _build(files), what: 'SyncCli.create');
+
+  static SyncCli _build(Map<String, String>? files) {
     final repo = ScopeRepo.create(prefix: 'sync_cli_');
     final srcRoot = Directory.current.path;
     (files ?? defaultFiles()).forEach(repo.write);

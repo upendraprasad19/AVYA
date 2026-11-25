@@ -69,6 +69,8 @@ ALTER TABLE subscriptions ALTER COLUMN end_date SET NOT NULL;
 
 Every `mcp__supabase__apply_migration` call MUST be paired with a `backups/applied_migrations.json` update in the same git commit (CLAUDE.md §4.5 `feedback_migration_apply_record_pair.md`). Enforced file → ledger by `check_migration_ledger_paired.dart` (a staged migration needs a staged ledger entry; matches top-level `NNN[x]_*.sql`, letter suffixes and timestamp-scheme files, NOT `041_chunks/`) and Gate 14 `check_migrations_applied.dart` (every file needs an entry); the entry's `hash` is verified by Gate 39 (see the immutability section below). **Nothing enforces live → ledger** — a migration applied to prod that nobody recorded is invisible to every gate (OI-272).
 
+**Order against the pull request's CI (OI-527, 2026-11-25).** `Supabase Integration Tests` runs on every pull request against the LIVE project. A pull request whose client code or tests need an ADDITIVE migration stays red until that migration is applied (per-action founder go, §4.3), so apply it before landing, then re-run the job. A DESTRUCTIVE migration keeps its own order: the code half is merged first.
+
 ### Allocating a migration number — `scripts/mint_migration.sh` (OI-263)
 
 Never read the next number off `ls supabase/migrations/`: a number applied **live** from an unmerged branch is invisible to every other branch's tree (148 → the 145→147→148→149 renumber, 2026-09-28). Reserve it:
