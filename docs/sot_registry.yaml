@@ -1249,7 +1249,7 @@ concepts:
           dismiss (per-user IST date key) + configBox kill-switch
           'disable_expiry_banner'. Renders via _buildExpiryBanner in home_screen.
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 123-126
+        line_range: 124-127
         method: WeekSelector build
         semantic: display-only
         fields_read: [isPro]
@@ -3068,7 +3068,7 @@ concepts:
       defect this concept exists to fix.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1322-1327
+        line_range: 1454-1459
         method: terms-write block inside _ensureLocalUser (not itself a named method)
         semantic: hive-write
         notes: |
@@ -3109,7 +3109,7 @@ concepts:
           investigation, not folded into this fix).
     readers:
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 776-1118
+        line_range: 777-1141
         method: hydrateFromCloud
         semantic: cloud-projection + restore
         notes: |
@@ -4636,12 +4636,12 @@ concepts:
         semantic: flag-check
         fields_read: [onboarding_completed]
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 377-497
+        line_range: 393-513
         method: _ensureLocalUser / signOut hooks
         semantic: flag-check
         fields_read: [onboarding_completed]
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 505-1097
+        line_range: 506-1118
         method: AuthSessionBootstrapper.hydrateFromCloud + resolveDestination
         semantic: flag-check
         fields_read: [onboarding_completed, onboarding_completed_at]
@@ -6943,7 +6943,7 @@ concepts:
         line_range: 1068-1070
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 760-1097
+        line_range: 761-1118
         method: AuthSessionBootstrapper.hydrateFromCloud
         notes: |
           Audit 2026-05-20 / A1 — owns the post-sign-in user_profile
@@ -6951,7 +6951,7 @@ concepts:
           the inline block at auth_provider._ensureLocalUser (was
           lines 477-770).
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 433-451
+        line_range: 434-452
         method: stampOnboardingCompletedAt
         notes: |
           e5b2a9 (evidence-first routing) - the ONE writer of the Plan A
@@ -7027,7 +7027,7 @@ concepts:
           Hive routes to resume-onboarding. NOT NULL routes to /home
           (15s timeout safety).
       - file: lib/core/services/auth_session_bootstrapper.dart
-        line_range: 505-563
+        line_range: 506-564
         method: AuthSessionBootstrapper.resolveDestination
         semantic: flag-check
         fields_read: [user_id, onboarding_completed_at, date_of_birth, primary_goal, current_weight_kg, fitness_experience]
@@ -7114,7 +7114,7 @@ concepts:
           midnight is wrong east of IST; the streak moves over in Batch B
           (OI-397).
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 377-497
+        line_range: 393-513
         method: _ensureLocalUser (mid-onboarding resume)
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -7404,7 +7404,7 @@ concepts:
           failure -> upsert_coach_chat_cleared_at (a swept push), except
           fromSignOut, which only logs coach_chat_cleared_at_push_failed.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1105-1138
+        line_range: 1130-1163
         method: _teardown
         notes: |
           2 s best-effort push (fromSignOut) BEFORE clearAllData wipes userBox.
@@ -8165,7 +8165,7 @@ concepts:
           + subscription_refresh_* + subscription_verify_non_200 +
           subscription_refresh_grace_skip events.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 113-567
+        line_range: 114-583
         method: auth lifecycle events
         semantic: pass-through
         fields_read: []
@@ -8318,7 +8318,7 @@ concepts:
           UI entry to deleteAllFilesForCurrentUser. After Edge Function
           succeeds, wipes Hive, signs out, and routes to /sign-in.
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 113-567
+        line_range: 114-583
         method: signOut + _ensureLocalUser lifecycle
         semantic: pass-through
         fields_read: []
@@ -9472,7 +9472,7 @@ concepts:
           ErrorTelemetry.recordNonFatal. Wraps response into typed
           RedemptionResult (success / errorMessage / alreadyRedeemed).
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 413-437
+        line_range: 429-453
         method: AuthNotifier.signUpWithEmail(referralCode:)
         notes: |
           c7b4d2 (2026-09-26): the sign-up field's code is stored in auth
@@ -10463,7 +10463,7 @@ concepts:
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 123-128
+        line_range: 124-129
         method: build → getPlanStartDate
         semantic: latest
         fields_read: [plan_start_date]
@@ -10614,12 +10614,12 @@ concepts:
         method: SelectedWeek / SelectedWeekNotifier.build (default, picked false) / select (picked true)
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 1089-1096
+        line_range: 1085-1092
         method: weekChipLit (pure)
         semantic: latest
         fields_read: [SelectedWeek.week, SelectedWeek.picked, HoldStatusData.todayHoldOrdinal]
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 151-161
+        line_range: 152-162
         method: _WeekSelectorState.build — selected + holdingToday for the current group
         semantic: latest
         fields_read: [selectedWeekProvider.picked, holdStatusProvider.todayHoldOrdinal]
@@ -14065,7 +14065,7 @@ concepts:
       Generator Unit 3D-a (OI-175 / FOB-4, plan docs/plans/2026-11-16-generator-step3d-hold-weeks.md section 2.3). The
       cloud has no is_hold column; a hold day's schedule row is pushed with week_number = 4 + n
       (sync_workout.dart 'week_number': entry['week']), so a scheduled_workouts row with week_number > 4 in a
-      Phase-I user's schedule is the server's only mark of a hold. Phases 2-12 write their own weeks 1-4 (measured live
+      Phase-I user's schedule is the server's only mark of a hold. Phases 2 and up write their own weeks 1-4 (measured live
       2026-11-16). Every read FAILS CLOSED: a missing progress row, current_phase other than exactly 1, or a failed
       read gives no hold and today's text. Stated limits: a stale current_phase is read as it is; rows of a failed or
       crash-partial hold that already synced can name a hold the app does not show until the next generation's sweep.
@@ -14341,7 +14341,7 @@ concepts:
         fields_read: [enabled]
         notes: self-heals via NotificationPrefsRepository.read() when pushed without `extra`.
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 239-260
+        line_range: 240-261
         method: _loadNotificationPreferences
         semantic: display-only
         fields_read: [enabled]
@@ -14478,7 +14478,7 @@ concepts:
           account).
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 144-149
+        line_range: 145-150
         method: past-phase strip
         semantic: render
         notes: The ONLY permitted caller of the display wrapper.
@@ -14539,7 +14539,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 340-438
+        line_range: 341-439
         method: _toPastPhases (weekCount) + pastPhaseWeekCount + pastPhaseWeekOf (the one calendar week rule for count and chip assignment) + pastPhaseGroupsForTest
         semantic: render
         notes: chip loop `for (var w = 1; w <= past.weekCount; w++)`; extendWeeks read once per build.
@@ -14591,11 +14591,11 @@ concepts:
       .timeout() frees the AWAITER and does NOT cancel the request.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 930
+        line_range: 1034
         method: signOutInProgress
         semantic: teardown-window-flag
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 1055-1092
+        line_range: 1080-1117
         method: signOut
         semantic: set-in-try-clear-in-finally
         notes: >-
@@ -14781,19 +14781,19 @@ concepts:
       user's position worse. Kill-switch configBox.disable_sign_in_timeout.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 223
+        line_range: 235
         method: signInTimeout
         semantic: the-ceiling-constant
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 258
+        line_range: 270
         method: boundSignIn
         semantic: applies-the-ceiling-injectable-test-seam
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 265
+        line_range: 277
         method: signInWithEmail
         semantic: sets-loading-then-error-on-timeout
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 301
+        line_range: 313
         method: _performEmailSignIn
         semantic: the-bounded-sequence-itself
     readers:
@@ -14908,15 +14908,15 @@ concepts:
       path and never to the OAuth ENTRY path.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 435
+        line_range: 451
         method: OAuth completion watch
         semantic: subscribes-to-onAuthStateChange-after-launch
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 464
+        line_range: 480
         method: cancelOAuthWatch
         semantic: teardown-also-wired-to-ref-onDispose
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 550
+        line_range: 566
         method: signInWithGoogle
         semantic: launches-the-redirect-then-arms-the-watch
     readers:
@@ -16642,7 +16642,7 @@ concepts:
       upendra@icanbefitter.com.
     writers:
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 351
+        line_range: 352
         method: build (contact card)
         semantic: display-only
       - file: lib/features/profile/screens/delete_account_screen.dart
@@ -18764,7 +18764,7 @@ concepts:
         line_range: 162-193
         method: lastUnitInches + preferredInches (profile measurement_unit, then the legacy per-user key, then the units setting)
       - file: lib/features/profile/screens/profile/screen.dart
-        line_range: 127-167
+        line_range: 128-168
         method: invalidateOnBackgroundRestore (re-seeds _isMetric on the restore tick) + _onUnitsChanged (the Units row; no build-time re-read, so no snap-back)
       - file: lib/features/ai_coach/widgets/diff_preview/switch_goal_diff.dart
         line_range: 49-80
@@ -20154,7 +20154,7 @@ concepts:
         semantic: cloud-write
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 244-295
+        line_range: 255-306
         method: _validatePromoCode — valid == true, else shows data['reason']; the call passes spendsQuotaPerCall (OI-414), so a thrown gateway error reaches the catch after one attempt
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
@@ -20573,7 +20573,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 435-464
+        line_range: 446-475
         method: _PaywallSheetState.build (none-mode branch)
         semantic: flag-check
         fields_read: [showsPurchaseUi]
@@ -20617,11 +20617,11 @@ concepts:
       runTimed + StepTimings (lib/core/utils/step_timings.dart), laps through hydrateFromCloud.
     writers:
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 978-1003
-        method: AuthNotifier._performConfirmEmail (stage emit after verifyConfirmToken)
+        line_range: 1001-1028
+        method: AuthNotifier._performConfirmEmail (stage emit after verifyConfirmToken; skipped once the ceiling abandoned the attempt)
         semantic: pass-through
       - file: lib/features/auth/providers/auth_provider.dart
-        line_range: 898-929
+        line_range: 905-942
         method: AuthNotifier.confirmEmailErrorState (verified -> confirmedButSlowMessage)
         semantic: pass-through
     reader_manifest_complete: true
@@ -20675,8 +20675,8 @@ concepts:
         semantic: display-only
         fields_read: [phase]
       - file: lib/features/train/providers/preview_plan_provider.dart
-        line_range: 185-185
-        method: _romanToInt (fromRoman ?? 1)
+        line_range: 190-193
+        method: previewPhaseFromRoman (fromRoman, 1..kPreviewMaxPhase, else 1)
         semantic: display-only
         fields_read: [phase]
       - file: lib/features/profile/widgets/journey_phase_dots.dart

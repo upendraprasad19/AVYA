@@ -727,6 +727,8 @@ Every term that has SPECIFIC meaning in this app. New features that use any of t
 | **StepTimings** / **runTimed** | `lib/core/utils/step_timings.dart`: a per-operation step timer (`lap(name)` = ms since the previous lap) and the wrapper that reports it exactly once whatever the body does. | NOT a `Stopwatch` per step. |
 | **Phase Progression** | `PaywallSheet.phaseProgressionFeature`: the paywall feature token (letterhead, subtitle switch, `paywall_shown feature=`) for every "phases after Phase I" door. Was `Phases 2-12` until 2026-11-25 (phases do not stop at XII). | NOT the gate key `phases_2_to_12` (unchanged). |
 | **toRoman** / **fromRoman** | `lib/core/utils/roman_numeral.dart`: the ONE phase numeral converter (1..3999; `fromRoman` canonical only). `phaseRoman` delegates to it. | NOT a 1-12 lookup map (none may exist under `lib/`). |
+| **previewPhaseFromRoman** / **kPreviewMaxPhase** | `preview_plan_provider.dart`: the preview route's `?phase=` numeral -> phase, I..XCIX (99), anything else Phase I. | NOT `fromRoman` alone (uncapped to 3999). |
+| **confirmedButSlowMessage** / **confirmedContinueMessage** | `AuthNotifier`: the two errors after a VERIFIED confirm link. Slow = the 40 s ceiling fired; Continue = any other failure except the cross-account `StateError`. | NOT "invalid or expired" (the link is spent, not bad). |
 
 ---
 

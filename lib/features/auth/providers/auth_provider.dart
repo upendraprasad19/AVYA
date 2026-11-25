@@ -821,8 +821,13 @@ class AuthNotifier extends Notifier<AuthState2> {
       // TimeoutException handling for a risk that's real but proportionally
       // small; revisit alongside signInWithEmail's identical gap if it ever
       // shows up in telemetry.
-      await boundSignIn(() => _performConfirmEmail(tokenHash));
+      final attempt = ++_confirmAttempt;
+      await boundSignIn(() => _performConfirmEmail(tokenHash, attempt));
     } on TimeoutException catch (e, st) {
+      // The ceiling does not cancel the body. Abandon it, so a link check
+      // that finishes late cannot replace this error with the "Email
+      // confirmed" stage (B-pass Finding 2, OI-348 Landing 3a).
+      _confirmAttempt++;
       unawaited(ErrorTelemetry.logEvent('auth_confirm_email_timeout',
           message: 'email confirm exceeded ${signInTimeout.inSeconds}s'));
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
@@ -890,16 +895,24 @@ class AuthNotifier extends Notifier<AuthState2> {
   /// - anything else — the generic "invalid or expired" fallback.
   ///
   /// When [AuthState2.emailVerified] is true the link was ALREADY accepted
-  /// (and is now spent), so every error except [StateError] maps to
-  /// [confirmedButSlowMessage]: "invalid or expired" or "try again" would be
-  /// false (OI-348 Landing 3a, B6). [StateError] keeps its own message: the
-  /// cross-account guard has already signed out.
+  /// (and is now spent), so "invalid or expired" or "try again" would be false
+  /// (OI-348 Landing 3a, B6): a [TimeoutException] maps to
+  /// [confirmedButSlowMessage], any other error except [StateError] to
+  /// [confirmedContinueMessage] (a hard failure is not "slow", B-pass
+  /// Finding 3). [StateError] keeps its own message: the cross-account guard
+  /// has already signed out.
   @visibleForTesting
   static AuthState2 confirmEmailErrorState(AuthState2 state, Object error) {
-    if (state.emailVerified && error is! StateError) {
+    if (state.emailVerified && error is TimeoutException) {
       return state.copyWith(
         status: AuthStatus.error,
         errorMessage: confirmedButSlowMessage,
+      );
+    }
+    if (state.emailVerified && error is! StateError) {
+      return state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: confirmedContinueMessage,
       );
     }
     if (error is TimeoutException) {
@@ -935,6 +948,12 @@ class AuthNotifier extends Notifier<AuthState2> {
   static const String confirmedButSlowMessage =
       'Email confirmed. Setting up your account is taking longer than usual. '
       'Tap GO TO SIGN IN to continue.';
+
+  /// The message for a VERIFIED link whose account load failed for a reason
+  /// other than the ceiling: no "taking longer" claim, since waiting will not
+  /// fix it.
+  static const String confirmedContinueMessage =
+      'Email confirmed. Tap GO TO SIGN IN to continue.';
 
   /// Kill switch for the "email confirmed, setting up" stage (root CLAUDE.md
   /// §4.6, auth). `true` = no intermediate state, exactly the pre-fix
@@ -973,9 +992,13 @@ class AuthNotifier extends Notifier<AuthState2> {
     return _ensureLocalUser(user, timings: timings);
   }
 
+  /// Bumped by each [confirmEmail] call and again when its ceiling fires; a
+  /// [_performConfirmEmail] whose `attempt` no longer matches was abandoned.
+  int _confirmAttempt = 0;
+
   /// The confirmation sequence itself. Bounded by [signInTimeout] at its only
   /// call site — see [confirmEmail].
-  Future<void> _performConfirmEmail(String tokenHash) async {
+  Future<void> _performConfirmEmail(String tokenHash, int attempt) async {
     final timings = StepTimings();
     final response = await verifyConfirmToken(tokenHash);
     timings.lap('verify');
@@ -991,7 +1014,9 @@ class AuthNotifier extends Notifier<AuthState2> {
     // OI-348 Landing 3a (B6): the link is accepted; say so while the account
     // loads (walk A1: ~10 s of a bare "Confirming..." spinner). Status stays
     // `loading`, so routing (success -> /restoring) is unchanged.
-    if (!confirmVerifiedStageDisabled) {
+    // Skipped when the ceiling already fired: the error screen stays (the
+    // pre-fix behaviour for a late link check).
+    if (!confirmVerifiedStageDisabled && attempt == _confirmAttempt) {
       state = state.copyWith(status: AuthStatus.loading, emailVerified: true);
     }
 

@@ -32,10 +32,13 @@ User _user() => User(
     );
 
 class _Notifier extends AuthNotifier {
-  _Notifier({this.userIsNull = false, this.loadError});
+  _Notifier({this.userIsNull = false, this.loadError, this.verifyHold});
 
   final bool userIsNull;
   final Object? loadError;
+
+  /// When set, the link check waits on it (a slow verifyOTP).
+  final Completer<void>? verifyHold;
   final Completer<void> load = Completer<void>();
   bool loadStarted = false;
   AuthState2? stateWhenLoadStarted;
@@ -44,8 +47,10 @@ class _Notifier extends AuthNotifier {
   Future<bool> ensureSupabaseReady() async => true;
 
   @override
-  Future<AuthResponse> verifyConfirmToken(String tokenHash) async =>
-      AuthResponse(user: userIsNull ? null : _user());
+  Future<AuthResponse> verifyConfirmToken(String tokenHash) async {
+    if (verifyHold != null) await verifyHold!.future;
+    return AuthResponse(user: userIsNull ? null : _user());
+  }
 
   @override
   Future<void> ensureLocalUserAfterConfirm(
@@ -174,14 +179,57 @@ void main() {
     });
   });
 
-  test('(g1) verified, then a generic load error -> confirmedButSlowMessage',
-      () async {
+  test('(g1) verified, then a generic load error -> confirmedContinueMessage '
+      '(no "taking longer" claim)', () async {
     final (c, n) = make(_Notifier(loadError: Exception('boom')));
     await n.confirmEmail('hash-g1');
     final s = c.read(authNotifierProvider);
     expect(s.status, AuthStatus.error);
-    expect(s.errorMessage, AuthNotifier.confirmedButSlowMessage);
+    expect(s.errorMessage, AuthNotifier.confirmedContinueMessage);
+    expect(s.errorMessage, isNot(contains('longer')));
   });
+
+  // B-pass Finding 2: the ceiling does not cancel the body. A link check that
+  // finishes AFTER the ceiling must not replace the timeout error with the
+  // verified stage (old code: the error screen stayed until a late success).
+  for (final lateLoadFails in [true, false]) {
+    test('(i) ceiling fires DURING the link check, which then finishes late '
+        '(${lateLoadFails ? 'load fails' : 'load succeeds'}): the verified '
+        'stage is never emitted', () {
+      fakeAsync((async) {
+        final hold = Completer<void>();
+        final (c, n) = make(_Notifier(
+            verifyHold: hold,
+            loadError: lateLoadFails ? Exception('late boom') : null));
+        final seen = <AuthState2>[];
+        c.listen<AuthState2>(authNotifierProvider, (_, s) => seen.add(s));
+        n.confirmEmail('hash-i');
+        async.flushMicrotasks();
+        async.elapse(AuthNotifier.signInTimeout + const Duration(seconds: 1));
+        async.flushMicrotasks();
+
+        const timeoutText = 'Confirmation is taking longer than usual. '
+            'Check your connection and try again.';
+        expect(c.read(authNotifierProvider).errorMessage, timeoutText);
+
+        hold.complete();
+        async.flushMicrotasks();
+        if (!lateLoadFails) n.load.complete();
+        async.flushMicrotasks();
+
+        expect(seen.where((s) => s.emailVerified), isEmpty,
+            reason: 'an abandoned attempt wrote the verified stage');
+        final end = c.read(authNotifierProvider);
+        if (lateLoadFails) {
+          expect(end.status, AuthStatus.error);
+          expect(end.errorMessage, timeoutText);
+        } else {
+          // Unchanged pre-fix behaviour: a late success still lands.
+          expect(end.status, AuthStatus.success);
+        }
+      });
+    });
+  }
 
   test('(g2) verified, then the cross-account StateError -> its own message',
       () async {

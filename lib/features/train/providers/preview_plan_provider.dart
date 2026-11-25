@@ -50,7 +50,7 @@ final previewPlanProvider =
     throw StateError('User profile not loaded — cannot generate preview.');
   }
 
-  final phaseInt = _romanToInt(key.phaseNumber);
+  final phaseInt = previewPhaseFromRoman(key.phaseNumber);
 
   // Derive week-within-phase (1-4) from the global week number.
   final weekInPhase = key.week - ((phaseInt - 1) * 4);
@@ -179,7 +179,15 @@ final previewPlanProvider =
   };
 });
 
+/// Highest phase the preview route accepts: XCIX (99 phases of 4 weeks is
+/// about 33 years of program). A higher numeral is a hand-typed URL.
+const int kPreviewMaxPhase = 99;
+
 /// Phase number from the route's numeral (`?phase=II`). Any canonical numeral
-/// parses (XIII and beyond too, OI-348 Landing 3a); anything else falls back
+/// I..XCIX parses (XIII and beyond too, OI-348 Landing 3a); anything else,
+/// including a numeral past [kPreviewMaxPhase] (B-pass Finding 4), falls back
 /// to Phase I as before.
-int _romanToInt(String roman) => fromRoman(roman) ?? 1;
+int previewPhaseFromRoman(String roman) {
+  final n = fromRoman(roman);
+  return (n == null || n > kPreviewMaxPhase) ? 1 : n;
+}

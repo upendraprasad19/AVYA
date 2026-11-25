@@ -136,6 +136,7 @@ P3: R1-14 phase-13 test is characterization -> said so + scratch mutation. R1-15
 - The phase-13 characterization test was NOT mutated: its only target is `plan_generator.dart` (rule 14, not even temporarily).
 - The journey free-dim rule keys on the absolute phase, but absolute vs block index cannot be told apart on screen (a block's first dot is never a future phase); no test claims otherwise.
 - Message shape: `outcome=<..> total=<ms> <laps>` (R2-6).
+- B-pass (`docs/reviews/oi348-landing3a-bpass.md`) changed three things: item 4 above now maps only a `TimeoutException` to `confirmedButSlowMessage` and any other non-`StateError` to `confirmedContinueMessage` ("Email confirmed. Tap GO TO SIGN IN to continue."); the stage emit is skipped for an attempt the 40 s ceiling already abandoned (`_confirmAttempt`); the preview parse is `previewPhaseFromRoman`, capped at XCIX.
 
 ## Out of scope (named, not deferred)
 - Speeding up the account load: needs the first `auth_ensure_timing` number (upstream_blocked on data).

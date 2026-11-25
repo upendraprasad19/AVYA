@@ -15,7 +15,7 @@ findings:
     title: "Confirm screen says 'Email confirmed. Setting up your account...' once the link is verified; a spent link is never called invalid"
     terminal_state: closed_in_commit
     commit: "oi348-landing3a@branch"
-    verification: "confirm_email_verified_stage_behavioral_test.dart (8, real confirmEmail incl. the real 40 s ceiling under fakeAsync), confirm_email_error_mapping_test (+5), confirm_email_screen_test (+2) green; mutants M1-M5 red (diagnose 918045)"
+    verification: "confirm_email_verified_stage_behavioral_test.dart (10, real confirmEmail incl. the real 40 s ceiling under fakeAsync and a link check finishing after it), confirm_email_error_mapping_test (+6), confirm_email_screen_test (+2) green; mutants M1-M5 and B-pass M15-M17 red (diagnose 918045)"
 
   - id: B6-TIMING
     title: "One auth_ensure_timing event per sign-in / confirm: outcome, total and per-step laps incl. every hydrateFromCloud cloud call"
@@ -33,7 +33,7 @@ findings:
     title: "One phase numeral converter; labels read XIII, XIV, ...; preview parse accepts any canonical numeral"
     terminal_state: closed_in_commit
     commit: "oi348-landing3a@branch"
-    verification: "roman_numeral_test (5), phase_roman_single_source_test (4), hold_week_labels_test (inverted 13 -> XIII) green; mutants M8, M9, M14 red (diagnose a2f144)"
+    verification: "roman_numeral_test (5), phase_roman_single_source_test (5, incl. the preview parse capped at XCIX), hold_week_labels_test (inverted 13 -> XIII) green; mutants M8, M9, M14 and B-pass M18, M19 red (diagnose a2f144)"
 
   - id: P1-JOURNEY
     title: "Profile journey card past Phase XII: the 12-phase block holding the current phase; the name cycles"
