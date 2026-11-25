@@ -49,8 +49,9 @@ findings:
 
   - id: P1-EF-DEPLOY
     title: "Redeploy ai-proxy and weekly-report so the coach manual's new line is live"
-    terminal_state: blocked_on_user
-    reason: "Each Edge Function deploy to prod needs its own founder go (CLAUDE.md section 4.3); done from main after the merge with the edge-function-deploy-rollback skill."
+    terminal_state: closed_in_commit
+    commit: "oi348-3a-efdeploy@branch"
+    verification: "Founder go 2026-11-25 ('Yes, redeploy both'). Deployed from main 50cc0d92 (functions tree equal to 2b5068be): ai-proxy v113 -> v114 (verify_jwt false), weekly-report v44 -> v45 (verify_jwt true). Before: live decoded files equal b6940494 (ai-proxy, 67 of 68; the type-only _shared/tools/types.ts is an empty part) and 33ae210c (weekly-report, 17 of 17); rollback payloads rebuilt with --rollback --dry-run and kept. After: ai-proxy 67 of 68 and weekly-report 17 of 17 equal 50cc0d92, so captain_manual.ts carries the 'All phases after Phase I' line; boot answers are the modules' own 401s (ai-proxy 'Missing authorization header', weekly-report 'Invalid or expired token' to an anon Bearer). Not checked: a live coach reply quoting the new line (needs a signed-in user)."
 
   - id: P1-WARD-PHASE-DOTS
     title: "ward_phase_dots.dart describes a twelve-phase Journey card (totalPhases = 12)"
