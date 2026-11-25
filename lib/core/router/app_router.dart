@@ -29,6 +29,7 @@ import 'package:icanbefitter/features/train/screens/phase_roadmap_screen.dart';
 import 'package:icanbefitter/features/train/screens/preview_workout_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/nutrition_screen.dart';
 import 'package:icanbefitter/features/nutrition/screens/diet_plan_screen.dart';
+import 'package:icanbefitter/features/nutrition/screens/nutrition_history_screen.dart';
 import 'package:icanbefitter/features/ai_coach/screens/ai_coach/screen.dart';
 import 'package:icanbefitter/features/profile/screens/profile/screen.dart';
 import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
@@ -486,6 +487,11 @@ class AppRouter {
                     path: 'diet-plan',
                     name: 'dietPlan',
                     builder: (context, state) => const DietPlanScreen(),
+                  ),
+                  GoRoute(
+                    path: 'history',
+                    name: 'nutritionHistory',
+                    builder: (context, state) => const NutritionHistoryScreen(),
                   ),
                 ],
               ),

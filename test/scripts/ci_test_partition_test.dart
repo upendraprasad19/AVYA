@@ -213,6 +213,126 @@ void main() {
     }
   });
 
+  group('core / sweep — the two sets and the weighted packing', () {
+    final mixed = sortedTestFiles([
+      for (var i = 0; i < 23; i++) 'test/contracts/c${i.toString().padLeft(2, '0')}_test.dart',
+      for (var i = 0; i < 11; i++) 'test/plan_generator/s${i.toString().padLeft(2, '0')}_test.dart',
+      'test/plan_generator/plan_audit/deep_test.dart',
+      'test/plan_generator_other/not_a_sweep_test.dart', // a sibling directory with the same prefix
+    ]);
+
+    test('disjoint and complete: one predicate and its negation', () {
+      final core = filesOfSet(mixed, 'core');
+      final sweep = filesOfSet(mixed, 'sweep');
+      expect(core.toSet().intersection(sweep.toSet()), isEmpty);
+      expect({...core, ...sweep}, mixed.toSet());
+      expect(core.length + sweep.length, mixed.length);
+      expect(sweep, hasLength(12));
+      expect(sweep.every((f) => f.startsWith('test/plan_generator/')), isTrue);
+      expect(core, contains('test/plan_generator_other/not_a_sweep_test.dart'),
+          reason: 'the rule is the DIRECTORY test/plan_generator/, not the name prefix');
+      expect(sweep, contains('test/plan_generator/plan_audit/deep_test.dart'));
+      expect(() => filesOfSet(mixed, 'all'), throwsArgumentError);
+    });
+
+    for (final total in [1, 2, 3, 5, 12]) {
+      test('packByDuration over $total shards: every file exactly once, none empty, each shard sorted', () {
+        final sweep = filesOfSet(mixed, 'sweep');
+        final table = {for (var i = 0; i < sweep.length; i++) sweep[i]: (i * 37) % 11 + 1};
+        final shards = packByDuration(sweep, total, table);
+        expect(shards, hasLength(total));
+        expect(shards.expand((x) => x).toList()..sort(), sweep);
+        expect(shards.every((x) => x.isNotEmpty), isTrue);
+        for (final x in shards) {
+          expect(x, [...x]..sort());
+        }
+        expect(packByDuration([...sweep.reversed], total, table), shards, reason: 'input order must not matter');
+      });
+    }
+
+    test('the packing is longest-first to the lightest shard (the exact rule, on a worked example)', () {
+      // weights 9 7 6 5 4 -> A:9  B:7  B? no: 6 goes to the lightest (B=7 vs A=9 -> B=13), 5 -> A=14, 4 -> B=17.
+      final t = {'test/plan_generator/a_test.dart': 9, 'test/plan_generator/b_test.dart': 7,
+          'test/plan_generator/c_test.dart': 6, 'test/plan_generator/d_test.dart': 5, 'test/plan_generator/e_test.dart': 4};
+      expect(packByDuration(t.keys.toList(), 2, t), [
+        ['test/plan_generator/a_test.dart', 'test/plan_generator/d_test.dart'],
+        ['test/plan_generator/b_test.dart', 'test/plan_generator/c_test.dart', 'test/plan_generator/e_test.dart'],
+      ]);
+    });
+
+    test('ties: equal weights break by path, equal loads go to the LOWEST shard', () {
+      final f = ['test/plan_generator/b_test.dart', 'test/plan_generator/a_test.dart', 'test/plan_generator/c_test.dart'];
+      expect(packByDuration(f, 3, const {}), [
+        ['test/plan_generator/a_test.dart'],
+        ['test/plan_generator/b_test.dart'],
+        ['test/plan_generator/c_test.dart'],
+      ]);
+    });
+
+    test('a file the table does not name weighs the table median, not zero', () {
+      final t = {'test/plan_generator/a_test.dart': 100, 'test/plan_generator/b_test.dart': 10, 'test/plan_generator/c_test.dart': 2};
+      expect(defaultDuration(t), 10);
+      expect(defaultDuration(const {}), 1);
+      // new (10) + b (10) + c (2) = 22 on one side, a (100) alone on the other.
+      final shards = packByDuration([...t.keys, 'test/plan_generator/new_test.dart'], 2, t);
+      expect(shards[0], ['test/plan_generator/a_test.dart']);
+      expect(shards[1], hasLength(3));
+    });
+
+    test('parseDurationTable refuses a weight that is not a number > 0', () {
+      expect(parseDurationTable('{"test/plan_generator/a_test.dart": 3.5}'), {'test/plan_generator/a_test.dart': 3.5});
+      for (final bad in ['[]', '"x"', '{"a": 0}', '{"a": -1}', '{"a": "7"}', '{"a": null}']) {
+        expect(() => parseDurationTable(bad), throwsFormatException, reason: bad);
+      }
+    });
+
+    test('shardFilesOfSet: core is the round-robin over the core files, sweep is the packing', () {
+      final core = filesOfSet(mixed, 'core');
+      final sweep = filesOfSet(mixed, 'sweep');
+      for (var s = 1; s <= 4; s++) {
+        expect(shardFilesOfSet(mixed, 'core', s, 4, const {}), shardFiles(core, s, 4));
+        expect(shardFilesOfSet(mixed, 'sweep', s, 4, const {}), packByDuration(sweep, 4, const {})[s - 1]);
+      }
+      expect(() => shardFilesOfSet(mixed, 'sweep', 0, 4, const {}), throwsArgumentError);
+      expect(() => shardFilesOfSet(mixed, 'sweep', 5, 4, const {}), throwsArgumentError);
+      expect(() => shardFilesOfSet(mixed, 'core', 1, 0, const {}), throwsArgumentError);
+    });
+  });
+
+  group('the REAL tree, the REAL table, CI\'s shard counts', () {
+    late List<String> all;
+    late Map<String, num> table;
+    setUpAll(() {
+      all = discoverTestFiles();
+      table = parseDurationTable(File(sweepDurationsPath).readAsStringSync());
+    });
+
+    test('the committed table parses and names only sweep files that exist', () {
+      expect(table, isNotEmpty);
+      expect(table.keys.every(isSweepTestPath), isTrue);
+      expect(staleDurationKeys(table, all), isEmpty,
+          reason: 'a sweep file was renamed or deleted: update $sweepDurationsPath (the CLI only warns)');
+    });
+
+    test('4 core shards + 5 sweep shards run every test file exactly once', () {
+      final legs = [
+        for (var s = 1; s <= 4; s++) shardFilesOfSet(all, 'core', s, 4, table),
+        for (var s = 1; s <= 5; s++) shardFilesOfSet(all, 'sweep', s, 5, table),
+      ];
+      expect(legs.every((l) => l.isNotEmpty), isTrue);
+      expect(legs.fold<int>(0, (a, l) => a + l.length), all.length, reason: 'a file in two legs, or in none');
+      expect(legs.expand((l) => l).toSet(), all.toSet());
+    });
+
+    test('the sweep legs are balanced by the table: heaviest leg within 1.25x of the lightest', () {
+      final loads = [
+        for (final leg in packByDuration(filesOfSet(all, 'sweep'), 5, table))
+          leg.fold<num>(0, (a, f) => a + (table[f] ?? defaultDuration(table))),
+      ];
+      expect(loads.reduce(max) / loads.reduce(min), lessThan(1.25), reason: 'loads: $loads');
+    });
+  });
+
   group('discoverTestFiles — mirrors flutter_tools _findTests', () {
     late Directory tmp;
     setUp(() => tmp = Directory.systemTemp.createTempSync('ci_partition_disc_'));
@@ -290,8 +410,10 @@ void main() {
     final script = File('scripts/ci_test_partition.dart').absolute.path;
     late Directory tmp;
 
-    ProcessResult run(List<String> args, {Directory? cwd}) => runSpawn(dartBin(), [script, ...args],
-        why: 'ci_test_partition ${args.join(' ')}', workingDirectory: (cwd ?? tmp).path);
+    // `set: null` passes the arguments verbatim (the usage cases); otherwise `--set <set>` is appended.
+    ProcessResult run(List<String> args, {Directory? cwd, String? set = 'core'}) => runSpawn(
+        dartBin(), [script, ...args, if (set != null) ...['--set', set]],
+        why: 'ci_test_partition ${args.join(' ')} --set $set', workingDirectory: (cwd ?? tmp).path);
 
     void touch(String rel) {
       final f = File('${tmp.path}/$rel')..createSync(recursive: true);
@@ -349,6 +471,92 @@ void main() {
         expect((r.stderr as String).trim(), isNotEmpty);
       });
     }
+
+    for (final bad in [
+      ['1', '2'], // the old all-files form: REMOVED, so nobody gets one set meaning the suite
+      ['1', '2', '--set'],
+      ['1', '2', '--set', 'all'],
+      ['1', '2', '--set', 'core', 'x'],
+      ['--set', 'core', '1', '2'],
+      ['1', '2', 'core', '--set'],
+    ]) {
+      test('`--set core|sweep` is REQUIRED, last, and exact (exit 64): ${bad.join(' ')}', () {
+        final r = run(bad, set: null);
+        expect(r.exitCode, 64);
+        expect((r.stdout as String).trim(), isEmpty);
+        expect(r.stderr as String, contains('--set core|sweep'));
+      });
+    }
+
+    group('the two sets in a tree that HAS sweep files', () {
+      setUp(() {
+        for (final f in ['p_test.dart', 'q_test.dart', 'sub/r_test.dart', 'helper_lib.dart']) {
+          touch('test/plan_generator/$f');
+        }
+      });
+
+      test('core never prints a sweep file and sweep never prints a core file; together they are everything', () {
+        final core = lines(run(['1', '1']));
+        final sweep = lines(run(['1', '1'], set: 'sweep'));
+        expect(core, ['test/a_test.dart', 'test/b/c_test.dart', 'test/b/d_test.dart', 'test/e_test.dart']);
+        expect(sweep, [
+          'test/plan_generator/p_test.dart',
+          'test/plan_generator/q_test.dart',
+          'test/plan_generator/sub/r_test.dart',
+        ]);
+      });
+
+      test('sweep packs by the committed table: the heavy file sits alone', () {
+        File('${tmp.path}/scripts/data/ci_sweep_durations.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('{"test/plan_generator/q_test.dart": 500, "test/plan_generator/p_test.dart": 10, '
+              '"test/plan_generator/sub/r_test.dart": 10}');
+        final one = run(['1', '2'], set: 'sweep');
+        final two = run(['2', '2'], set: 'sweep');
+        expect(lines(one), ['test/plan_generator/q_test.dart']);
+        expect(lines(two), ['test/plan_generator/p_test.dart', 'test/plan_generator/sub/r_test.dart']);
+        expect((one.stderr as String).trim(), isEmpty);
+      });
+
+      test('no table: a warning, equal weights, every sweep file still dealt exactly once', () {
+        final shards = [for (var i = 1; i <= 3; i++) run(['$i', '3'], set: 'sweep')];
+        expect(shards.every((r) => r.exitCode == 0), isTrue);
+        expect(shards.first.stderr as String, contains('::warning::'));
+        expect(shards.expand(lines).toList()..sort(), [
+          'test/plan_generator/p_test.dart',
+          'test/plan_generator/q_test.dart',
+          'test/plan_generator/sub/r_test.dart',
+        ]);
+      });
+
+      test('a STALE table row is a warning, not a failure (a rename must not redden every sweep leg)', () {
+        File('${tmp.path}/scripts/data/ci_sweep_durations.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync('{"test/plan_generator/gone_test.dart": 9}');
+        final r = run(['1', '1'], set: 'sweep');
+        expect(r.exitCode, 0);
+        expect(r.stderr as String, contains('gone_test.dart'));
+        expect(lines(r), hasLength(3));
+      });
+
+      for (final bad in ['[]', '{"test/plan_generator/p_test.dart": 0}', '{"test/plan_generator/p_test.dart": -3}',
+          '{"test/plan_generator/p_test.dart": "12"}', 'not json']) {
+        test('an unusable table is refused (exit 5, nothing on stdout): $bad', () {
+          File('${tmp.path}/scripts/data/ci_sweep_durations.json')
+            ..createSync(recursive: true)
+            ..writeAsStringSync(bad);
+          final r = run(['1', '1'], set: 'sweep');
+          expect(r.exitCode, 5);
+          expect((r.stdout as String).trim(), isEmpty);
+        });
+      }
+
+      test('an empty sweep shard is refused (exit 3): more shards than sweep files', () {
+        final r = run(['4', '4'], set: 'sweep');
+        expect(r.exitCode, 3);
+        expect((r.stdout as String).trim(), isEmpty);
+      });
+    });
 
     test('an EMPTY shard is refused (exit 3), never printed as an empty list', () {
       // 4 test files, 5 shards: shard 5 is empty.

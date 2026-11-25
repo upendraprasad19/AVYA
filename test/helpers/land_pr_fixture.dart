@@ -52,6 +52,7 @@ Map<String, String> allGreen() => <String, String>{
       for (final j in requiredJobs) j: 'completed/success',
       'Unit Tests shard 1/4': 'completed/success',
       'Plan-review record (>=account merge-to-main)': 'completed/skipped',
+      'Supabase Integration Tests': 'completed/success',
     };
 
 const String _lib = r'''
@@ -106,6 +107,7 @@ case "\$*" in
   "pr view "*"--json state") kind=pr-state;;
   "api repos/"*"/pulls/"*"/files"*) kind=pr-files;;
   "api repos/"*"/commits/"*"/check-runs"*) kind=check-runs;;
+  "api repos/"*"/actions/jobs/"*) kind=run-jobs;;
   *) echo "gh stub: unknown argv: \$*" >&2; exit 99;;
 esac
 n=\$(bump "\$kind")

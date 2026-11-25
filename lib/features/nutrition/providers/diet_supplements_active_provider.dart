@@ -27,7 +27,11 @@ typedef SupplementInputs = ({Object? switchValue, Object? dob});
 /// the restore tick rebuilds it and the value is read from Hive, never from
 /// the provider's possibly stale state. Watched only with the kill switch on.
 final dietSupplementsInputsProvider = Provider<SupplementInputs>((ref) {
-  ref.watch(authUserIdTokenProvider); // c4055a: reads the user's stored profile
+  final token = ref.watch(authUserIdTokenProvider); // c4055a: reads the user's stored profile
+  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+  // A raw box read throws there; serve the empty value, and the token
+  // flipping back re-runs this with the real data.
+  if (token == '<anon>') return (switchValue: null, dob: null);
   ref.watch(restoreCompletedTickProvider);
   ref.watch(userProfileProvider.select<SupplementInputs>(
       (p) => (switchValue: p['diet_supplements'], dob: p['date_of_birth'])));

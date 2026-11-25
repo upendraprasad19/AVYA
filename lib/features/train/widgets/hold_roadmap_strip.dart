@@ -4,6 +4,7 @@ import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 
 /// Compact 3-phase roadmap card shown on Train while the user is holding —
@@ -24,11 +25,9 @@ class HoldRoadmapStrip extends ConsumerWidget {
 
   final int currentPhase;
 
-  static const _romans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', //
-    'IX', 'X', 'XI', 'XII'];
-
-  static String _roman(int phase) =>
-      (phase >= 1 && phase <= _romans.length) ? _romans[phase - 1] : '$phase';
+  /// Any phase, XIII and beyond too: a delegate to the shared [phaseRoman]
+  /// (OI-348 Landing 3a).
+  static String _roman(int phase) => phaseRoman(phase);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -3,7 +3,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/health_write_service.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
@@ -19,8 +18,8 @@ import 'package:icanbefitter/core/services/write_result.dart';
 // and is now invoked from DayRolloverObserver / splash, not from
 // StreakFreezeNotifier.build().
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
-import 'package:icanbefitter/core/utils/effective_macro_targets.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/utils/nutrition_targets_resolver.dart';
 import 'package:icanbefitter/core/services/badge_service.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
@@ -86,7 +85,11 @@ class CalendarWeekNotifier extends Notifier<List<CalendarDayData>> {
 
   @override
   List<CalendarDayData> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return const <CalendarDayData>[];
     final now = nowWall();
     final todayDate = istMidnight(now);
     final weekStart = mondayOfIst(now);
@@ -278,7 +281,11 @@ final restoreCompletedTickProvider = Provider<int>((ref) {
 class StreakNotifier extends Notifier<int> {
   @override
   int build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return 0;
     ref.watch(restoreCompletedTickProvider); // freeze-refill-sync: restore tick
     // APK Test #12.7 — single source of truth for streak count.
     // Previously read cached `current_streak_days` from `user_progress`,
@@ -317,7 +324,11 @@ class StreakFreezeNotifier extends Notifier<int> {
     // `StreakProgressService.refillIfNewWeek()` and invoked from
     // `DayRolloverObserver._doRolloverWithRef` (every rollover; idempotent
     // for non-Monday calls) + splash post-restore (first launch).
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return 0;
     ref.watch(restoreCompletedTickProvider); // freeze-refill-sync: restore tick
     final progress = UserRepository.instance.getProgress();
     final stored = (progress?['streak_freezes_available'] as int?) ?? 1;
@@ -402,7 +413,18 @@ class StreakWarningEligibilityNotifier
     extends Notifier<StreakWarningEligibility> {
   @override
   StreakWarningEligibility build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') {
+      return const StreakWarningEligibility(
+        shouldShow: false,
+        medianWorkoutHour: 19, // the cold-start default
+        isWorkoutDayToday: false,
+        isTodayCompleted: false,
+      );
+    }
     final streakDays = ref.watch(streakProvider);
     final todaySchedule = ref.watch(todayWorkoutProvider);
 
@@ -561,7 +583,11 @@ final subscriptionExpiryBannerProvider = NotifierProvider<
 class TodayWorkoutNotifier extends Notifier<Map<String, dynamic>?> {
   @override
   Map<String, dynamic>? build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return null;
     // Read today's schedule from WorkoutScheduleService (single source of truth)
     // A7 / B5 D9-D10 — canonical provider path.
     return ref
@@ -601,67 +627,35 @@ class NutritionSummaryData {
 class NutritionSummaryNotifier extends Notifier<NutritionSummaryData> {
   @override
   NutritionSummaryData build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return const NutritionSummaryData();
     // F7 · Single source of truth — Home + Nutrition screens sum
     // identically via NutritionRepository.dailyMacros.
     final today = DateTime.now();
     final macros = NutritionRepository.instance.dailyMacros(today);
 
+    // ONE resolver with the Nutrition tab (diagnose c2a4e8): stored pack, else
+    // the recompute from the profile's inputs, else the shared last resort;
+    // then the diet strategy (docs/plans/diet-strategy.md §3.3). The PRO and
+    // restore-tick watches exist ONLY with the flag on, so a flag-off build
+    // keeps this provider's dependency set.
     final profile = UserRepository.instance.getProfile();
-    final baseCalorieTarget =
-        (profile?['daily_calories'] as num?)?.toDouble() ?? 2000;
-    final proteinTarget =
-        (profile?['protein_grams'] as num?)?.toDouble() ?? 120;
-    // OBS-11 — dual-name read; a restored profile carries the plural
-    // `carbs_grams` (cloud/restore name), not `carb_grams`. Without this Home's
-    // carb target silently fell to the 250 default. (See nutrition_provider.)
-    final storedCarbs =
-        (profile?['carb_grams'] ?? profile?['carbs_grams']) as num?;
-    var carbTarget = storedCarbs?.toDouble() ?? 250;
-    final storedFat = profile?['fat_grams'] as num?;
-    var fatTarget = storedFat?.toDouble() ?? 65;
-
-    // Diet plan Unit 3a (docs/plans/diet-strategy.md §3.3): a PRO user's
-    // non-Balanced strategy changes the carb/fat targets, applied to the
-    // stored pack only when it is complete (the defaults are Balanced). The
-    // watches exist ONLY with the flag on, so a flag-off build keeps this
-    // provider's pre-3a dependency set.
+    var strategyEnabled = false;
+    var pro = false;
     if (DietStrategyFlags.enabled) {
-      final pro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
+      strategyEnabled = true;
+      pro = ref.watch(subscriptionInfoProvider.select((s) => s.isPro));
       ref.watch(restoreCompletedTickProvider);
-      final storedCalories = profile?['daily_calories'] as num?;
-      final storedProtein = profile?['protein_grams'] as num?;
-      if (storedCalories != null &&
-          storedProtein != null &&
-          storedCarbs != null &&
-          storedFat != null) {
-        final effective = effectiveMacroTargets(
-          (
-            calories: storedCalories.toDouble(),
-            protein: storedProtein.toDouble(),
-            carbs: storedCarbs.toDouble(),
-            fat: storedFat.toDouble(),
-          ),
-          profile?['diet_strategy'],
-          pro: pro,
-          enabled: true,
-        )!;
-        if (effective.strategy != DietStrategy.balanced) {
-          carbTarget = effective.carbs;
-          fatTarget = effective.fat;
-        }
-      }
     }
-
-    // Apply AI-coach calorie target override for today (clamped 800..6000).
-    // Macros are not scaled — overrides ship a kcal delta only.
-    final override =
-        NutritionRepository.instance.getActiveTargetOverride(today);
-    final calorieTarget = override == null
-        ? baseCalorieTarget
-        : (baseCalorieTarget + ((override['delta_kcal'] as num?) ?? 0))
-            .clamp(800, 6000)
-            .toDouble();
+    final targets = resolveNutritionTargets(profile,
+        strategyEnabled: strategyEnabled, pro: pro);
+    final calorieTarget = targets.calories;
+    final proteinTarget = targets.protein;
+    final carbTarget = targets.carbs;
+    final fatTarget = targets.fat;
 
     return NutritionSummaryData(
       calories: (macros['calories'] as num?)?.toDouble() ?? 0.0,
@@ -686,7 +680,11 @@ final nutritionSummaryProvider =
 class WeightHistoryNotifier extends Notifier<List<WeightEntryData>> {
   @override
   List<WeightEntryData> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return <WeightEntryData>[];
     final hive = HiveService.instance;
     final healthBox = hive.healthBox;
 
@@ -783,7 +781,11 @@ class RecentFoodLogEntry {
 class RecentFoodLogsNotifier extends Notifier<List<RecentFoodLogEntry>> {
   @override
   List<RecentFoodLogEntry> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return <RecentFoodLogEntry>[];
     final hive = HiveService.instance;
     final nutritionBox = hive.nutritionBox;
     final today = DateTime.now();
@@ -889,7 +891,11 @@ final dailyQuoteProvider =
 class TodayStepsNotifier extends Notifier<int> {
   @override
   int build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return 0;
     final hive = HiveService.instance;
     final healthBox = hive.healthBox;
     final todayStr = istTodayStr();
@@ -1024,7 +1030,11 @@ final weightLogNotifierProvider =
 class TodayWeightLoggedNotifier extends Notifier<bool> {
   @override
   bool build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // The raw box getter throws there, so serve the empty value; the token
+    // flipping back re-runs build() with the real data.
+    if (token == '<anon>') return false;
     final healthBox = HiveService.instance.healthBox;
     // Bug w7r4c3 (APK Test #16.2) — read the IST date string to match the
     // writer's key formula at health_write_service.dart:122. Pre-fix this
@@ -1050,7 +1060,12 @@ final todayWeightLoggedProvider =
 class AllExercisePRsNotifier extends Notifier<List<ExercisePR>> {
   @override
   List<ExercisePR> build() {
-    ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
+    // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
+    // A raw box read throws there; serve the empty value, and the token
+    // flipping back re-runs this with the real data.
+    if (token == '<anon>') return <ExercisePR>[];
+    ref.watch(restoreCompletedTickProvider); // c2f7d1 — a restore writes exlog rows
     return WorkoutRepository.instance.loadAllExercisePRs();
   }
 }

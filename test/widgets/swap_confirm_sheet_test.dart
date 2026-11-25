@@ -23,6 +23,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/swap_service.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/train/widgets/swap_confirm_sheet.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/ward_button.dart';
@@ -139,12 +140,16 @@ void main() {
     Future<DaySwapResult?> openConfirm(
       WidgetTester tester, {
       bool isPro = true,
+      String? token,
       required DaySwapDayState dayA,
       required DaySwapDayState dayB,
     }) async {
       DaySwapResult? captured;
       await tester.pumpWidget(ProviderScope(
-        overrides: [subscriptionInfoProvider.overrideWith(() => _Sub(isPro))],
+        overrides: [
+          subscriptionInfoProvider.overrideWith(() => _Sub(isPro)),
+          if (token != null) authUserIdTokenProvider.overrideWithValue(token),
+        ],
         child: MaterialApp(
           // Scaffold ancestor required — see swap_picker_sheet_test.dart's
           // note: the post-swap toast calls ScaffoldMessenger.showSnackBar,
@@ -319,6 +324,17 @@ void main() {
       expect(find.text(DaySwapCopy.spentTitleFree), findsOneWidget);
       expect(find.text(DaySwapCopy.seePro.toUpperCase()), findsOneWidget);
       expect(find.text(DaySwapCopy.confirmSwap.toUpperCase()), findsNothing);
+    });
+
+    testWidgets('a2d9f4: while the session is closed (token is anonymous) the '
+        'sheet shows nothing: no preview read, no SWAP button', (tester) async {
+      await openConfirm(tester,
+          isPro: false,
+          token: '<anon>',
+          dayA: day(fri, workout(fri, 'Pull + Core')),
+          dayB: day(sat, workout(sat, 'Legs + Core')));
+      expect(find.text(DaySwapCopy.confirmSwap.toUpperCase()), findsNothing);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('free user with a swap left still gets the SWAP button (mirror)',

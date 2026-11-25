@@ -1,0 +1,50 @@
+# Closure ledger - integration tests on pull requests + fixture rebuild, branch ci-integration-on-pr, PR 341. Gate 40.
+# One terminal_state per unit; no deferral key. Detail: docs/plans/2026-11-25-ci-integration-on-pr.md.
+
+batch: 2026-11-25-ci-integration-on-pr
+plan_review_record: docs/plan-reviews/ci-integration-on-pr.md
+bpass_review: docs/reviews/ci-integration-on-pr-bpass.md
+total_findings: 7
+closed_count: 7
+
+findings:
+  - id: OI-527-WORKFLOW
+    title: "The integration job runs on every pull request of this repository, one job at a time (if, shared concurrency group, queue max, missing secret fails on a pull request)"
+    terminal_state: closed_in_commit
+    commit: "37adbd98"
+    verification: "PR 341 run 45531579264: the job ran on a pull request and both test steps passed (job 138927938137). test/contracts/ci_integration_job_on_pr_test.dart"
+
+  - id: OI-527-MERGE-RULE
+    title: "safe_pr_merge_lib: prTimeSkippableJobs (success or skipped pass; failure refuses; missing or only-cancelled is not finished)"
+    terminal_state: closed_in_commit
+    commit: "37adbd98"
+    verification: "test/scripts/safe_pr_merge_lib_test.dart, land_pr_lib_test.dart, land_pr_e2e_test.dart (three OI-527 cases); 8 mutants red (diagnose b7e3c1)"
+
+  - id: OI-528-REBUILD
+    title: "A fixture build during which a child status was lost is rebuilt once (spawn.dart counter in both loops, rebuildOnLostStatus, SyncCli.create)"
+    terminal_state: closed_in_commit
+    commit: "37adbd98"
+    verification: "test/contracts/spawn_retry_test.dart group OI-528; 16 mutants red (diagnose f2a8d6)"
+
+  - id: BPASS-FINDINGS
+    title: "Code review: 2 P2 + 1 P3 in the contract test (step-level weakening, duplicate keys, a lazy regex); 4 P3 notes"
+    terminal_state: closed_in_commit
+    commit: "the commit that adds this ledger"
+    verification: "docs/reviews/ci-integration-on-pr-bpass.md; 8 new in-test mutants and one mutation of the real workflow, all red"
+
+  - id: OVERLAP-EVIDENCE
+    title: "Two integration jobs at once do wipe each other (the hazard the group removes)"
+    terminal_state: verified_clean
+    evidence: "2026-11-25: the job re-run on PR 341 (new workflow) and on main run 45471562759 (old workflow, no group) at the same minute; both failed, on different profile tests (auth_restore_test T10; sync_service_test T1). main's job was then re-run alone. Plan section 8."
+
+  - id: QUEUE-HONOURED
+    title: "GitHub accepted `queue: max`; that a second job WAITS (and whether a waiting job has a check-run) needs two runs of the new workflow at once"
+    terminal_state: upstream_blocked
+    blocker: "Until this pull request is on main every other run uses the old workflow, which has no concurrency group."
+    reopen_when: "the first time two runs of the merged workflow overlap: read the waiting job's check-run; the merge rule is correct for either answer (plan section 2 item 3)"
+
+  - id: DOCS
+    title: "docs/architecture/hooks.md (new section), supabase/migrations/CLAUDE.md (order rule), debugging bug-class 2.172, OI-527 and OI-528 moved to the closed board"
+    terminal_state: closed_in_commit
+    commit: "37adbd98 and the commit that adds this ledger"
+    verification: "pre-commit gate loop green"

@@ -16,8 +16,8 @@ class WeightTrendPoint {
 /// last point strictly before the window so a post-gap weigh-in always connects
 /// to prior history with a line — never a misleading lone dot. [window] null →
 /// all points (sorted). This is the lone-dot fix (e1c6a9); kept top-level + pure
-/// so it is unit-testable.
-@visibleForTesting
+/// so it is unit-testable. Generic over any dated value: the PR trend sheet
+/// (`features/home/widgets/pr_trend_sheet.dart`) windows its series with it too.
 List<WeightTrendPoint> weightTrendWindow(
     List<WeightTrendPoint> entries, Duration? window) {
   DateTime? dayOf(WeightTrendPoint p) {

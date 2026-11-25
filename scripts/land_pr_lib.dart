@@ -256,3 +256,58 @@ String unpushedSummary(List<String> subjects, {int max = 20}) {
   final more = subjects.length > max ? '\n  ... and ${subjects.length - max} more' : '';
   return '${subjects.length} commit(s) will be pushed:\n$shown$more';
 }
+
+// ── Did the plan-generator sweeps run? (docs/plans/2026-11-24-ci-sweep-split.md) ──────
+//
+// On a pull request the `sweep-test` legs skip their test step when no changed path is
+// an input of the sweeps (scripts/ci_sweep_scope_lib.dart). Such a leg ends `success`,
+// exactly like a leg that ran, so a check-run cannot tell the two apart; the job's
+// STEPS can. land_pr prints one `sweeps:` line before `result:` so a reader of
+// `ci-green` knows which of the two it was. It is information only: it never changes
+// the result word or the exit status, and anything unreadable is `unknown`.
+
+/// The check-run name prefix of a sweep leg (test.yml `sweep-test`, name template
+/// `Unit Tests sweep shard n/N`).
+const String sweepLegNamePrefix = 'Unit Tests sweep shard ';
+
+/// The name of the ONE conditional step of a sweep leg (pinned against test.yml by
+/// test/contracts/ci_unit_test_matrix_shape_test.dart).
+const String sweepTestStepName = "Run this shard's whole sweep files";
+
+const String sweepsRan = 'ran';
+const String sweepsSkipped = 'skipped (out of scope)';
+const String sweepsUnknown = 'unknown';
+
+/// The job ids of the sweep legs in [checkRuns]: for each leg name the check-run with
+/// the highest id (the latest attempt), in name order. An Actions check-run id is the
+/// job id `repos/{repo}/actions/jobs/{id}` takes.
+List<int> sweepLegJobIds(List<Map<String, dynamic>> checkRuns) {
+  final latest = <String, int>{};
+  for (final r in checkRuns) {
+    final name = r['name'];
+    final id = r['id'];
+    if (name is! String || id is! int || !name.startsWith(sweepLegNamePrefix)) continue;
+    if (id > (latest[name] ?? -1)) latest[name] = id;
+  }
+  return [for (final n in latest.keys.toList()..sort()) latest[n]!];
+}
+
+/// `ran` when the test step of EVERY job in [jobs] concluded `success`, `skipped (out
+/// of scope)` when every one concluded `skipped`, `unknown` otherwise: no jobs, a job
+/// that could not be read (null), a missing step, a mix, or any other conclusion.
+String sweepsWord(List<Map<String, dynamic>?> jobs) {
+  if (jobs.isEmpty) return sweepsUnknown;
+  final seen = <String>{};
+  for (final j in jobs) {
+    final steps = j?['steps'];
+    if (steps is! List) return sweepsUnknown;
+    String? conclusion;
+    for (final s in steps) {
+      if (s is Map && s['name'] == sweepTestStepName) conclusion = s['conclusion'] as String?;
+    }
+    if (conclusion != 'success' && conclusion != 'skipped') return sweepsUnknown;
+    seen.add(conclusion!);
+  }
+  if (seen.length != 1) return sweepsUnknown;
+  return seen.single == 'success' ? sweepsRan : sweepsSkipped;
+}

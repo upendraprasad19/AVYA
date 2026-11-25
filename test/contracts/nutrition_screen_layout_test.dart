@@ -43,7 +43,15 @@ void main() {
     // Existing kept widgets
     expect(source.contains('TodaysMealsCard'), isTrue,
         reason: 'TodaysMealsCard must still render (kept, repositioned).');
-    expect(source.contains('WeeklyChartCard'), isTrue,
+    // The INSIGHTS section moved to its own widget (nutrition-history plan):
+    // the page mounts it, and the weekly pair lives there.
+    expect(source.contains('const NutritionInsightsSection()'), isTrue,
+        reason: 'the page must mount the INSIGHTS section.');
+    expect(
+        File('lib/features/nutrition/widgets/insights_section.dart')
+            .readAsStringSync()
+            .contains('WeeklyChartCard('),
+        isTrue,
         reason: 'WeeklyChartCard must still render (under INSIGHTS).');
 
     // Hoisted-into-sheet sections must NOT be instantiated on the page

@@ -1,6 +1,6 @@
 // Generator step 4 (OI-53, plan docs/plans/2026-11-16-generator-step4-titration-plateau.md section 4 item 3): the
 // history simulation shared by the t404 dump (`history_sim_dump_test.dart`) and the CI gate
-// (`titration_plateau_gate_test.dart`). Volume titration and plateau escalation read the user's history (`exlog_*`
+// (`test/helpers/titration_plateau_gate_lib.dart`, run by the three `titration_plateau_gate_<goal>_test.dart`). Volume titration and plateau escalation read the user's history (`exlog_*`
 // e1RM, `readiness_*`), so the no-history plan audit cannot see them: this writes a simulated history for a profile,
 // then generates the next phase in four worlds from that same history.
 //

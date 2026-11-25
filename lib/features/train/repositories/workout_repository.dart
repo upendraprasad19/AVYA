@@ -24,6 +24,8 @@ import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:uuid/uuid.dart';
 
+import '../services/exercise_pr_series.dart';
+
 /// A personal record for a single exercise, based on all-time best value.
 class ExercisePR {
   final String exerciseName;
@@ -951,37 +953,23 @@ class WorkoutRepository {
   /// closes-diagnose: 2026-05-16-pr-cumulative-bug
   List<ExercisePR> loadAllExercisePRs() {
     final bestMap = <String, ExercisePR>{};
+    // The day each current best was achieved (null = no resolvable day), for
+    // the tie rule below.
+    final bestDay = <String, String?>{};
 
-    final entries = _hive.workoutBox.toMap();
+    // The one exlog key predicate; same key order as the box.
+    final rows = WorkoutReadService.exlogRows(_hive.workoutBox).toList();
 
     // OI-389 pass 1: which cardio exercises have ANY km logged. Their PR is
     // in km; the rest in seconds. One unit per exercise, so a 5 km log and a
     // later 1800 s log are never compared (1800 > 5).
-    final cardioWithKm = <String>{};
-    for (final entry in entries.entries) {
-      if (!entry.key.toString().startsWith('exlog_')) continue;
-      final raw = entry.value;
-      if (raw is! Map) continue;
-      final log = Map<String, dynamic>.from(raw);
-      if ((log['logging_type'] as String?) != 'cardio') continue;
-      final n = (log['exercise_name'] as String? ?? '').trim().toLowerCase();
-      if (n.isNotEmpty && WorkoutReadService.aggregateDistanceKm(log) > 0) {
-        cardioWithKm.add(n);
-      }
-    }
+    final cardioWithKm = cardioExercisesWithKm(rows);
 
-    for (final entry in entries.entries) {
-      final keyStr = entry.key.toString();
-      if (!keyStr.startsWith('exlog_')) continue;
-      final raw = entry.value;
-      if (raw is! Map) continue;
-      final log = Map<String, dynamic>.from(raw);
-
+    for (final log in rows) {
       final name = (log['exercise_name'] as String? ?? '').trim();
       if (name.isEmpty) continue;
       final nameKey = name.toLowerCase();
 
-      final loggingType = (log['logging_type'] as String? ?? 'weight_reps');
       // U2 (plan coach-history-correctness-client): the PR's date is the
       // workout DAY (`date`, then `created_at`) through the canonical reader.
       // `created_at` first dated a restored edited or moved log to the day it
@@ -989,55 +977,33 @@ class WorkoutRepository {
       final dayKey = WorkoutReadService.istDateForExlogRow(log) ?? '';
       final date = DateTime.tryParse(dayKey) ?? DateTime(2020);
 
-      // OI-02 / OI-08 (closes-diagnose: 2026-05-17-oi-02-read-services) —
-      // per-set MAX semantic delegated to canonical WorkoutReadService.
-      // Pre-fix the math was inline here AND duplicated in
-      // train_screen.dart `_bestPerSetReps`/`_bestPerSetDuration`.
-      double value;
-      String? unit;
-      switch (loggingType) {
-        case 'weight_reps':
-        case 'weighted_bodyweight':
-          value = WorkoutReadService.bestPerSetWeight(log);
-          break;
-        case 'bodyweight_reps':
-          value = WorkoutReadService.bestPerSetReps(log).toDouble();
-          break;
-        case 'timed':
-          value = WorkoutReadService.bestPerSetDuration(log).toDouble();
-          break;
-        case 'cardio':
-          // Cardio: cumulative distance IS the meaningful metric when the
-          // exercise has km at all (pass 1); otherwise the best set's
-          // duration (Drift-fix 2026-05-24 / T6: per-set, via the helper).
-          // OI-389: km through the reader, in ONE unit per exercise.
-          if (cardioWithKm.contains(nameKey)) {
-            value = WorkoutReadService.aggregateDistanceKm(log);
-            unit = 'km';
-          } else {
-            value = WorkoutReadService.bestPerSetDuration(log).toDouble();
-            unit = 'sec';
-          }
-          break;
-        case 'distance':
-          value = WorkoutReadService.aggregateDistanceKm(log);
-          unit = 'km';
-          break;
-        default:
-          value = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-      }
+      // The ONE per-row value rule, shared with the PR series
+      // (`exercise_pr_series.dart`): per-set MAX through WorkoutReadService,
+      // km or seconds for cardio by pass 1.
+      final v = exercisePrValueOfRow(log,
+          cardioHasKm: cardioWithKm.contains(nameKey));
+      if (v == null) continue;
 
-      if (value <= 0) continue;
-
+      // Strictly greater wins; on an equal value the EARLIER resolved day
+      // wins, so the PR's date is the first day the best was achieved
+      // whatever order the keys sort in.
+      final day = exercisePrDayOfRow(log);
       final existing = bestMap[nameKey];
-      if (existing == null || value > existing.bestValue) {
+      if (existing == null ||
+          exercisePrRowReplaces(
+            value: v.value,
+            day: day,
+            bestValue: existing.bestValue,
+            bestDay: bestDay[nameKey],
+          )) {
         bestMap[nameKey] = ExercisePR(
           exerciseName: name,
-          loggingType: loggingType,
-          bestValue: value,
+          loggingType: v.loggingType,
+          bestValue: v.value,
           date: date,
-          unit: unit,
+          unit: v.statedUnit,
         );
+        bestDay[nameKey] = day;
       }
     }
 
@@ -1051,6 +1017,17 @@ class WorkoutRepository {
             : a.exerciseName.toLowerCase().compareTo(b.exerciseName.toLowerCase());
       });
     return result;
+  }
+
+  /// The best value per workout day for every exercise in [prs] (the list
+  /// [loadAllExercisePRs] returned), keyed by `exercisePrNameKey`. One read of
+  /// the exlog rows; the Home PR sparklines and the trend sheet draw from it.
+  Map<String, ExercisePrSeries> loadAllExercisePrSeries(List<ExercisePR> prs) {
+    if (prs.isEmpty) return const {};
+    return buildExercisePrSeries(
+      WorkoutReadService.exlogRows(_hive.workoutBox).toList(),
+      prs,
+    );
   }
 
   /// Loads personal records for the key compound lifts from workout logs.

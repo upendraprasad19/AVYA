@@ -52,7 +52,7 @@ WhatsApp AI Coach → **DEFERRED** (Telegram focus for now).
 
 | Feature | Key | Details |
 |---------|-----|---------|
-| Phases 2-12 | `phases_2_to_12` | Auto-generate new 4-week plans after Week 4. Unlimited progression |
+| Phase Progression (all phases after I) | `phases_2_to_12` | Auto-generate new 4-week plans after Week 4. Unlimited progression |
 | Higher daily AI coach limit | `ai_coach_unlimited` (internal id, not renamed) | Higher daily limit (20/day) on Gemini 3.1 Flash Lite — same model as free; copy never says "unlimited" |
 | AI-Personalised Morning Alert | `morning_alert_pro` | 7AM push referencing specific yesterday's data (weight, workout, streak) |
 | Weekly AI Nutrition Report | `weekly_ai_report` | Every week, in-app (free = first report only) |

@@ -63,7 +63,6 @@ void main() {
         'getCaloriesForDate': repo.getCaloriesForDate(date),
         'getNutritionDaysLoggedThisWeek': repo.getNutritionDaysLoggedThisWeek(),
         'getDailyMacros': repo.getDailyMacros(days: 30).toString(),
-        'computeWeeklyReportData': repo.computeWeeklyReportData().toString(),
         'getWeeklyAverages': repo.getWeeklyAverages(weeks: 8).toString(),
         'getProteinDeficitStreak': repo.getProteinDeficitStreak(),
         'getWeekdayVsWeekendCalories':
@@ -189,6 +188,13 @@ void main() {
       }
     }
     // A NEW whole-box reader must be looked at (and this count raised).
-    expect(found.length, 17, reason: found.join('\n'));
+    // 17 -> 16 (nutrition-history): `computeWeeklyReportData` (a dead reader)
+    // was deleted. The two readers that batch added are not `for (` lines on
+    // the box and are filtered on `date` all the same:
+    // `NutritionRepository.mealsForDay` (`raw['date'] != dayKey`) and
+    // `loadHistoryInputs`, whose values go through `countedRow` (a String
+    // `date`) in nutrition_history.dart; N3 of
+    // nutrition_history_writer_to_reader_test.dart seeds the bookkeeping keys.
+    expect(found.length, 16, reason: found.join('\n'));
   });
 }

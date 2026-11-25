@@ -15,6 +15,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/utils/injury_vocab.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/core/utils/step_timings.dart';
 import 'package:icanbefitter/core/services/workout_schedule_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/legacy_goal_healer.dart';
@@ -774,9 +775,14 @@ class AuthSessionBootstrapper {
   /// (the `_ensureLocalUser` orchestrator in auth_provider) wrap this
   /// in their own outer catch so the cross-account guard + verify-
   /// after-clear semantics are preserved at the orchestration layer.
-  Future<void> hydrateFromCloud(User user) async {
+  ///
+  /// [timings] (OI-348 Landing 3a, B6): the caller's step timer; each cloud
+  /// step laps `h_*` into it so the sign-in's `auth_ensure_timing` line names
+  /// the slow call. Null = no laps.
+  Future<void> hydrateFromCloud(User user, {StepTimings? timings}) async {
     final userId = user.id;
     await _withLock(userId, () async {
+      timings?.lap('h_lock');
       final userBox = _hive.userBox;
       final existing = userBox.get('profile');
 
@@ -791,11 +797,13 @@ class AuthSessionBootstrapper {
                   : 'User'),
           'created_at': DateTime.now().toUtc().toIso8601String(),
         }, onConflict: 'id', ignoreDuplicates: true);
+        timings?.lap('h_users_upsert');
 
         // Always update last_active_at (safe — doesn't touch full_name).
         await _supabase.client.from('users').update({
           'last_active_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', user.id);
+        timings?.lap('h_users_active');
 
         // H-3 (audit-2026-05-11) full_name self-heal.
         final localProfile = userBox.get('profile');
@@ -814,6 +822,7 @@ class AuthSessionBootstrapper {
                 .update({'full_name': localName}).eq('id', user.id);
           }
         }
+        timings?.lap('h_users_name');
 
         // Sync ToS/Privacy acceptance from Hive (stamped by the email
         // sign-up flow — see sign_in_screen.dart / auth_provider.dart).
@@ -833,7 +842,9 @@ class AuthSessionBootstrapper {
           // SEPARATE call site, wired in RestoringScreen instead).
           await ensureTermsConsentFallback(user.id);
         }
+        timings?.lap('h_terms_sync');
       } catch (e, st) {
+        timings?.lap('h_users_failed');
         // Bug A defense (2026-04-26): silent-swallow let an orphan
         // public.users row block sync for 48h. Route through canonical
         // ErrorTelemetry so 23505/23503 violations surface (audit A11).
@@ -868,6 +879,7 @@ class AuthSessionBootstrapper {
             .select()
             .eq('user_id', user.id)
             .limit(1);
+        timings?.lap('h_profile_read');
 
         final cloudHasRealData = profileRows.isNotEmpty &&
             (profileRows.first['primary_goal'] != null ||
@@ -901,6 +913,7 @@ class AuthSessionBootstrapper {
           await ProfileWriteService.instance
               .updateProfile(merged, skipSync: true);
           await MigratedKey.write('onboarding_completed', true);
+          timings?.lap('h_profile_merge');
 
           // Also pull progress (rare to have local progress before login).
           try {
@@ -936,6 +949,7 @@ class AuthSessionBootstrapper {
                 unawaited(SyncService.instance.syncFreezes());
               }
             }
+            timings?.lap('h_progress_read');
 
             // Hydrate terms acceptance.
             final userRows = await supabase
@@ -958,6 +972,7 @@ class AuthSessionBootstrapper {
                 }
               }
             }
+            timings?.lap('h_terms_read');
 
             // Regenerate workout schedule locally if plan is missing.
             if (!WorkoutScheduleService.instance.hasPlan() &&
@@ -1032,6 +1047,7 @@ class AuthSessionBootstrapper {
                   injuries: injuries, // U4
                 );
               } catch (genErr, genSt) {
+                timings?.lap('h_plan_gen_failed');
                 debugPrint(
                     'Plan generation failed on login restore: $genErr');
                 unawaited(ErrorTelemetry.recordNonFatal(
@@ -1041,7 +1057,9 @@ class AuthSessionBootstrapper {
                 ));
               }
             }
+            timings?.lap('h_plan_gen');
           } catch (e, st) {
+            timings?.lap('h_progress_failed');
             debugPrint(
                 '[AuthSessionBootstrapper] Progress/trial restore failed: $e');
             unawaited(ErrorTelemetry.recordNonFatal(
@@ -1055,6 +1073,7 @@ class AuthSessionBootstrapper {
           // Push Hive → cloud to repair instead of routing to onboarding.
           await MigratedKey.write('onboarding_completed', true);
           unawaited(SyncService.instance.syncProfileNow(user.id));
+          timings?.lap('h_profile_branch');
         } else {
           // Neither has real data → genuine new user.
           if (profileRows.isNotEmpty) {
@@ -1076,8 +1095,10 @@ class AuthSessionBootstrapper {
               (userRows.first['onboarding_completed'] as bool?) == true) {
             await MigratedKey.write('onboarding_completed', true);
           }
+          timings?.lap('h_profile_branch');
         }
       } catch (e, st) {
+        timings?.lap('h_profile_failed');
         debugPrint(
             '[AuthSessionBootstrapper.hydrateFromCloud] restore query failed: $e');
         unawaited(ErrorTelemetry.recordNonFatal(
@@ -1103,6 +1124,7 @@ class AuthSessionBootstrapper {
           skipSync: true,
         );
       }
+      timings?.lap('h_stub');
 
       // Last-ditch gap closer: if cloud still has no user_profile row,
       // push Hive now. Rare — F3 branch above already handled the main case.
@@ -1115,6 +1137,7 @@ class AuthSessionBootstrapper {
       // After cross-account guard passes, normalize any persisted exlog rows
       // with logging_type mismatches (e.g., from a mid-workout swap).
       unawaited(_healMismatchedExerciseLogs());
+      timings?.lap('h_tail');
     });
   }
 

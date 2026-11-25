@@ -16,6 +16,7 @@ Map<String, dynamic> run(int id, String name, {String status = 'completed', Stri
 List<Map<String, dynamic>> green() => [
       for (final (i, n) in [...requiredSuccessJobs, 'Unit Tests shard 1/4'].indexed) run(10 + i, n),
       run(30, skippedOkJobs.first, conclusion: 'skipped'),
+      for (final (i, n) in prTimeSkippableJobs.indexed) run(40 + i, n),
     ];
 
 List<Map<String, dynamic>> without(List<Map<String, dynamic>> runs, String name) => runs.where((r) => r['name'] != name).toList();
@@ -311,6 +312,58 @@ void main() {
       expect(evaluateCheckRuns(fixtures['a required job missing']).reasons, ['"Audit Gates" has no check-run (required)']);
       expect(evaluateCheckRuns(fixtures['a required job only cancelled']).reasons, ['"Analyze" has only cancelled runs']);
       expect(evaluateCheckRuns(fixtures['an unlisted job failing']).reasons, ['"Extra job" concluded failure']);
+    });
+  });
+
+  group('sweeps: did the plan-generator sweeps run? (information only)', () {
+    Map<String, dynamic> job(String? conclusion, {String step = sweepTestStepName}) => {
+          'steps': [
+            {'name': 'Install dependencies', 'conclusion': 'success'},
+            {'name': 'Decide whether this pull request can change the sweeps', 'conclusion': 'success'},
+            {'name': step, 'conclusion': conclusion},
+          ],
+        };
+
+    test('sweepLegJobIds: only sweep legs, the LATEST attempt per name, in name order', () {
+      final ids = sweepLegJobIds([
+        ...green(),
+        run(70, 'Unit Tests sweep shard 2/5'),
+        run(60, 'Unit Tests sweep shard 1/5', conclusion: 'cancelled'),
+        run(61, 'Unit Tests sweep shard 1/5'), // a rerun: the higher id wins
+        run(80, 'Unit Tests sweep shard 3/5'),
+        {'id': 'x', 'name': 'Unit Tests sweep shard 4/5'}, // not an int id: ignored
+      ]);
+      expect(ids, [61, 70, 80]);
+      expect(sweepLegJobIds(green()), isEmpty, reason: 'a core shard is not a sweep leg');
+    });
+
+    test('ran: every leg\'s test step concluded success', () {
+      expect(sweepsWord([job('success'), job('success')]), sweepsRan);
+    });
+
+    test('skipped (out of scope): every leg\'s test step concluded skipped', () {
+      expect(sweepsWord([job('skipped'), job('skipped'), job('skipped')]), sweepsSkipped);
+    });
+
+    test('unknown: nothing to read, an unreadable job, a mix, a missing step, any other conclusion', () {
+      expect(sweepsWord([]), sweepsUnknown);
+      expect(sweepsWord([job('success'), null]), sweepsUnknown);
+      expect(sweepsWord([job('success'), job('skipped')]), sweepsUnknown);
+      expect(sweepsWord([job('success', step: 'Renamed step')]), sweepsUnknown);
+      expect(sweepsWord([job('failure')]), sweepsUnknown);
+      expect(sweepsWord([job(null)]), sweepsUnknown);
+      expect(sweepsWord([{'steps': 'nope'}]), sweepsUnknown);
+      expect(sweepsWord([{}]), sweepsUnknown);
+    });
+
+    test('the three words are distinct and none of them is a result word', () {
+      expect({sweepsRan, sweepsSkipped, sweepsUnknown}, hasLength(3));
+      for (final w in [sweepsRan, sweepsSkipped, sweepsUnknown]) {
+        expect(parseResultWord('sweeps: $w\nresult: ci-green\n'), 'ci-green',
+            reason: 'the sweeps line goes BEFORE the result line and must not disturb it');
+        expect(parseResultWord('result: ci-green\nsweeps: $w\n'), isNull,
+            reason: 'printed AFTER the result line it would hide the result: land_pr must never do that');
+      }
     });
   });
 

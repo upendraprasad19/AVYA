@@ -47,6 +47,7 @@ import '../../providers/referral_eligibility_provider.dart';
 import '../../utils/profile_image_url.dart';
 import '../../services/est_seal_date.dart';
 import '../apply_referral_sheet.dart';
+import '../../widgets/journey_phase_dots.dart';
 import '../../widgets/profile_identity.dart';
 import '../../widgets/profile_row.dart';
 import '../../widgets/section_header.dart';

@@ -42,6 +42,7 @@ import 'package:icanbefitter/core/services/day_rollover_service.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/target_history_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
@@ -80,10 +81,15 @@ void main() {
     await Hive.openBox(HiveService.migrationBoxName);
     HiveService.debugMarkInitializedForTests();
     GuardedBox.testBypassOwnership = true;
+    // a2d9f4: a signed-in app has a live auth uid; the providers that serve an
+    // empty value on the '<anon>' token read it through this seam. It follows
+    // the open session's owner, so there is never an auth/Hive disagreement.
+    debugAuthUidResolverForTests = () => HiveUserSession.currentOwnerFullId;
   });
 
   tearDownAll(() async {
     GuardedBox.testBypassOwnership = false;
+    debugAuthUidResolverForTests = null;
     await HiveUserSession.closeAll();
     await Hive.close();
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
@@ -105,6 +111,38 @@ void main() {
   // ── 'last_known_date' string literal (field _hiveKey is private) ───────────
 
   group('day_rollover_provider_invalidation', () {
+    // ── Target history (plan nutrition-history T2) ──
+    testWidgets('runRolloverNow records the targets in force in the target history',
+        (tester) async {
+      await tester.runAsync(() async {
+        await HiveUserSession.openForUser(testUser);
+        await HiveService.instance.userBox.put('profile', {
+          'daily_calories': 2540,
+          'protein_grams': 140,
+          'carb_grams': 300,
+          'fat_grams': 70,
+        });
+        await HiveService.instance.userBox.delete(TargetHistoryService.boxKey);
+      });
+      expect(TargetHistoryService.read(), isEmpty,
+          reason: 'a direct profile put has no trigger');
+
+      final refCompleter =
+          Completer<({WidgetRef ref, ProviderContainer container})>();
+      await tester.pumpWidget(
+        ProviderScope(
+          child: _RefCaptureWidget(onCapture: refCompleter.complete),
+        ),
+      );
+      await tester.pump();
+      final captured = await tester.runAsync(() => refCompleter.future);
+      await tester.runAsync(() async {
+        await DayRolloverObserver.instance.runRolloverNow(captured!.ref);
+      });
+
+      expect(TargetHistoryService.read().single.calories, 2540);
+    });
+
     // ── Test A: configBox['last_known_date'] updates from yesterday → today ──
 
     testWidgets(
@@ -404,7 +442,9 @@ void main() {
       // orthogonal to the invalidation gap this test targets.
       await tester.runAsync(() async {
         await nutritionBox.put('nlog_test_today', {
-          'date': DateTime.now().toIso8601String(),
+          // The shape every writer stores: an IST day key (a full timestamp
+          // is not a day key and is counted nowhere since nutrition-history).
+          'date': istDateStr(DateTime.now()),
           'total_calories': 850,
           'total_protein': 40,
         });

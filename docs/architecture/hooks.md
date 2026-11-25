@@ -176,6 +176,26 @@ runs the same gates). See §4 process invariants for the no-deferred-failures po
   `safe_pr_merge.sh` requires green (`requiredSuccessJobs`) — passes only when every shard did. `/build-apk`
   Gate 3.5 and `reconcile_ci.dart` read no job name: they read the run-level conclusion of the whole
   `Test & Analyze` workflow, which any red shard turns red.
+  **Two matrices since 2026-11-24 (plan `docs/plans/2026-11-24-ci-sweep-split.md`):** the partition CLI now
+  REQUIRES `--set core|sweep`. `unit-test` runs the core set (every test file not under `test/plan_generator/`,
+  round-robin as above, 4 legs); the new `sweep-test` matrix (`Unit Tests sweep shard n/N`, 5 legs) runs the
+  plan-generator sweeps, packed longest-first by the measured table `scripts/data/ci_sweep_durations.json`.
+  The sweeps were 66-69% of all per-file test time and left two of four mixed shards near 21 min. The gate
+  `Unit Tests` needs BOTH matrices `success`.
+  **Scoped on a pull request:** each sweep leg has a scope step (`dart scripts/ci_sweep_scope.dart` over
+  `git diff --no-renames --name-only HEAD^1 HEAD` of the merge commit) and its test step carries the job's only
+  `if:` (`steps.scope.outputs.run != 'false'`). The sweeps are skipped ONLY when the script prints exactly
+  `run=false`: no changed path is in the import closure of `test/plan_generator/**` (derived on every run), a
+  declared input (`declaredInputs`: the exercise library, fixtures) or an always-run path. A push, a failing
+  `git`/`dart`, a deleted Dart file, an unresolved import, a changed path that is not plain ASCII (git quotes
+  it), a pull request that changes the scope or partition scripts or anything under `.github/` (the shell does
+  not ask the script at all): the sweeps run. A skipped leg ends `success`, so
+  `land_pr` prints `sweeps: ran | skipped (out of scope) | unknown` before `result:` (information only; it
+  reads the test step's conclusion from `repos/{repo}/actions/jobs/{id}`). `ci-green` on a PR therefore means
+  "every test whose inputs the PR changed"; a sweep red on `main` after a skipped PR is a scope miss, fixed by
+  declaring the missed input. Tests: `test/scripts/ci_sweep_scope_test.dart` (exhaustive over the real
+  closure; every path literal in every closure file must be classified). A local run without the sweeps:
+  `flutter test $(dart scripts/ci_test_partition.dart 1 1 --set core) --exclude-tags golden`.
   This is NOT `flutter test --total-shards`, which was tried and reverted on 2026-08-10. The shell logic of both
   jobs is executed, and their wiring (`needs`, `if`, `continue-on-error`, the matrix keys, the step's last
   command) is pinned, by `test/contracts/ci_unit_test_matrix_shape_test.dart`.
@@ -382,6 +402,18 @@ Tests: `test/scripts/local_indexes_e2e_test.dart`, `test/scripts/bug_index_stric
 | **What it does not stop** | A merge made in the GitHub web UI: `main` has no required status checks (CLAUDE.md §4.3), so the red `Analyze` then shows on `main`, where `scripts/reconcile_ci.dart` warns at the next session start and `/build-apk --from-green` is blocked. Not pinned by the test: workflow-level `env:` / `defaults:`, a retargeted action tag, a lock that is a symlink, and YAML spellings the hand-written reader cannot read and does not reject (a complex key `? k`, an alias that smuggles a key in); the compensating controls are `--allow-workflow-change` and the `platform`-tier record on `test.yml`. The reader FAILS CLOSED on every other line it cannot interpret in the jobs section or the guarded job (a flow-style step or job, `-  name:`, a bare `-`, an anchor, `<<:`, an odd indent): `[unparsed]` / `[unparsed-jobs]`. |
 | **Tests and proofs** | `test/contracts/ci_lockfile_enforced_test.dart` pins the shape of the two steps and of the job around them (71 cases: 61 in-memory mutants, each of which must report its own `[token]`, and 7 controls that must stay green; the Flutter pin is read from the file, so route (2) above needs no test edit; `requiredSuccessJobs` is read by import); real-runner red runs on throwaway PRs 319 (the flag), 320 (an `sdks` floor edit) and 321 (a deleted lock), all closed unmerged. |
 | **Pitfall it fixed** | A guard that compares a REGENERATED file with the committed one is blind to the file being absent, and a hand-written reader that merges a line it cannot parse into its neighbour is blind to every spelling it does not know: fail closed (agent memory `feedback_mistake_guard_without_its_mirror.md`, the 2026-11-22 instance; not tracked in this repo). |
+
+### Integration tests on pull requests — `Supabase Integration Tests` runs on every PR, one job at a time (OI-527, 2026-11-25)
+
+Before this the job ran only on a push to `main`, so a break showed after the merge: PR #328 broke `sync_service_test` T4 and `main` stayed red for 14 hours across six merges. Plan `docs/plans/2026-11-25-ci-integration-on-pr.md`.
+
+| Topic | Rule |
+|---|---|
+| **When it runs** | A push to `main`, and every pull request of this repository. A Dependabot run and a fork run get no Actions secrets, so the job-level `if:` SKIPS them (keyed on `github.actor`, so a human commit on a `dependabot/*` branch runs). On a pull request a missing secret FAILS the job; on a push to `main` it is still the old warning. |
+| **One at a time** | Every step signs in as one shared QA account and deletes its rows. The job has ONE literal concurrency group for all pull requests and `main`, `cancel-in-progress: false`, `queue: max` (the default queue keeps a single waiting job and a newer arrival cancels it). A job waits its turn, about 3 minutes per job ahead of it. |
+| **What it proves** | The pull request's CLIENT and TEST code against the LIVE backend: deployed Edge Functions and applied migrations, not the pull request's own. A changed Edge Function is tested against the old deployed version (the Deno job covers the function). A pull request that needs an ADDITIVE migration is red until the migration is applied, with its own founder go (`supabase/migrations/CLAUDE.md`). |
+| **The merge** | `scripts/safe_pr_merge_lib.dart` lists the job in `prTimeSkippableJobs`: `success` or `skipped` pass; a failure refuses; a MISSING check-run or a job with only cancelled runs is "not finished" (a head that predates this change has no run: sync the branch). There is no override flag, as for every required job. An outage of Supabase blocks landing while it lasts; the AI tests accept a capped or hard-failure reply. The bare version-bump landing waits for it too. |
+| **Pins** | `test/contracts/ci_integration_job_on_pr_test.dart` (the `if:`, the group, the queue, the secret check, the lists), `test/scripts/safe_pr_merge_lib_test.dart`, `test/scripts/land_pr_e2e_test.dart`. |
 
 ## Pre-shortening root text (verbatim, formerly root CLAUDE.md)
 

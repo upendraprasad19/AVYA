@@ -118,6 +118,70 @@ void main() {
     });
   });
 
+  group('sweeps: line (docs/plans/2026-11-24-ci-sweep-split.md): information only, printed before result:', () {
+    Map<String, String> withSweeps() => {
+          ...allGreen(),
+          'Unit Tests sweep shard 1/5': 'completed/success',
+          'Unit Tests sweep shard 2/5': 'completed/success',
+        };
+    String jobBody(String conclusion) =>
+        '{"steps":[{"name":"Install dependencies","conclusion":"success"},{"name":"Run this shard\'s whole sweep files","conclusion":"$conclusion"}]}';
+    List<String> lines(ProcessResult r) => out(r).split('\n').where((l) => l.trim().isNotEmpty).toList();
+
+    for (final (conclusion, word) in [('skipped', 'sweeps: skipped (out of scope)'), ('success', 'sweeps: ran')]) {
+      test('--ci-only, test step $conclusion on every sweep leg: "$word", then result: ci-green', () {
+        final fx = LandFixture.create();
+        fx.q('check-runs', 1, checkRunsBody(withSweeps()));
+        fx.q('run-jobs', 1, jobBody(conclusion));
+        final r = fx.land(extra: ['--ci-only']);
+        expectResult(r, 0, 'ci-green');
+        expect(lines(r), contains(word));
+        expect(lines(r).indexOf(word), lessThan(lines(r).indexOf('result: ci-green')));
+        expect(lines(r).last, 'result: ci-green');
+        expect(fx.calls.where((c) => c == 'gh run-jobs'), hasLength(2), reason: 'one read per sweep leg');
+      });
+    }
+
+    test('a failing jobs call is "sweeps: unknown" and changes NOTHING else: still ci-green, exit 0', () {
+      final fx = LandFixture.create();
+      fx.q('check-runs', 1, checkRunsBody(withSweeps()));
+      fx.q('run-jobs', 1, '', exit: 1, stderr: 'HTTP 500');
+      final r = fx.land(extra: ['--ci-only']);
+      expectResult(r, 0, 'ci-green');
+      expect(lines(r), contains('sweeps: unknown'));
+      expect(lines(r).last, 'result: ci-green');
+    });
+
+    test('garbage from the jobs call, or no queue at all for it, is "sweeps: unknown"', () {
+      for (final body in ['not json', null]) {
+        final fx = LandFixture.create();
+        fx.q('check-runs', 1, checkRunsBody(withSweeps()));
+        if (body != null) fx.q('run-jobs', 1, body);
+        final r = fx.land(extra: ['--ci-only']);
+        expectResult(r, 0, 'ci-green');
+        expect(lines(r), contains('sweeps: unknown'));
+      }
+    });
+
+    test('no sweep legs among the check-runs (an old-layout run): "sweeps: unknown", and no jobs call is made', () {
+      final fx = LandFixture.create();
+      final r = fx.land(extra: ['--ci-only']);
+      expectResult(r, 0, 'ci-green');
+      expect(lines(r), contains('sweeps: unknown'));
+      expect(fx.calls, isNot(contains('gh run-jobs')));
+    });
+
+    test('a full landing prints it too, and still merges', () {
+      final fx = LandFixture.create();
+      fx.q('check-runs', 1, checkRunsBody(withSweeps()));
+      fx.q('run-jobs', 1, jobBody('skipped'));
+      final r = fx.land();
+      expectResult(r, 0, 'merged');
+      expect(lines(r), contains('sweeps: skipped (out of scope)'));
+      expect(lines(r).last, 'result: merged');
+    });
+  });
+
   group('--ci-only (review CI, CLAUDE.md §4.12.8)', () {
     test('CI green: result ci-green, exit 0, and the run ends at the CI wait (no PR-head check, record gate, merge)', () {
       final fx = LandFixture.create();
@@ -203,6 +267,30 @@ void main() {
       final r = fx.land(ciTimeoutMs: 400, pollMs: 30);
       expectResult(r, 3, 'ci-timeout');
       expect(out(r), contains('Unit Tests'));
+      expect(fx.calls, isNot(contains('merge')));
+    });
+
+    test('OI-527: the integration job with NO check-run is waited for, not merged past and not red', () {
+      final fx = LandFixture.create();
+      fx.q('check-runs', 1, checkRunsBody(Map.of(allGreen())..remove('Supabase Integration Tests')));
+      final r = fx.land(ciTimeoutMs: 400, pollMs: 30);
+      expectResult(r, 3, 'ci-timeout');
+      expect(out(r), contains('"Supabase Integration Tests" has no check-run'));
+      expect(fx.calls, isNot(contains('merge')));
+    });
+
+    test('OI-527: the integration job skipped by its own `if:` (a Dependabot run) is green', () {
+      final fx = LandFixture.create();
+      fx.q('check-runs', 1, checkRunsBody({...allGreen(), 'Supabase Integration Tests': 'completed/skipped'}));
+      expectResult(fx.land(pollMs: 5, ciTimeoutMs: 60000), 0, 'merged');
+    });
+
+    test('OI-527: the integration job red refuses', () {
+      final fx = LandFixture.create();
+      fx.q('check-runs', 1, checkRunsBody({...allGreen(), 'Supabase Integration Tests': 'completed/failure'}));
+      final r = fx.land(pollMs: 5, ciTimeoutMs: 60000);
+      expect(r.exitCode, isNot(0));
+      expect(out(r), contains('"Supabase Integration Tests" concluded failure'));
       expect(fx.calls, isNot(contains('merge')));
     });
 

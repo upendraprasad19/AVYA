@@ -46,3 +46,14 @@ Deno.test("chat channel carries the plain-words rules", () => {
   assertStringIncludes(p, "already built into the system");
   assertStringIncludes(p, "point them to the Train tab");
 });
+
+// OI-348 Landing 3a (P1): phases do not stop at XII. The manual must not tell
+// the coach they do, and the hold-week warning that follows the line stays.
+Deno.test("manual says phases continue past XII, with no end point", () => {
+  assert(!/II\s*[-–]\s*XII/.test(CAPTAIN_MANUAL), "stale 'Phases II–XII' wording");
+  assert(!/2\s*[-–]\s*12/.test(CAPTAIN_MANUAL), "stale 'phases 2-12' wording");
+  assertStringIncludes(
+    CAPTAIN_MANUAL,
+    "All phases after Phase I auto-generated, with no end point (free locks at Phase I after 4 weeks)",
+  );
+});

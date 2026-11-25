@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart'
     show nutritionSummaryProvider;
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart'
-    show dailyNutritionProvider, macroTargetsProvider;
+    show dailyNutritionProvider, macroTargetsProvider, weeklyNutritionProvider;
 import 'package:icanbefitter/features/profile/providers/profile_completeness_provider.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart'
     show userProfileProvider, userStatsProvider;
@@ -21,9 +21,10 @@ void main() {
       nutritionSummaryProvider,
       dailyNutritionProvider,
       macroTargetsProvider,
+      weeklyNutritionProvider, // diagnose a9d5c3
       profileCompletenessProvider,
     });
-    expect(seen.length, 6, reason: 'once each');
+    expect(seen.length, 7, reason: 'once each');
   });
 
   test('one failing invalidate never stops the rest', () {
@@ -36,6 +37,6 @@ void main() {
       }
       seen.add(p);
     }, source: 'test');
-    expect(seen.length, 5);
+    expect(seen.length, 6);
   });
 }

@@ -75,10 +75,10 @@ const Map<String, String> cqrsExemptions = {
           'Behavioral: test/contracts/subscription_cqrs_behavioral_test.dart',
   'lib/core/services/supabase_service.dart::getOrCreateReferralCode':
       'OI-44 Unit 6 item D — PERMANENT, closed verified_clean. The hidden '
-          'write is real (falls through to a live Postgres upsert via '
-          '_generateNewCode), but "get-or-create" is a universally understood '
+          'write is real (since OI-348 B2 the server mints the code: the '
+          'issue_referral_code RPC, migration 186), but "get-or-create" is a universally understood '
           'idiom that already announces the create, and this is the ONLY '
-          'callsite (invite_friends_sheet.dart:64). Renaming buys no '
+          'callsite (the invite sheet: load and REGENERATE). Renaming buys no '
           'behavioural safety and churns a live payment-adjacent path. '
           'Recording the decision in an enforced ledger rather than in prose is '
           'the point: a board note rots silently, this cannot.',

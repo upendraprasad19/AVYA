@@ -31,7 +31,7 @@ status: scaffold
 - Workout Receipt PNG (shareable) — after every completed workout
 
 ## PRO — ₹349/month or ₹2,999/year
-- Auto-generate new plans after Week 4 (phases 2-12)
+- Auto-generate new plans after Week 4 (all phases, no end point)
 - AI food text analysis — unlimited (server-side abuse ceiling 200/day)
 - Scan meal camera — 10 scans/day (soft cap warning at 7/10)
 - Cart Auditor — 10 scans/day (soft cap warning at 7/10)

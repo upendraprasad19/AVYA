@@ -16,7 +16,7 @@ import 'keep_training_phase1_action.dart';
 /// Day-29+ free-tier UI shown on Home + Train when Phase 1 has
 /// elapsed. Two doors and a hint:
 ///
-///   1. Primary · Upgrade to PRO        → opens paywall sheet ('Phases 2-12')
+///   1. Primary · Upgrade to PRO        → opens paywall sheet (PaywallSheet.phaseProgressionFeature)
 ///   2. Hold the line — another week    → `holdWeek()` (Unit 3D-b, d57)
 ///   3. Hint · MY TEMPLATES             → navigates to template builder
 ///
@@ -111,7 +111,7 @@ class _PlanExpiredCardState extends ConsumerState<PlanExpiredCard> {
     // PaywallSheet._featureSubtitle resolves the "You crushed Phase 1"
     // subtitle instead of falling back to the generic copy. Passing the
     // gate-KEY ('phases_2_to_12') misses the switch.
-    showPaywallSheet(context, feature: 'Phases 2-12');
+    showPaywallSheet(context, feature: PaywallSheet.phaseProgressionFeature);
   }
 
   void _handleTemplateBuilder() {

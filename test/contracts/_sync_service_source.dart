@@ -28,12 +28,17 @@ class SyncServiceSourceFacade implements File {
     final root = File(_rootPath).readAsStringSync(encoding: encoding);
     final partsDir = Directory(_partsDirPath);
     if (!partsDir.existsSync()) return root;
-    final parts = partsDir
+    // Sorted by path: `listSync` order is the filesystem's and differs
+    // between machines, and a pattern that runs past the end of one part
+    // file then reads a different neighbour on each (diagnose e4b7a9).
+    final files = partsDir
         .listSync()
         .whereType<File>()
         .where((f) => f.path.endsWith('.dart'))
-        .map((f) => f.readAsStringSync(encoding: encoding))
-        .toList();
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+    final parts =
+        files.map((f) => f.readAsStringSync(encoding: encoding)).toList();
     return [root, ...parts].join('\n\n');
   }
 

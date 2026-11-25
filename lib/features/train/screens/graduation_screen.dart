@@ -344,7 +344,7 @@ class _GenerateNextPhaseButtonState
       onFree: () {
         unawaited(ErrorTelemetry.logEvent('phase_unlock_gate_routed_free',
             message: 'feature=phases_2_to_12'));
-        showPaywallSheet(context, feature: 'Phases 2-12');
+        showPaywallSheet(context, feature: PaywallSheet.phaseProgressionFeature);
       },
     );
   }
