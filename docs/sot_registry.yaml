@@ -1259,7 +1259,7 @@ concepts:
         semantic: display-only
         fields_read: [isPro]
       - file: lib/features/train/screens/phase_roadmap_screen.dart
-        line_range: 43-52
+        line_range: 117-126
         method: PhaseRoadmapScreen build
         semantic: display-only
         fields_read: [isPro]
@@ -10473,7 +10473,7 @@ concepts:
         semantic: latest
         fields_read: [schedule_<date>.* via getScheduleForDate]
       - file: lib/features/train/screens/phase_roadmap_screen.dart
-        line_range: 42-52
+        line_range: 116-137
         method: build → getCurrentWeekNumber
         semantic: latest
         fields_read: [computed week-1-to-4 from plan_start_date]

@@ -16,12 +16,86 @@ import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/shared/widgets/paywall_sheet_phase_variant.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/ward_rank_insignia.dart';
 
+// ── Pure position helpers (OI-447) ────────────────────────────────
+
+/// 1-based deployment a phase belongs to: phases 1-3 are Deployment 01,
+/// 4-6 Deployment 02, and so on. The roadmap used to print a literal
+/// `DEPLOYMENT 01` for everyone (diagnose b7f1c8 fixed the same literal on the
+/// Train screen). A phase below 1 is read as 1, like `programWeekFor`.
+int roadmapDeploymentNumber(int phase) =>
+    (((phase < 1 ? 1 : phase) - 1) ~/ 3) + 1;
+
+/// Header eyebrow: `DEPLOYMENT 02 · FOUNDATION`.
+String roadmapDeploymentEyebrow(int phase, String phaseName) =>
+    'DEPLOYMENT ${roadmapDeploymentNumber(phase).toString().padLeft(2, '0')}'
+    ' · ${phaseName.toUpperCase()}';
+
+/// Weeks of program done across ALL deployments: `(phase - 1) * 4` plus the
+/// week within the phase (1-4, the clamped value, so a holder reads the last
+/// week they finished). `programWeekFor` folds this back into 1-12.
+int roadmapAbsoluteWeek(int phase, int weekInPhase) =>
+    ((phase < 1 ? 1 : phase) - 1) * 4 + weekInPhase;
+
+/// "You are here" caption on the rank ladder. A holder sits OUTSIDE the
+/// phase's weeks, so the caption says HOLDING instead of claiming a new one.
+String roadmapYouAreHereLabel({required int absoluteWeek, int? holdOrdinal}) =>
+    holdOrdinal != null
+    ? 'YOU ARE HERE · HOLDING AFTER WEEK $absoluteWeek'
+    : 'YOU ARE HERE · PROGRAM WEEK $absoluteWeek';
+
+/// The rank ladder below the 12-week deployment, in order. `week` is the
+/// number printed in `whenLabel` and is what the marker is placed against.
+class _LadderRow {
+  const _LadderRow(
+    this.rankCode,
+    this.week,
+    this.whenLabel, {
+    this.band,
+    this.emphasised = false,
+    this.faint = false,
+  });
+  final String rankCode;
+  final int week;
+  final String whenLabel;
+
+  /// Year band drawn directly above this row.
+  final String? band;
+  final bool emphasised;
+  final bool faint;
+}
+
+const List<_LadderRow> _ladder = [
+  _LadderRow('CPO', 26, 'WEEK 26', band: 'YEAR 1'),
+  _LadderRow('MCPO', 52, 'WEEK 52 · 1-YEAR SERVICE PIN'),
+  _LadderRow(
+    'SubLt',
+    104,
+    'WEEK 104 · OFFICER COMMISSION',
+    band: 'YEAR 2',
+    emphasised: true,
+  ),
+  _LadderRow('Lt', 130, 'WEEK 130', band: 'YEARS 3 — 5'),
+  _LadderRow('LtCdr', 156, 'WEEK 156'),
+  _LadderRow('Cdr', 208, 'WEEK 208'),
+  _LadderRow('Capt', 260, 'WEEK 260', faint: true),
+];
+
+/// Index into [_ladder] the "you are here" row goes BEFORE (`_ladder.length` =
+/// after the last row), or null while [absoluteWeek] is still inside the first
+/// deployment: there the active phase block already says where the user is.
+int? roadmapLadderMarkerIndex(int absoluteWeek) {
+  if (absoluteWeek <= 12) return null;
+  final i = _ladder.indexWhere((r) => r.week > absoluteWeek);
+  return i == -1 ? _ladder.length : i;
+}
+
 /// 12-week + lifetime phase roadmap.
 ///
 /// Route: `/train/roadmap` (registered in app_router.dart).
 ///
 /// Vertical timeline. Sections (top to bottom):
-///   1. Header: DEPLOYMENT 01 · FOUNDATION  WK N/12  X% complete
+///   1. Header: DEPLOYMENT NN · FOUNDATION  WK N/12  X% complete
+///      (NN from the phase; earlier deployments listed as complete)
 ///   2. W1 marker (current position when user is in week 1)
 ///   3. Phase I — Foundation (W1-4)
 ///      Promotion marker at W2 (SD1)
@@ -56,7 +130,11 @@ class PhaseRoadmapScreen extends ConsumerWidget {
     final currentWeek = ref
         .read(workoutScheduleReadServiceProvider)
         .getProgramWeek(currentPhase);
-    final completePct = ((currentWeek / 12) * 100).clamp(0, 100).round();
+    // OI-447: the week WITHIN the phase (1-4, clamped), kept so the ladder
+    // marker can place the user on the ABSOLUTE program week.
+    final weekInPhase = ref
+        .read(workoutScheduleReadServiceProvider)
+        .getCurrentWeekNumber();
     // FOB-1 (OI-60): getProgramWeek is programWeekFor(phase,
     // getCurrentWeekNumber()), and that inner call clamps to [1,4] — so a
     // phase-1 holder read "WK 4 / 12" at every ordinal, forever. The PERCENT
@@ -85,86 +163,13 @@ class PhaseRoadmapScreen extends ConsumerWidget {
           onPressed: () => context.pop(),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
-        children: [
-          _DeploymentHeader(
-            currentWeek: currentWeek,
-            completePct: completePct,
-            phaseName: phaseName,
-            holdOrdinal: holdOrdinal,
-          ),
-          const SizedBox(height: 16),
-
-          // ── Phase I (free) ────────────────────────────
-          _PhaseBlock(
-            number: 'I',
-            name: 'FOUNDATION',
-            weekRange: 'W1 – W4',
-            description: 'Push / Pull / Legs · 6 ex/day',
-            isLocked: false,
-            isActive: currentWeek <= 4,
-          ),
-
-          _PromotionMarker(rankCode: 'SD1', whenLabel: 'WEEK 2'),
-          _PromotionMarker(rankCode: 'LS', whenLabel: 'WEEK 4'),
-
-          // ── Phase II (PRO) ────────────────────────────
-          _PhaseBlock(
-            number: 'II',
-            name: 'STRENGTH',
-            weekRange: 'W5 – W8',
-            description: 'Heavier compounds, lower reps, real progression.',
-            isLocked: !isPro,
-            isActive: currentWeek >= 5 && currentWeek <= 8,
-            onTapPreview: isPro
-                ? () => context.push('/train/preview?phase=II&week=5&day=1')
-                : null,
-          ),
-
-          // ── Phase III (PRO) ───────────────────────────
-          _PhaseBlock(
-            number: 'III',
-            name: 'HYPERTROPHY',
-            weekRange: 'W9 – W12',
-            description: 'Volume push. Muscle-building emphasis.',
-            isLocked: !isPro,
-            isActive: currentWeek >= 9 && currentWeek <= 12,
-            onTapPreview: isPro
-                ? () => context.push('/train/preview?phase=III&week=9&day=1')
-                : null,
-          ),
-
-          _PromotionMarker(
-            rankCode: 'PO',
-            whenLabel: 'WEEK 12 — DEBRIEF + DEPLOYMENT 02',
-            emphasised: true,
-          ),
-
-          // ── Year 1 band ───────────────────────────────
-          const _YearBand(label: 'YEAR 1'),
-          _PromotionMarker(rankCode: 'CPO', whenLabel: 'WEEK 26'),
-          _PromotionMarker(
-            rankCode: 'MCPO',
-            whenLabel: 'WEEK 52 · 1-YEAR SERVICE PIN',
-          ),
-
-          // ── Year 2 band ───────────────────────────────
-          const _YearBand(label: 'YEAR 2'),
-          _PromotionMarker(
-            rankCode: 'SubLt',
-            whenLabel: 'WEEK 104 · OFFICER COMMISSION',
-            emphasised: true,
-          ),
-
-          // ── Years 3-5 band ────────────────────────────
-          const _YearBand(label: 'YEARS 3 — 5'),
-          _PromotionMarker(rankCode: 'Lt', whenLabel: 'WEEK 130'),
-          _PromotionMarker(rankCode: 'LtCdr', whenLabel: 'WEEK 156'),
-          _PromotionMarker(rankCode: 'Cdr', whenLabel: 'WEEK 208'),
-          _PromotionMarker(rankCode: 'Capt', whenLabel: 'WEEK 260', faint: true),
-          const SizedBox(height: 20),
-        ],
+      body: RoadmapBody(
+        phase: currentPhase,
+        weekInPhase: weekInPhase,
+        programWeek: currentWeek,
+        phaseName: phaseName,
+        holdOrdinal: holdOrdinal,
+        isPro: isPro,
       ),
       bottomNavigationBar: isPro
           ? null
@@ -199,15 +204,134 @@ class PhaseRoadmapScreen extends ConsumerWidget {
   }
 }
 
+/// The roadmap's scrolling content, built from plain values so a test can pump
+/// it without Hive or a provider scope (OI-447).
+class RoadmapBody extends StatelessWidget {
+  const RoadmapBody({
+    super.key,
+    required this.phase,
+    required this.weekInPhase,
+    required this.programWeek,
+    required this.phaseName,
+    required this.isPro,
+    this.holdOrdinal,
+  });
+
+  /// `user_progress.current_phase` (1-12).
+  final int phase;
+
+  /// Week within the phase, 1-4 (clamped; a holder reads 4).
+  final int weekInPhase;
+
+  /// Week within the CURRENT 12-week deployment (`getProgramWeek`), 1-12.
+  final int programWeek;
+  final String phaseName;
+  final bool isPro;
+
+  /// 1-based hold number while holding, else null.
+  final int? holdOrdinal;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentWeek = programWeek;
+    final completePct = ((currentWeek / 12) * 100).clamp(0, 100).round();
+    final absoluteWeek = roadmapAbsoluteWeek(phase, weekInPhase);
+    final markerAt = roadmapLadderMarkerIndex(absoluteWeek);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+      children: [
+        _DeploymentHeader(
+          deploymentNumber: roadmapDeploymentNumber(phase),
+          currentWeek: currentWeek,
+          completePct: completePct,
+          phaseName: phaseName,
+          holdOrdinal: holdOrdinal,
+        ),
+        const SizedBox(height: 16),
+        for (var d = 1; d < roadmapDeploymentNumber(phase); d++)
+          _CompletedDeployment(number: d),
+
+        // ── Phase I (free) ────────────────────────────
+        _PhaseBlock(
+          number: 'I',
+          name: 'FOUNDATION',
+          weekRange: 'W1 – W4',
+          description: 'Push / Pull / Legs · 6 ex/day',
+          isLocked: false,
+          isActive: currentWeek <= 4,
+        ),
+
+        _PromotionMarker(rankCode: 'SD1', whenLabel: 'WEEK 2'),
+        _PromotionMarker(rankCode: 'LS', whenLabel: 'WEEK 4'),
+
+        // ── Phase II (PRO) ────────────────────────────
+        _PhaseBlock(
+          number: 'II',
+          name: 'STRENGTH',
+          weekRange: 'W5 – W8',
+          description: 'Heavier compounds, lower reps, real progression.',
+          isLocked: !isPro,
+          isActive: currentWeek >= 5 && currentWeek <= 8,
+          onTapPreview: isPro
+              ? () => context.push('/train/preview?phase=II&week=5&day=1')
+              : null,
+        ),
+
+        // ── Phase III (PRO) ───────────────────────────
+        _PhaseBlock(
+          number: 'III',
+          name: 'HYPERTROPHY',
+          weekRange: 'W9 – W12',
+          description: 'Volume push. Muscle-building emphasis.',
+          isLocked: !isPro,
+          isActive: currentWeek >= 9 && currentWeek <= 12,
+          onTapPreview: isPro
+              ? () => context.push('/train/preview?phase=III&week=9&day=1')
+              : null,
+        ),
+
+        _PromotionMarker(
+          rankCode: 'PO',
+          whenLabel: 'WEEK 12 — DEBRIEF + DEPLOYMENT 02',
+          emphasised: true,
+        ),
+
+        // ── Rank ladder (Year 1 → Years 3-5) ──────────
+        for (var i = 0; i <= _ladder.length; i++) ...[
+          if (i == markerAt)
+            _YouAreHere(
+              label: roadmapYouAreHereLabel(
+                absoluteWeek: absoluteWeek,
+                holdOrdinal: holdOrdinal,
+              ),
+            ),
+          if (i < _ladder.length) ...[
+            if (_ladder[i].band != null) _YearBand(label: _ladder[i].band!),
+            _PromotionMarker(
+              rankCode: _ladder[i].rankCode,
+              whenLabel: _ladder[i].whenLabel,
+              emphasised: _ladder[i].emphasised,
+              faint: _ladder[i].faint,
+            ),
+          ],
+        ],
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+}
+
 // ── Header ────────────────────────────────────────────────────────
 
 class _DeploymentHeader extends StatelessWidget {
   const _DeploymentHeader({
+    required this.deploymentNumber,
     required this.currentWeek,
     required this.completePct,
     required this.phaseName,
     this.holdOrdinal,
   });
+  final int deploymentNumber;
   final int currentWeek;
   final int completePct;
   final String phaseName;
@@ -221,7 +345,8 @@ class _DeploymentHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'DEPLOYMENT 01 · ${phaseName.toUpperCase()}',
+          'DEPLOYMENT ${deploymentNumber.toString().padLeft(2, '0')}'
+          ' · ${phaseName.toUpperCase()}',
           style: AppTypography.mono.copyWith(
             color: AppColors.accent,
             fontSize: 11,
@@ -260,6 +385,74 @@ class _DeploymentHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Earlier deployments + ladder position ─────────────────────────
+
+class _CompletedDeployment extends StatelessWidget {
+  const _CompletedDeployment({required this.number});
+  final int number;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: ValueKey('roadmap_deployment_complete_$number'),
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle, size: 14, color: AppColors.accent),
+          const SizedBox(width: 8),
+          Text(
+            'DEPLOYMENT ${number.toString().padLeft(2, '0')} · COMPLETE',
+            style: AppTypography.mono.copyWith(
+              fontSize: 10,
+              letterSpacing: 1.6,
+              color: AppColors.textDim,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _YouAreHere extends StatelessWidget {
+  const _YouAreHere({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: const ValueKey('roadmap_you_are_here'),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          const SizedBox(width: 32),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: AppColors.accent,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.mono.copyWith(
+                fontSize: 10,
+                letterSpacing: 1.4,
+                color: AppColors.accent,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
