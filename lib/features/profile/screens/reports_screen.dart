@@ -31,6 +31,65 @@ import 'package:icanbefitter/shared/widgets/empty_state.dart';
 import '../providers/profile_provider.dart';
 import '../services/weekly_report_refresh_policy.dart';
 
+/// The Weight Trend card's axis labels (extracted so a test can render them; the
+/// rules are unchanged by the extraction).
+@visibleForTesting
+FlTitlesData weightTrendTitlesData(List<Map<String, dynamic>> entries) {
+  final dates = <int, String>{
+    for (var i = 0; i < entries.length; i++) i: entries[i]['date'] as String? ?? '',
+  };
+  final xInterval = (entries.length / 5).clamp(1, 100).roundToDouble();
+  final last = entries.length - 1;
+  return FlTitlesData(
+    leftTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 40,
+        getTitlesWidget: (value, meta) {
+          // The chart library also labels the axis minimum and maximum, which are not whole
+          // numbers here (lowest weigh-in - 1): that label rounded to the same text as the tick
+          // beside it ("74" twice). Only the ticks are drawn.
+          final step = meta.appliedInterval;
+          final rem = value % step;
+          if (rem > 1e-6 && step - rem > 1e-6) return const SizedBox();
+          return Text(
+            // A step under 1 kg would print the same whole number on two ticks.
+            value.toStringAsFixed(step >= 1 ? 0 : 1),
+            style: AppTypography.monoXs.copyWith(color: AppColors.textDim),
+          );
+        },
+      ),
+    ),
+    bottomTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 22,
+        interval: xInterval,
+        getTitlesWidget: (value, meta) {
+          final idx = value.toInt();
+          if (idx < 0 || idx >= entries.length) return const SizedBox();
+          // The chart library adds a label at the LAST point on top of the every-step ones. When
+          // the last point is less than half a step after a step label, the two are drawn over
+          // each other (27 points: step 5, labels at 25 and 26). The newest date wins.
+          if (idx != last && (last - idx) * 2 < xInterval) return const SizedBox();
+          final d = dates[idx] ?? '';
+          // Show abbreviated date: "3/12" or "12 Mar"
+          final parts = d.split('-');
+          if (parts.length == 3) {
+            return Text(
+              '${int.tryParse(parts[2]) ?? ""}/${int.tryParse(parts[1]) ?? ""}',
+              style: AppTypography.monoXs.copyWith(fontSize: 8, color: AppColors.textDim),
+            );
+          }
+          return const SizedBox();
+        },
+      ),
+    ),
+    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+  );
+}
+
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -791,43 +850,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             strokeWidth: 0.5,
           ),
         ),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 40,
-              getTitlesWidget: (value, meta) {
-                return Text(
-                  value.toStringAsFixed(0),
-                  style: AppTypography.monoXs.copyWith(color: AppColors.textDim),
-                );
-              },
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 22,
-              interval: (entries.length / 5).clamp(1, 100).roundToDouble(),
-              getTitlesWidget: (value, meta) {
-                final idx = value.toInt();
-                if (idx < 0 || idx >= entries.length) return const SizedBox();
-                final d = dates[idx] ?? '';
-                // Show abbreviated date: "3/12" or "12 Mar"
-                final parts = d.split('-');
-                if (parts.length == 3) {
-                  return Text(
-                    '${int.tryParse(parts[2]) ?? ""}/${int.tryParse(parts[1]) ?? ""}',
-                    style: AppTypography.monoXs.copyWith(fontSize: 8, color: AppColors.textDim),
-                  );
-                }
-                return const SizedBox();
-              },
-            ),
-          ),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
+        titlesData: weightTrendTitlesData(entries),
         borderData: FlBorderData(show: false),
         minY: minY,
         maxY: maxY,

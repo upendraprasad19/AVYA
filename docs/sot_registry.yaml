@@ -9256,6 +9256,12 @@ concepts:
           sheet) else EquipmentVocab.normalize; defaultReps is a String
           ("8-12" ranges). Judges the write by the stored row
           (customExerciseRowLanded), throwing write_failed only when absent.
+          ONE NAME ONCE (f2a6c8, 2026-11-25, founder): a name the exercise
+          list holds (name, then older `name_aliases`: getByExactName), the
+          v5 id of an earlier custom, or the exerciseNameKey of any of the
+          user's exercise rows is refused with duplicate_name and
+          WardroomCopy.customExerciseNameTakenTemplate, for the sheet and the
+          coach alike. Test test/contracts/custom_exercise_name_unique_behavioral_test.dart.
       - file: lib/core/services/workout_write_service.dart
         line_range: 1629-1671
         method: upsertCustomExercise
@@ -20252,7 +20258,7 @@ concepts:
         semantic: count
         fields_read: [via countBeatenPrs]
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 1916-1923
+        line_range: 1939-1946
         method: getAllExerciseLogKeysForLifetimeSum
         semantic: aggregated
         fields_read: [volume_kg]

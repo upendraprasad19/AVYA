@@ -228,8 +228,9 @@ void _openCreateAndAutoSwap(
             );
         if (change != SessionExerciseChange.applied) {
           // OI-358: the custom row stays in the library; only the swap is off,
-          // so no UNDO. A custom can share a library name, the create guard
-          // compares ids.
+          // so no UNDO. The create guard already refuses a name the exercise list
+          // holds, so this is the rare name that is in the workout but in no list
+          // (a deleted custom, a restored row).
           if (change == SessionExerciseChange.nameTaken && context.mounted) {
             _showExerciseNameTaken(ScaffoldMessenger.of(context), newName);
           }

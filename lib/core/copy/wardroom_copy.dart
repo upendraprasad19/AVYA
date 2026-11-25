@@ -200,6 +200,12 @@ class WardroomCopy {
   static const templateAlreadyAddedTemplate =
       '“{exercise}” is already in this template.';
 
+  /// A new custom exercise whose name the exercise list already holds (the list's own
+  /// name, one of its older names, or one of the user's own exercises): refused where it is
+  /// created, so no second exercise shares the first one's name and history.
+  static const customExerciseNameTakenTemplate =
+      '“{exercise}” is already in the exercise list. Search for it instead.';
+
   /// First-use hint for the two icons (shown once per account).
   static const activeSwapMoveHintTitle = 'On every exercise';
   static const activeSwapMoveHintSwap = 'Swap — use a different exercise';

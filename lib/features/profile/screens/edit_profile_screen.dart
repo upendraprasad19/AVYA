@@ -2038,6 +2038,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
 
     setState(() => _isSaving = true);
+    // The screen can be closed while this Save awaits (the profile write, the "Reschedule
+    // Workouts?" dialog, the plan regeneration: 10+ s on a slow phone), and a closed screen's
+    // `ref` throws. Every provider call below that follows an await goes through the app-wide
+    // container instead, so a closed screen never half-finishes a Save (2026-11-25, A20).
+    final container = ProviderScope.containerOf(context, listen: false);
 
     try {
       // Derive activity_level from lifestyle + training days (more accurate
@@ -2125,11 +2130,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         }
       }
 
-      await ref.read(userProfileProvider.notifier).updateProfile(updates);
-      await ref.read(userProfileProvider.notifier).recalculateTargets();
+      await container.read(userProfileProvider.notifier).updateProfile(updates);
+      await container.read(userProfileProvider.notifier).recalculateTargets();
       // goal-change-targets B3: what this Save did to the targets (null = nothing to say).
       final targetImpact =
-          targetImpactFor(_profileAtOpen, ref.read(userProfileProvider));
+          targetImpactFor(_profileAtOpen, container.read(userProfileProvider));
       final savedPlanExists = UserRepository.instance.getSavedDietPlan() != null;
       var impactShown = false;
 
@@ -2172,12 +2177,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       // profile, stats, nutrition summary / daily / macro targets, and the
       // profile completeness nudge, which caches its tier-1/tier-2 count until
       // invalidated: observed 2026-04-17, bar stuck at 61% until a relaunch).
-      invalidateProfileDerivedSurfaces(ref.invalidate, source: 'edit_profile');
+      invalidateProfileDerivedSurfaces(container.invalidate, source: 'edit_profile');
       // Refresh home screen name/greeting — these are separate providers
       // in home_provider.dart that cache the name independently.
-      ref.invalidate(userFirstNameProvider);
-      ref.invalidate(userInitialProvider);
-      ref.invalidate(userGreetingProvider);
+      container.invalidate(userFirstNameProvider);
+      container.invalidate(userInitialProvider);
+      container.invalidate(userGreetingProvider);
 
       // Detect plan-affecting field changes and offer rescheduling.
       // Experience sets the weekly set band and the per-session cap the session
@@ -2355,10 +2360,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
 
       // Refresh train plan providers after potential rescheduling.
-      ref.invalidate(currentPlanProvider);
-      ref.invalidate(todayWorkoutProvider);
-      ref.invalidate(calendarWeekProvider);
-      ref.invalidate(aiInsightProvider);  // F5 — refresh home insight after regen
+      container.invalidate(currentPlanProvider);
+      container.invalidate(todayWorkoutProvider);
+      container.invalidate(calendarWeekProvider);
+      container.invalidate(aiInsightProvider);  // F5 — refresh home insight after regen
 
       // Push updated profile to Supabase immediately (fire-and-forget).
       final userId = SupabaseService.instance.currentUser?.id;
