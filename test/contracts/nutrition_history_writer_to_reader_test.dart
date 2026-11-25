@@ -73,6 +73,26 @@ void main() {
       expect(weekIndexOfDateKey('2026-11-23', '2026-11-29'), 0);
     });
 
+    test('a day key is strict: ten characters and a real date (B-pass F3)', () {
+      expect(parseDayKey('2026-11-25'), DateTime.utc(2026, 11, 25));
+      for (final bad in const [
+        '2026-13-45', '2026-02-30', '2026/11/25', '20261125',
+        '2026-11-25T10:00', '2026-11-2', '', 'junk-junk-',
+      ]) {
+        expect(parseDayKey(bad), isNull, reason: bad);
+        expect(weekIndexOfDateKey(bad, '2026-11-25'), isNull, reason: bad);
+      }
+      // A row whose date is not a day key is counted nowhere (the day reader
+      // matches a day key by equality, so it never counted it either).
+      final days = buildNutritionDays([
+        _meal('2026-11-25T10:00', 500),
+        _meal('2026-13-45', 500),
+      ], const {}, fromDay: '2026-11-25', toDay: '2027-12-31');
+      expect(days.every((d) => !d.logged), isTrue);
+      expect(firstMealDay([_meal('2026-13-45', 1), _meal('0001/01/01', 1)]),
+          isNull);
+    });
+
     test('weekend and Monday come from the key', () {
       expect(isWeekendDayKey('2026-11-28'), isTrue); // Saturday
       expect(isWeekendDayKey('2026-11-29'), isTrue);
@@ -142,7 +162,9 @@ void main() {
       expect(s(1800, 90), DayStatus.onTarget, reason: 'exactly -10 %');
       expect(s(2201, 100), DayStatus.over);
       expect(s(1799, 100), DayStatus.under);
-      expect(s(2000, 89.9), DayStatus.under, reason: 'calories fine, protein short');
+      expect(s(2000, 89.9), DayStatus.lowProtein,
+          reason: 'calories fine, protein short: never "under" (B-pass F8)');
+      expect(DayStatus.lowProtein.isComplete, isTrue);
       expect(s(2201, 10), DayStatus.over);
     });
 
@@ -477,6 +499,30 @@ void main() {
       await log(now.subtract(const Duration(days: 1)), 'dinner', [rice]);
       c.invalidate(dailyNutritionProvider);
       expect(c.read(nutritionHistoryProvider).daysLogged, 2);
+    });
+
+    test('one garbled old row cannot stretch the series past ten years; a zero '
+        'calorie target judges nothing (B-pass F4, F7)', () {
+      final data = buildNutritionHistoryData(
+        inputs: (
+          rows: [_meal('1970-01-01', 500), _meal('2026-11-20', 1900, protein: 100)],
+          waterByDay: const {},
+          trainingDays: const {},
+          onboardingDay: null,
+          targets: const [
+            TargetEntry(
+                from: '2026-01-01', calories: 0, protein: 100, carbs: 0,
+                fat: 0, strategy: 'balanced', atMs: 1),
+          ],
+        ),
+        todayKey: '2026-11-25',
+        waterTargetMl: 0,
+        weights: const [],
+      );
+      expect(data.days.length, kHistoryMaxDays);
+      expect(data.days.last.date, '2026-11-25');
+      final logged = data.days.firstWhere((j) => j.date == '2026-11-20');
+      expect((logged.target, logged.status), (null, DayStatus.logged));
     });
 
     test('the inputs carry the onboarding day when it is the earliest', () async {

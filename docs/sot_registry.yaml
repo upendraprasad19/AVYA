@@ -744,13 +744,13 @@ concepts:
         semantic: display-only
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber]
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 88-110
+        line_range: 80-105
         method: dailyMacros
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date, is_saved_meal]
         notes: Sums daily totals; skips is_saved_meal=true template rows.
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 190-239
+        line_range: 154-207
         method: getDailyMacros (last-N-days bucketing)
         semantic: historical-series
         fields_read: [total_calories, total_protein, total_carbs, total_fat, date]
@@ -758,7 +758,7 @@ concepts:
           Per-day map; also accepts legacy top-level 'calories' /
           'protein' / 'carbs' / 'fat' fallback for restored rows.
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 455-473
+        line_range: 459-471
         method: getCaloriesForDate
         semantic: aggregated
         fields_read: [total_calories, date]
@@ -2768,7 +2768,7 @@ concepts:
         semantic: aggregated
         fields_read: [total_calories, total_protein, items[], meal_type, log_key, id, created_at]
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 105-473
+        line_range: 80-471
         method: dailyMacros, getDailyMacros, getCaloriesForDate, getNutritionDaysLoggedThisWeek
         semantic: aggregated
         fields_read: [total_calories, total_protein, total_carbs, total_fat, total_fiber, date, is_saved_meal]
@@ -5652,7 +5652,7 @@ concepts:
         semantic: pass-through
         fields_read: [via waterIntakeProvider]
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 432-454
+        line_range: 434-455
         method: getHydrationDeficitStreak
         semantic: historical-series
         fields_read: [healthBox['water_ml_<date>'] for each of last 90 days]
@@ -5767,7 +5767,7 @@ concepts:
           Skips template rows from the per-day meal aggregation so
           presets don't double-count.
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 116-127
+        line_range: 80-105
         method: dailyMacros (skip is_saved_meal)
         semantic: flag-check
         fields_read: [is_saved_meal]
@@ -9362,7 +9362,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
-        line_range: 17-90
+        line_range: 16-105
         method: NutritionRepository.dailyMacros
         semantic: aggregated
         fields_read: [via NutritionReadService.totalMacrosForDate]

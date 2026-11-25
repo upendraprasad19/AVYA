@@ -28,6 +28,20 @@ int? heatmapIndexAt(List<JudgedDay> days, int column, int row) {
   return (i < 0 || i >= days.length) ? null : i;
 }
 
+/// The heatmap in words (the cells are painted, so colour needs a text twin):
+/// `Consistency, 120 days: 40 on target, 12 under, ...`.
+String heatmapSummary(List<JudgedDay> days) {
+  final counts = <DayStatus, int>{};
+  for (final j in days) {
+    counts[j.status] = (counts[j.status] ?? 0) + 1;
+  }
+  final parts = [
+    for (final s in DayStatus.values)
+      if ((counts[s] ?? 0) > 0) '${counts[s]} ${statusLabel(s).toLowerCase()}',
+  ];
+  return 'Consistency, ${days.length} days: ${parts.join(', ')}';
+}
+
 class HistoryHeatmap extends StatelessWidget {
   const HistoryHeatmap({
     super.key,
@@ -84,9 +98,12 @@ class HistoryHeatmap extends StatelessWidget {
                           );
                           if (i != null) onDayTap!(days[i].date);
                         },
-                  child: CustomPaint(
-                    size: Size(width < 0 ? 0 : width, height),
-                    painter: _HeatPainter(days, shape.firstRow),
+                  child: Semantics(
+                    label: heatmapSummary(days),
+                    child: CustomPaint(
+                      size: Size(width < 0 ? 0 : width, height),
+                      painter: _HeatPainter(days, shape.firstRow),
+                    ),
                   ),
                 ),
               ),
@@ -97,6 +114,8 @@ class HistoryHeatmap extends StatelessWidget {
         HistoryLegend([
           if (hasTargets) ...[
             (statusColor(DayStatus.onTarget), statusLabel(DayStatus.onTarget)),
+            (statusColor(DayStatus.lowProtein),
+                statusLabel(DayStatus.lowProtein)),
             (statusColor(DayStatus.under), statusLabel(DayStatus.under)),
             (statusColor(DayStatus.over), statusLabel(DayStatus.over)),
           ] else

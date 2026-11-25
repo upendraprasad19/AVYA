@@ -81,10 +81,23 @@ void main() {
       expect(next.map((e) => e.from), ['2026-11-01']);
     });
 
-    test('a later-dated entry (clock moved back) leaves the list alone', () {
-      final entries = [_e('2026-11-26', 2400)];
-      expect(identical(TargetHistoryService.reconciled(entries, today), entries),
-          isTrue);
+    test('entries dated after today are dropped, never obeyed (B-pass F2)', () {
+      // The device clock was ahead when the 2027 entry was written.
+      final entries = [_e('2026-11-01', 2400), _e('2027-06-01', 2000)];
+      final changed =
+          TargetHistoryService.reconciled(entries, _e('2026-11-25', 2500));
+      expect(changed.map((e) => (e.from, e.calories)),
+          [('2026-11-01', 2400), ('2026-11-25', 2500)]);
+      // Even with nothing new to record the future entry goes.
+      final same =
+          TargetHistoryService.reconciled(entries, _e('2026-11-25', 2400));
+      expect(same.map((e) => e.from), ['2026-11-01']);
+      expect(identical(same, entries), isFalse);
+      // Only a future entry: today's targets replace it.
+      expect(
+          TargetHistoryService.reconciled(
+              [_e('2027-06-01', 2000)], today).single.from,
+          '2026-11-25');
     });
 
     test('the cap drops the oldest entries', () {
@@ -212,6 +225,21 @@ void main() {
       expect(TargetHistoryService.read(), isEmpty);
       await svc.updateProfile(_pack(2540));
       expect(TargetHistoryService.read().length, 1);
+    });
+
+    test('a zero calorie target is not recorded (B-pass F7)', () async {
+      await svc.updateProfile(_pack(0));
+      expect(TargetHistoryService.read(), isEmpty);
+      await svc.updateProfile(_pack(2540));
+      expect(TargetHistoryService.read().single.calories, 2540);
+    });
+
+    test('a future-dated stored entry no longer blocks recording', () async {
+      await HiveService.instance.userBox
+          .put(TargetHistoryService.boxKey, [_e('2999-01-01', 1800).toMap()]);
+      await svc.updateProfile(_pack(2540));
+      expect(TargetHistoryService.read().map((e) => (e.from, e.calories)),
+          [(today, 2540)]);
     });
 
     test('kill switch: nothing is written', () async {

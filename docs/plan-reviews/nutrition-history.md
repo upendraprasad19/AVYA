@@ -5,7 +5,8 @@ blast_radius: account
 review_rounds: 4
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/ec84affa06db-review.md
 ---
 
 # Plan-review record — Nutrition History (Landing A)
@@ -52,3 +53,9 @@ Explicit withdrawals of the superseded water rows; raw-key pin outcome stated pe
 - `NutritionRepository.mealsForDay` returns an empty list when no session is open.
 - S12's timing bound is 400 ms on the 4-core VPS for 730 days x 4 meals (plan said 150 ms; not
   measured below that on this machine under a test runner).
+
+## B-pass — accepted (0 P0/P1, 2 P2, 6 P3), all fixed in the branch
+`docs/reviews/ec84affa06db-review.md`, one fresh seat on the CI-green head ec84affa. Fixes:
+a failing history put is recorded; future-dated entries are dropped instead of blocking;
+strict day keys; a ten-year floor on the series; a zero calorie target judges nothing; a
+"Low protein" status and a text twin for the heatmap; seven registry cites re-derived.

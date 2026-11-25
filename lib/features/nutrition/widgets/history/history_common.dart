@@ -95,6 +95,8 @@ Color statusColor(DayStatus s) {
   switch (s) {
     case DayStatus.onTarget:
       return AppColors.ok;
+    case DayStatus.lowProtein:
+      return AppColors.accent;
     case DayStatus.under:
       return AppColors.info;
     case DayStatus.over:
@@ -113,6 +115,8 @@ String statusLabel(DayStatus s) {
   switch (s) {
     case DayStatus.onTarget:
       return 'On target';
+    case DayStatus.lowProtein:
+      return 'Low protein';
     case DayStatus.under:
       return 'Under';
     case DayStatus.over:

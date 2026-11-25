@@ -13,6 +13,12 @@
 // each profile put), the day rollover, the post-restore heal, and the History
 // screen on open. Every call is idempotent; a missed one is healed by the
 // next. Local only until Landing B adds the cloud column.
+//
+// Stated limit: PRO state is read at call time (`proStateSnapshot`). A profile
+// write that lands before PRO is known (the restore on a fresh install)
+// records a Keto / Low carb user's Balanced carbs and fat; the next trigger
+// the same day replaces the entry. Calories and protein never depend on the
+// strategy, so day statuses and hit-rates are unaffected either way.
 
 import 'dart:async';
 
@@ -153,9 +159,19 @@ class TargetHistoryService {
     List<TargetEntry> entries,
     TargetEntry today,
   ) {
+    // Entries dated AFTER today describe days that have not happened (the
+    // device clock was ahead when they were written, then corrected). They
+    // are dropped, never obeyed: keeping one would block every recording
+    // until the real date caught up with it.
     if (entries.isNotEmpty && entries.last.from.compareTo(today.from) > 0) {
-      // A later-dated entry exists (clock moved back): leave history alone.
-      return entries;
+      final past = [
+        for (final e in entries)
+          if (e.from.compareTo(today.from) <= 0) e,
+      ];
+      final next = reconciled(past, today);
+      // `next` may be `past` itself (nothing to add): still a change, the
+      // future entries are gone.
+      return next;
     }
     final hasSameDay = entries.isNotEmpty && entries.last.from == today.from;
     final before = hasSameDay
@@ -206,7 +222,9 @@ class TargetHistoryService {
         pro: strategyEnabled && SubscriptionService.instance.proStateSnapshot(),
         now: at,
       );
-      if (t.isFallback) return false;
+      // A zero calorie target is not a target (it would judge every day
+      // "over"); nothing is recorded for it.
+      if (t.isFallback || t.calories <= 0) return false;
 
       final today = TargetEntry(
         from: istDateStr(at),
@@ -221,7 +239,15 @@ class TargetHistoryService {
       final next = reconciled(entries, today);
       if (identical(next, entries)) return false;
       // Not awaited: the value is readable at once; the disk flush follows.
-      unawaited(box.put(boxKey, [for (final e in next) e.toMap()]));
+      unawaited(box
+          .put(boxKey, [for (final e in next) e.toMap()])
+          .catchError((Object e, StackTrace st) {
+        // The disk flush failed (box closing, storage full). The next
+        // trigger records again; this makes the failure visible.
+        debugPrint('[TargetHistoryService.reconcile] put failed: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'target_history_put'));
+      }));
       return true;
     } catch (e, st) {
       debugPrint('[TargetHistoryService.reconcile] $e');

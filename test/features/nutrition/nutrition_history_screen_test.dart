@@ -251,6 +251,16 @@ void main() {
     expect(find.text('In progress'), findsOneWidget);
   });
 
+  testWidgets('the heatmap has a text twin and a Low protein legend entry '
+      '(B-pass F8)', (tester) async {
+    final data = _data(10);
+    expect(heatmapSummary(data.days),
+        'Consistency, 10 days: 1 in progress, 9 on target');
+    await _pump(tester, data);
+    expect(find.bySemanticsLabel(heatmapSummary(data.days)), findsOneWidget);
+    expect(find.text('Low protein'), findsOneWidget);
+  });
+
   testWidgets('the day sheet lists the meals and marks an assumed target',
       (tester) async {
     final day = _data(60).days.first;

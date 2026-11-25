@@ -99,6 +99,17 @@ findings:
       Each finding folded into plan sections 11, 12, 13 and U12; per-round summary in
       docs/plan-reviews/nutrition-history.md. Round 4 converged.
 
+  - id: BP
+    title: "B-pass on ec84affa: 2 P2, 6 P3"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      docs/reviews/ec84affa06db-review.md, each finding with its status. Eight more mutants
+      (N1-N8), all KILLED: N1 future entry obeyed (2 red), N2 no round trip (1), N3 any length
+      (1), N4 no floor (1), N5 zero target judged (1), N6 zero target recorded (1), N7 low
+      protein reads under (1), N8 countedRow accepts any date string (1). Finding 1's
+      catchError is presence only (no harness makes a put fail late).
+
   - id: B
     title: "Landing B: cloud backup of the target history (user_profile.target_history + merge RPC + push + restore)"
     terminal_state: blocked_on_user
@@ -109,4 +120,4 @@ findings:
       a reinstall or a second device; the screen then judges earlier days against the earliest
       target it has and says so.
 
-closed_count: 10
+closed_count: 11

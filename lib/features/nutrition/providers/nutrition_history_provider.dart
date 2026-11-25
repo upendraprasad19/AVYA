@@ -58,6 +58,9 @@ class NutritionHistoryData {
   bool get isEmpty => daysLogged == 0;
 }
 
+/// The longest history the screen builds (ten years).
+const int kHistoryMaxDays = 3653;
+
 /// Pure assembly (tested without Riverpod).
 NutritionHistoryData buildNutritionHistoryData({
   required NutritionHistoryInputs inputs,
@@ -65,18 +68,26 @@ NutritionHistoryData buildNutritionHistoryData({
   required int waterTargetMl,
   required List<WeightEntryData> weights,
 }) {
+  // Never further back than [kHistoryMaxDays]: one garbled row dated decades
+  // ago must not build a series of hundreds of thousands of days.
+  final today = parseDayKey(todayKey);
+  final floor = today == null
+      ? todayKey
+      : dayKeyOf(today.subtract(const Duration(days: kHistoryMaxDays - 1)));
   var fromDay = todayKey;
   for (final candidate in [inputs.onboardingDay, firstMealDay(inputs.rows)]) {
     if (candidate != null && candidate.compareTo(fromDay) < 0) {
       fromDay = candidate;
     }
   }
+  if (fromDay.compareTo(floor) < 0) fromDay = floor;
   final series = buildNutritionDays(inputs.rows, inputs.waterByDay,
       fromDay: fromDay, toDay: todayKey);
   final entries = inputs.targets;
   DayTarget? targetOf(String day) {
     final hit = TargetHistoryService.targetFor(day, entries);
-    if (hit == null) return null;
+    // A zero calorie target judges nothing (every day would read "over").
+    if (hit == null || hit.entry.calories <= 0) return null;
     return (
       calories: hit.entry.calories.toDouble(),
       protein: hit.entry.protein.toDouble(),

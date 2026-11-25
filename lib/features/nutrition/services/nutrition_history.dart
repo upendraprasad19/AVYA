@@ -6,14 +6,19 @@
 // day the rest of the app shows. All calendar maths runs on IST date KEYS
 // parsed as UTC calendar dates, never on a device-local `DateTime`.
 
-/// `yyyy-MM-dd` -> a UTC calendar date, or null.
+/// A strict `yyyy-MM-dd` day key -> a UTC calendar date, or null. Exactly ten
+/// characters, `-` separators, and a real calendar date (`2026-13-45` and
+/// `2026-11-25T10:00` are not day keys): the shape every writer produces and
+/// the only one `totalMacrosForDate` can match.
 DateTime? parseDayKey(String key) {
-  if (key.length < 10) return null;
+  if (key.length != 10 || key[4] != '-' || key[7] != '-') return null;
   final y = int.tryParse(key.substring(0, 4));
   final m = int.tryParse(key.substring(5, 7));
   final d = int.tryParse(key.substring(8, 10));
   if (y == null || m == null || d == null) return null;
-  return DateTime.utc(y, m, d);
+  final date = DateTime.utc(y, m, d);
+  if (date.year != y || date.month != m || date.day != d) return null;
+  return date;
 }
 
 String dayKeyOf(DateTime utcDate) {
@@ -81,12 +86,14 @@ class NutritionDay {
 }
 
 /// [raw] as a counted row, or null: the same predicate as
-/// `totalMacrosForDate` (a Map with a String `date`, not a saved meal). Read
+/// `totalMacrosForDate` (a Map whose `date` is a day key, not a saved meal;
+/// that reader matches a day key by equality, so no other shape can count). Read
 /// its day with [rowDay].
 Map<dynamic, dynamic>? countedRow(Object? raw) {
   if (raw is! Map) return null;
   if (raw['is_saved_meal'] == true) return null;
-  return raw['date'] is String ? raw : null;
+  final date = raw['date'];
+  return date is String && parseDayKey(date) != null ? raw : null;
 }
 
 String rowDay(Map<dynamic, dynamic> countedRow) => countedRow['date'] as String;
@@ -106,7 +113,6 @@ String? firstMealDay(Iterable<Object?> nutritionRows) {
     final row = countedRow(raw);
     if (row == null) continue;
     final day = rowDay(row);
-    if (parseDayKey(day) == null) continue;
     if (row['meal_type'] is! String) continue;
     if (first == null || day.compareTo(first) < 0) first = day;
   }
@@ -193,13 +199,20 @@ enum DayStatus {
   /// A complete day with no known target.
   logged,
   onTarget,
+
+  /// Calories inside the band, protein under its share.
+  lowProtein,
   under,
   over;
 
   /// A full day of eating: the only days averages, hit-rates, runs, patterns
   /// and insights use.
   bool get isComplete =>
-      this == logged || this == onTarget || this == under || this == over;
+      this == logged ||
+      this == onTarget ||
+      this == lowProtein ||
+      this == under ||
+      this == over;
 }
 
 const double kPartialDayShare = 0.25;
@@ -210,7 +223,8 @@ const double kOnTargetCalorieBand = 0.10;
 const double kOnTargetProteinShare = 0.90;
 
 /// On target = calories within 10 % of the target AND protein at least 90 %
-/// of its target (founder rule 2026-11-25).
+/// of its target (founder rule 2026-11-25). Calories in the band with protein
+/// short is [DayStatus.lowProtein], never "under" (that word is about calories).
 DayStatus dayStatusOf(NutritionDay day, DayTarget? target, String todayKey) {
   if (!day.logged) return DayStatus.notLogged;
   if (day.date == todayKey) return DayStatus.inProgress;
@@ -226,7 +240,7 @@ DayStatus dayStatusOf(NutritionDay day, DayTarget? target, String todayKey) {
   if (day.protein >= target.protein * kOnTargetProteinShare) {
     return DayStatus.onTarget;
   }
-  return DayStatus.under;
+  return DayStatus.lowProtein;
 }
 
 /// A day with its target and status.
