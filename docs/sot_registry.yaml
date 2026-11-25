@@ -5361,18 +5361,25 @@ concepts:
           Canonical PR reader. Post-2026-05-16 fix iterates sets[] for
           per-set MAX. Pre-fix returned cumulative SUM for bodyweight_reps
           + timed. Closes-diagnose: 2026-05-16-pr-cumulative-bug
+          2026-11-25 (pr-strength-charts): the per-row value switch lives in
+          lib/features/train/services/exercise_pr_series.dart
+          (exercisePrValueOfRow, shared with the PR series); on an EQUAL
+          value the earlier resolved day wins (exercisePrRowReplaces), so
+          the PR date is the first day the best was achieved. Pinned by
+          test/contracts/load_all_exercise_prs_preservation_test.dart.
       - file: lib/features/home/providers/home_provider.dart
-        line_range: 1097-1112
+        line_range: 1097-1113
         method: AllExercisePRsNotifier.build (wraps loadAllExercisePRs)
         semantic: pass-through
         fields_read: [via loadAllExercisePRs]
+        notes: c2f7d1 — watches restoreCompletedTickProvider (after the '<anon>' return), so a completed restore rebuilds the PR list on every tab. Behavioral test/contracts/pr_list_follows_restore_tick_behavioral_test.dart.
       - file: lib/features/train/widgets/stats_grid.dart
         line_range: 164-210
         method: StatsGrid (home PR tiles)
         semantic: display-only
         fields_read: [bestValue, exerciseName, loggingType]
       - file: lib/features/home/widgets/pr_snapshot.dart
-        line_range: 23-80
+        line_range: 26-205
         method: PrSnapshot (home PR card)
         semantic: display-only
         fields_read: [bestValue, exerciseName, loggingType]
@@ -5434,6 +5441,58 @@ concepts:
       sets[] for per-set MAX. Top-level reps_completed / duration_seconds
       are SUM (Test #6 writer contract) and must NEVER be surfaced as
       "best per-set" value.
+
+  - concept: exercise_pr_series
+    domain: workout
+    behavioral_test_path: test/contracts/exercise_pr_series_writer_to_reader_test.dart
+    description: |
+      The best value per workout day of every exercise that has a PR: the
+      data behind the sparklines on the Home PR tiles and the see-all list
+      and behind the trend sheet (plan docs/plans/pr-strength-charts.md).
+      DERIVED, no writer of its own and nothing stored: one read of the
+      exlog rows, valued by the SAME per-row function as the PR
+      (exercisePrValueOfRow) and filtered to each PR's own unit, so a chart
+      never peaks above its PR and peaks AT it on the PR's day whenever the
+      PR's row has a resolvable day.
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 1-9999
+        method: logExercise
+        notes: the exercise log rows; this concept adds no write
+    readers:
+      - file: lib/features/train/services/exercise_pr_series.dart
+        line_range: 1-9999
+        method: exercisePrValueOfRow / cardioExercisesWithKm / exercisePrDayOfRow / exercisePrRowReplaces / buildExercisePrSeries
+        semantic: per-set
+        fields_read: [exercise_name, logging_type, date, created_at, sets, weight_kg]
+        notes: Pure. Aggregates through WorkoutReadService (bestPerSetWeight / bestPerSetReps / bestPerSetDuration / aggregateDistanceKm / istDateForExlogRow). Per day the max; rows with no resolvable day skipped; reps = the most reps at the day's heaviest weight, only with per-set detail.
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 1-9999
+        method: loadAllExercisePrSeries
+        semantic: pass-through
+        fields_read: [via buildExercisePrSeries]
+      - file: lib/features/home/providers/pr_series_provider.dart
+        line_range: 1-9999
+        method: exercisePrSeriesProvider
+        semantic: pass-through
+        fields_read: [via loadAllExercisePrSeries]
+        notes: Takes allExercisePRsProvider as its INPUT, so it recomputes exactly when the PR list does. Behavioral test/contracts/exercise_pr_series_provider_behavioral_test.dart.
+      - file: lib/features/home/widgets/pr_snapshot.dart
+        line_range: 1-9999
+        method: PrSnapshot tiles and list rows (prSparkValues)
+        semantic: display-only
+        fields_read: [points.value]
+      - file: lib/features/home/widgets/pr_trend_sheet.dart
+        line_range: 1-9999
+        method: PrTrendSheet (prWindowPoints / prMarkerIndex / prPointLabel / prJourneyLine)
+        semantic: display-only
+        fields_read: [points.date, points.value, points.reps]
+    regression_test: test/features/home/pr_trend_widgets_test.dart
+    provider_invalidation_set: [allExercisePRsProvider]
+    class_constraints: |
+      One value rule for the PR and its chart: never value a row for the
+      series with anything but exercisePrValueOfRow. A sparkline needs two
+      logged days. The series is in the PR's unit only.
 
   - concept: water_logs
     domain: nutrition
@@ -6166,7 +6225,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 336-357
+        line_range: 338-359
         method: reckonStreakDecayAndPersist
         semantic: flag-check
         fields_read: [restoreSettledForCurrentUser]
@@ -6244,13 +6303,13 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 421-598
+        line_range: 423-600
         method: _calculateStreak
         semantic: flag-check
         fields_read: [schedule_<date> presence]
         notes: a rowless day before today ends the chain (no freeze spent); today is tolerated.
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 636-684
+        line_range: 638-686
         method: completionRateOverWindow
         semantic: flag-check
         fields_read: [schedule_<date> presence]
@@ -20334,7 +20393,7 @@ concepts:
         semantic: count
         fields_read: [via countBeatenPrs]
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 1916-1923
+        line_range: 1893-1900
         method: getAllExerciseLogKeysForLifetimeSum
         semantic: aggregated
         fields_read: [volume_kg]

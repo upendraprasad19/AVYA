@@ -1102,6 +1102,7 @@ class AllExercisePRsNotifier extends Notifier<List<ExercisePR>> {
     // A raw box read throws there; serve the empty value, and the token
     // flipping back re-runs this with the real data.
     if (token == '<anon>') return <ExercisePR>[];
+    ref.watch(restoreCompletedTickProvider); // c2f7d1 — a restore writes exlog rows
     return WorkoutRepository.instance.loadAllExercisePRs();
   }
 }
