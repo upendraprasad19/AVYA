@@ -260,9 +260,11 @@ void main() {
       expect(phaseRoman(12), 'XII');
     });
 
-    test('out-of-table falls back to the bare number rather than throwing',
+    // OI-348 Landing 3a: INVERTED. Phases do not stop at XII, so 13 is
+    // XIII (this pinned '13' before). 0 still falls back to digits.
+    test('past XII keeps counting in numerals; 0 falls back to digits',
         () {
-      expect(phaseRoman(13), '13');
+      expect(phaseRoman(13), 'XIII');
       expect(phaseRoman(0), '0');
     });
   });

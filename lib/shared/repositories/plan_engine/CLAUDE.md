@@ -48,7 +48,7 @@ Phase {
 }
 ```
 
-**FREE:** Phase 1 only (4 weeks). **PRO:** Generate new phases 2-12.
+**FREE:** Phase 1 only (4 weeks). **PRO:** Generate every later phase, with no end point (13+ are named "Deployment N" in the blob).
 
 ## V4 Pipeline (MuscleSlot Architecture)
 

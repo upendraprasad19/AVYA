@@ -20,7 +20,9 @@ void main() {
     ).readAsStringSync();
 
     // Find the _ensureLocalUser method body
-    final ensureStart = source.indexOf('Future<void> _ensureLocalUser(');
+    // OI-348 Landing 3a: the body moved into _ensureLocalUserBody (the
+    // timed wrapper _ensureLocalUser now runs it); anchor there.
+    final ensureStart = source.indexOf('Future<void> _ensureLocalUserBody(');
     expect(ensureStart, isNot(-1),
         reason: '_ensureLocalUser must exist on AuthNotifier');
 
@@ -33,9 +35,12 @@ void main() {
     // stamp block (Part A) added ~18 lines before the ErrorTelemetry
     // call, pushing it past the old 10000-char cutoff (measured 10213
     // bytes from method start to the ErrorTelemetry line).
+    // OI-348 Landing 3a (2026-11-25) — bumped to 14000: step-timing laps
+    // added lines (measured 10792 bytes from _ensureLocalUserBody to the
+    // first recordNonFatal, 208 short of the old cap).
     final body = source.substring(
       ensureStart,
-      (ensureStart + 11000).clamp(0, source.length),
+      (ensureStart + 14000).clamp(0, source.length),
     );
 
     // Must route through the canonical telemetry sink. ErrorTelemetry

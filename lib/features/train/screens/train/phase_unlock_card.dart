@@ -80,7 +80,7 @@ extension _PhaseUnlockCard on _TrainScreenState {
                   },
                   onFree: () => showPaywallSheet(
                     context,
-                    feature: 'Phases 2-12',
+                    feature: PaywallSheet.phaseProgressionFeature,
                   ),
                 );
               },

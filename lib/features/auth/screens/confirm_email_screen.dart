@@ -126,10 +126,16 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
       );
     }
 
-    return _buildLoadingState(context);
+    return _buildLoadingState(context, emailVerified: authState.emailVerified);
   }
 
-  Widget _buildLoadingState(BuildContext context) {
+  /// Loading text before the link is checked: "Confirming your account...".
+  /// Once the link is accepted and the account is loading (OI-348 Landing
+  /// 3a, B6): [verifiedLoadingText].
+  static const String verifiedLoadingText =
+      'Email confirmed. Setting up your account...';
+
+  Widget _buildLoadingState(BuildContext context, {bool emailVerified = false}) {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
@@ -153,7 +159,9 @@ class _ConfirmEmailScreenState extends ConsumerState<ConfirmEmailScreen> {
                 ),
                 const SizedBox(height: AppSpacing.stackM),
                 Text(
-                  'Confirming your account...',
+                  emailVerified
+                      ? verifiedLoadingText
+                      : 'Confirming your account...',
                   textAlign: TextAlign.center,
                   style: AppTypography.body.copyWith(color: AppColors.textDim),
                 ),

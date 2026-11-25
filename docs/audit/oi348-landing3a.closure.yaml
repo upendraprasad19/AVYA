@@ -1,0 +1,68 @@
+# Closure ledger - oi348-landing3a (OI-348 walk, Landing 3a: P1 "all phases" + numerals, B6 email-confirm progress + timing).
+# Gate 40. One terminal_state per unit; no `deferred:` key.
+# Plan: docs/plans/oi348-landing3a.md (2 review rounds, converged). `oi348-landing3a@branch` is the in-branch commit form.
+
+batch: oi348-landing3a
+plan_review_record: docs/plan-reviews/oi348-landing3a.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-25-confirm-email-no-progress-918045.md
+  - docs/diagnoses/2026-11-25-phase-numeral-past-xii-a2f144.md
+total_findings: 10
+closed_count: 10
+
+findings:
+  - id: B6-STAGE
+    title: "Confirm screen says 'Email confirmed. Setting up your account...' once the link is verified; a spent link is never called invalid"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3a@branch"
+    verification: "confirm_email_verified_stage_behavioral_test.dart (10, real confirmEmail incl. the real 40 s ceiling under fakeAsync and a link check finishing after it), confirm_email_error_mapping_test (+6), confirm_email_screen_test (+2) green; mutants M1-M5 and B-pass M15-M17 red (diagnose 918045)"
+
+  - id: B6-TIMING
+    title: "One auth_ensure_timing event per sign-in / confirm: outcome, total and per-step laps incl. every hydrateFromCloud cloud call"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3a@branch"
+    verification: "step_timings_test (3), auth_ensure_timing_runner_test (4, behavioural), auth_ensure_timing_presence_test (4, wiring presence) green; mutants M6, M7 red"
+
+  - id: B6-SPEEDUP
+    title: "Make the post-verify account load faster"
+    terminal_state: upstream_blocked
+    blocker: "Which step is slow is unknown until auth_ensure_timing reports from a phone; the app with the timing reaches phones only in the next AAB (web gets it on merge)."
+    reopen_when: "the first auth_ensure_timing row with outcome=ok from a phone (or a slow web sign-up) exists in client_errors"
+
+  - id: P1-NUMERALS
+    title: "One phase numeral converter; labels read XIII, XIV, ...; preview parse accepts any canonical numeral"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3a@branch"
+    verification: "roman_numeral_test (5), phase_roman_single_source_test (5, incl. the preview parse capped at XCIX), hold_week_labels_test (inverted 13 -> XIII) green; mutants M8, M9, M14 and B-pass M18, M19 red (diagnose a2f144)"
+
+  - id: P1-JOURNEY
+    title: "Profile journey card past Phase XII: the 12-phase block holding the current phase; the name cycles"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3a@branch"
+    verification: "journey_phase_dots_test (10, widget pumps at 1/12/13/24/25 + wiring pin) green; mutants M12, M13 red"
+
+  - id: P1-COPY
+    title: "Copy says all phases, no end point: paywall token Phase Progression (one constant), benefit lines, phase variant, Phase 2 card, coach manual, comments and docs"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3a@branch"
+    verification: "phase_copy_no_end_point_test (3), the 4 repointed pins, Deno captain_manual_limits_test (+1) green; deno test supabase/functions/ 1966 passed; mutants M10, M11 red"
+
+  - id: P1-EF-DEPLOY
+    title: "Redeploy ai-proxy and weekly-report so the coach manual's new line is live"
+    terminal_state: blocked_on_user
+    reason: "Each Edge Function deploy to prod needs its own founder go (CLAUDE.md section 4.3); done from main after the merge with the edge-function-deploy-rollback skill."
+
+  - id: P1-WARD-PHASE-DOTS
+    title: "ward_phase_dots.dart describes a twelve-phase Journey card (totalPhases = 12)"
+    terminal_state: verified_clean
+    evidence: "Exported from wardroom.dart but used nowhere in lib/ (grep WardPhaseDots 2026-11-25); the live journey card is JourneyPhaseDots."
+
+  - id: P1-PREVIEW-CARD-NAME
+    title: "phase2_preview_card._phaseDisplayName falls back to 'Phase n' past 12"
+    terminal_state: verified_clean
+    evidence: "The card is shown only for Phase II/III (graduation and the free preview); a phase past 12 never reaches it."
+
+  - id: P1-SIGNIN-MANIFESTO
+    title: "sign_in_screen 'Twelve months. We change the man.'"
+    terminal_state: verified_clean
+    evidence: "Brand time copy (a year of training), not a statement that phases end at 12; unchanged."

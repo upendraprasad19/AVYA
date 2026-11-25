@@ -3,7 +3,7 @@
 // A free user who keeps training Phase I takes "hold weeks" (H1, H2, ...). The app writes each hold day as a
 // `schedule_<date>` row with `week: 4 + n`, and the push sends it to `scheduled_workouts.week_number`
 // (lib/core/services/sync/sync_workout.dart, `'week_number': entry['week']`). The cloud has no `is_hold` column, so a
-// row with `week_number > 4` in a Phase-I user's schedule is the only server-side mark of a hold. Phases 2-12 write
+// row with `week_number > 4` in a Phase-I user's schedule is the only server-side mark of a hold. Phases II onward write
 // their own weeks 1-4 (measured live 2026-11-16), and the phase filter below keeps any future numbering out.
 //
 // Two texts read it: the Sunday Brief push (`weekly-recap-ready`) and the weekly report prompt (`weekly-report`).

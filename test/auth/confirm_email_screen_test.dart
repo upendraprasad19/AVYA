@@ -80,6 +80,7 @@ class _AlreadyAuthenticatedAuthNotifier extends AuthNotifier {
 }
 
 void main() {
+  verifiedStageTests();
   testWidgets(
     'a missing token_hash shows the invalid-link message without calling confirmEmail',
     (tester) async {
@@ -426,4 +427,41 @@ void main() {
       expect(find.text('SIGN-IN-SCREEN-STUB'), findsOneWidget);
     },
   );
+}
+
+/// OI-348 Landing 3a (B6): a notifier parked in a given loading state.
+class _ParkedAuthNotifier extends AuthNotifier {
+  _ParkedAuthNotifier(this.parked);
+  final AuthState2 parked;
+
+  @override
+  AuthState2 build() {
+    ref.onDispose(cancelOAuthWatch);
+    return parked;
+  }
+
+  @override
+  Future<void> confirmEmail(String tokenHash) async {}
+}
+
+void verifiedStageTests() {
+  for (final (verified, text) in [
+    (true, 'Email confirmed. Setting up your account...'),
+    (false, 'Confirming your account...'),
+  ]) {
+    testWidgets('loading, emailVerified=$verified shows "$text" and keeps '
+        'GO TO SIGN IN', (tester) async {
+      final notifier = _ParkedAuthNotifier(const AuthState2()
+          .copyWith(status: AuthStatus.loading, emailVerified: verified));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [authNotifierProvider.overrideWith(() => notifier)],
+          child: const MaterialApp(home: ConfirmEmailScreen(tokenHash: 'h')),
+        ),
+      );
+      await tester.pump();
+      expect(find.text(text), findsOneWidget);
+      expect(find.text('GO TO SIGN IN'), findsOneWidget);
+    });
+  }
 }

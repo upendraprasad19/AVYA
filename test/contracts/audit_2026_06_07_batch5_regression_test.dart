@@ -108,7 +108,7 @@ void main() {
 
     test('F25: plan-expired paywall passes the display token, not the gate key', () {
       final s = _read('lib/features/train/widgets/plan_expired_card.dart');
-      expect(s.contains("feature: 'Phases 2-12'"), isTrue,
+      expect(s.contains('feature: PaywallSheet.phaseProgressionFeature'), isTrue,
           reason: 'F25: PaywallSheet switches on the display token; the gate key fell to the generic subtitle');
       expect(s.contains('featurePhases2To12'), isFalse,
           reason: 'F25: must not pass the gate KEY as the paywall feature arg');
