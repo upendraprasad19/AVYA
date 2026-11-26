@@ -16,7 +16,6 @@ import 'train_provider.dart';
 /// pre-log data.
 final List<ProviderOrFamily> workoutSurfaceProviders = [
   currentPlanProvider,
-  workoutStatsProvider,
   calendarWeekProvider,
   streakProvider,
   todayWorkoutProvider,

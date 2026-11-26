@@ -69,12 +69,11 @@ class DaySwapController {
     _ref.invalidate(daySwapWeekProvider);
     _ref.invalidate(daySwapAllowanceProvider);
     if (result is! DaySwapDone) return;
-    // docs/architecture/sync.md mandatory batch — the same six as
-    // tool_dispatcher._invalidateWorkoutProviders. Each is independently
+    // docs/architecture/sync.md mandatory batch (Train's own key-lift
+    // provider left it with its widget, 83e031). Each is independently
     // guarded so one failure cannot stop the rest.
     final batch = <(String, void Function())>[
       ('currentPlanProvider', () => _ref.invalidate(currentPlanProvider)),
-      ('workoutStatsProvider', () => _ref.invalidate(workoutStatsProvider)),
       ('calendarWeekProvider', () => _ref.invalidate(calendarWeekProvider)),
       ('streakProvider', () => _ref.invalidate(streakProvider)),
       ('todayWorkoutProvider', () => _ref.invalidate(todayWorkoutProvider)),

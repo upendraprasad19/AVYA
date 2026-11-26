@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Writers: workout_write_service._rescanPrFor (after every set commit),
 ///          edit_workout_log_sheet.EditWorkoutLogSheet.save (rescans on edit)
 /// Readers: home_provider.allExercisePRsProvider,
-///          train/widgets/stats_grid.StatsGrid (home PR tiles),
+///          home/widgets/pr_snapshot.PrSnapshot (Home AND Train, 83e031),
 ///          ai_coach_repository._getPersonalRecords
 ///
 /// PR comparison MUST be strict > (not >=). allExercisePRsProvider is the
@@ -94,15 +94,16 @@ void main() {
               '(coach can congratulate user on new PRs)');
     });
 
-    test('stats_grid.dart exists as PR display consumer', () {
-      final sf = File('lib/features/train/widgets/stats_grid.dart');
-      if (!sf.existsSync()) {
-        // May be at a different path
-        final sf2 =
-            File('lib/features/home/widgets/stats_grid.dart');
-        if (!sf2.existsSync()) return;
-      }
-      // Just assert it exists — detailed tests in receipt_per_set_chips_test.dart
+    test('Home and Train render the ONE PR card, read from allExercisePRsProvider (83e031)', () {
+      final card =
+          File('lib/features/home/widgets/pr_snapshot.dart').readAsStringSync();
+      expect(card, contains('ref.watch(allExercisePRsProvider)'));
+      final train = File('lib/features/train/screens/train/screen.dart')
+          .readAsStringSync();
+      expect(train, contains('PrSnapshot(seeAll: PrSeeAll.button)'));
+      expect(File('lib/features/train/widgets/stats_grid.dart').existsSync(),
+          isFalse,
+          reason: "Train's own PR grid (a second PR reader) is gone");
     });
 
     test('forbidden: is_pr >= pattern absent from PR detection code', () {

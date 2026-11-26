@@ -476,7 +476,6 @@ class _GenerateNextPhaseButtonState
       ref.invalidate(currentPlanProvider);
       ref.invalidate(todayWorkoutProvider);
       ref.invalidate(calendarWeekProvider);
-      ref.invalidate(workoutStatsProvider);
       ref.invalidate(streakProvider);
       ref.invalidate(allExercisePRsProvider);
       ref.invalidate(aiInsightProvider);

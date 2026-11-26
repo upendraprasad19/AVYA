@@ -72,7 +72,6 @@ const Map<String, int> kExpected = {
   'lib/features/train/screens/train/phase_unlock_card.dart': 3,
   'lib/features/train/widgets/phase2_preview_card.dart': 2,
   'lib/features/train/widgets/plan_expired_card.dart': 1,
-  'lib/features/train/widgets/stats_grid.dart': 1,
   'lib/shared/services/pro_phase_advance.dart': 2,
   'lib/shared/widgets/paywall_sheet.dart': 18,
   'lib/shared/widgets/paywall_play_body.dart': 8,

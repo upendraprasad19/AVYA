@@ -12,7 +12,7 @@
 //      sync_profile.dart:165 already accepts it).
 //   4. Canonical provider invalidation batch after successful unlock:
 //      currentPlanProvider, todayWorkoutProvider, calendarWeekProvider,
-//      workoutStatsProvider, streakProvider, allExercisePRsProvider,
+//      streakProvider, allExercisePRsProvider,
 //      aiInsightProvider, graduationStatsProvider.
 //   5. Success snackbar shown before navigation.
 //   6. F-NEW root cause fix: UserRepository.updateProgress fires
@@ -188,7 +188,6 @@ void main() {
         'currentPlanProvider',
         'todayWorkoutProvider',
         'calendarWeekProvider',
-        'workoutStatsProvider',
         'streakProvider',
         'allExercisePRsProvider',
         'aiInsightProvider',

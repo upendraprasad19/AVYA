@@ -11,6 +11,11 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 import 'pr_trend_sheet.dart';
 
+/// How the full PR list is opened (83e031): Home's small `SEE ALL N →` link,
+/// shown past 4, or Train's full-width `VIEW ALL EXERCISE PRS` button, shown
+/// whenever there is at least one PR. Both open the same sheet.
+enum PrSeeAll { link, button }
+
 /// Personal Records 2×2 grid — matches the handoff
 /// (`design_handoff_wardroom/src/screens/daily.jsx` lines 229–251).
 ///
@@ -23,8 +28,13 @@ import 'pr_trend_sheet.dart';
 /// Each tile and each list row carries a sparkline of the exercise's best
 /// value per workout day (`exercisePrSeriesProvider`) once it has two days of
 /// history, and opens the full trend sheet on tap.
+///
+/// ONE card for Home and Train (83e031): Train passes
+/// `seeAll: PrSeeAll.button`; everything else is identical.
 class PrSnapshot extends ConsumerWidget {
-  const PrSnapshot({super.key});
+  const PrSnapshot({super.key, this.seeAll = PrSeeAll.link});
+
+  final PrSeeAll seeAll;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -89,7 +99,17 @@ class PrSnapshot extends ConsumerWidget {
             ],
           );
         }),
-        if (hasMore) ...[
+        if (seeAll == PrSeeAll.button) ...[
+          const SizedBox(height: 10),
+          WardButton(
+            key: const Key('pr_view_all_button'),
+            label: 'VIEW ALL EXERCISE PRS',
+            onPressed: () => _showAllPRsSheet(context, prs, seriesByName),
+            variant: WardButtonVariant.outline,
+            trailing: const Icon(Icons.arrow_forward,
+                size: 14, color: AppColors.accent),
+          ),
+        ] else if (hasMore) ...[
           const SizedBox(height: 8),
           GestureDetector(
             onTap: () => _showAllPRsSheet(context, prs, seriesByName),
