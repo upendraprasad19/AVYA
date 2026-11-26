@@ -3,10 +3,9 @@
 -- Rollback strategy: inline   -- commented block at the end of the file restores migration 154's objects exactly; needs its own explicit go (CLAUDE.md 4.3)
 -- Linked diagnose-doc: f3c9a1
 --
--- DRAFT (supabase/migrations/CLAUDE.md, "Review a migration as a DRAFT outside this directory"). This file
--- becomes supabase/migrations/NNN_progress_photos_free_weekly_cap.sql only after the founder's go: the number
--- is reserved with scripts/mint_migration.sh, the file is copied (cmp identical), applied, and committed with
--- the ledger entry and the schema snapshot. Plan: docs/plans/oi348-landing3c.md (OI-348 Landing 3c, P2).
+-- OI-348 Landing 3c (P2), plan docs/plans/oi348-landing3c.md. Reviewed as a draft outside the migrations
+-- directory (supabase/migrations/CLAUDE.md) and copied here byte-identical at apply, with its number reserved
+-- by scripts/mint_migration.sh; the draft path was test/sql/progress_photos_free_weekly_cap_draft.sql.
 --
 -- WHAT IT DOES. ONE statement (a DO block), so every change commits or rolls back together.
 --
@@ -32,15 +31,19 @@
 --       154's subscription conjunct is now the trigger's PRO branch). Postgres applies RLS WITH CHECK after
 --       BEFORE row triggers, so the trigger's refusal is the one a client sees.
 --   (4) public.enforce_progress_photo_pro() (the progress_photos row door of migration 154; trigger
---       trg_progress_photo_pro kept, NOT re-created): NEW.created_at is set by the server: the created_at of
+--       trg_progress_photo_pro kept, NOT re-created): when the request's JWT role is anon or authenticated
+--       and NEW.user_id is not the caller, it returns at once and RLS WITH CHECK refuses the row: no lookup,
+--       no lock, no answer about another user's subscription or week (the storage door's guard; Hermes A1:
+--       as a definer it could otherwise read another user's state). Then NEW.created_at is set by the server: the created_at of
 --       the caller's own Storage object at NEW.storage_path when there is one, else now(). The photo's week
 --       is therefore its OBJECT's week at both doors (an upload at Sunday 23:59:50 whose row lands at Monday
 --       00:00:05 belongs to Sunday's week at both). PRO passes; otherwise the same lock key, and any row of
 --       the user whose created_at falls in the same IST week refuses with P0001 progress_photo_pro_required
 --       (the literal shipped clients already read).
 --   (5) public.keep_progress_photo_created_at() + trigger trg_progress_photo_created_at_keep BEFORE UPDATE
---       on public.progress_photos: an UPDATE cannot move created_at (the owner's UPDATE policy of migration
---       022 would otherwise let a free user backdate this week's row and free the row door).
+--       on public.progress_photos: an UPDATE cannot move created_at or storage_path (the owner's UPDATE policy
+--       of migration 022 would otherwise let a free user backdate this week's row, or repoint an old row at
+--       this week's object, and free the row door; no client updates either column).
 --
 -- SECURITY DEFINER (the three trigger functions; a change from migration 154's INVOKER, and from diagnose
 -- d8f2a6's "no definer" choice, which was about a callable predicate helper): the insert that fires the
@@ -168,6 +171,9 @@ BEGIN
   DECLARE
     v_week timestamptz;
   BEGIN
+    IF auth.role() IN ('anon', 'authenticated') AND NEW.user_id IS DISTINCT FROM auth.uid() THEN
+      RETURN NEW;
+    END IF;
     NEW.created_at := COALESCE(
       (SELECT o.created_at FROM storage.objects o
         WHERE o.bucket_id = 'progress-photos'
@@ -203,6 +209,7 @@ BEGIN
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
   BEGIN
     NEW.created_at := OLD.created_at;
+    NEW.storage_path := OLD.storage_path;
     RETURN NEW;
   END;
   $fn$;
@@ -220,7 +227,8 @@ $mig$;
 -- migration 154's live state: the Storage INSERT policy with its subscription conjunct, the row trigger
 -- function as SECURITY INVOKER with 154's body and its live ACL before this migration (read 2026-11-26:
 -- {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}),
--- no storage trigger, no UPDATE trigger. Same lock footprint; the rehearsal runs this block too.
+-- no storage trigger, no UPDATE trigger. Same lock footprint. Proven by the second rehearsal (forward,
+-- this block, then test/sql/progress_photos_free_weekly_cap_rollback_verify.sql in one aborting statement).
 --
 -- DO $rb$
 -- BEGIN

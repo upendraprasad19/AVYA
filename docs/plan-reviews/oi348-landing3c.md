@@ -7,7 +7,7 @@ ground_truth_verified: true
 verdict: converged
 bpass: accepted
 bpass_review: docs/reviews/oi348-landing3c-bpass.md
-hermes: pending
+hermes: accepted
 hermes_report: docs/audit/2026-11-26-hermes-oi348-landing3c.md
 ---
 
@@ -56,4 +56,4 @@ all accepted and fixed: the tier (catastrophic by content, so a Hermes pass is o
 10 s bounds on the cleanup and the pre-check, the row door's bound as `168 hours`, live-verify W16.
 
 ## Hermes
-(pending: owed before the merge; seats run as Sonnet per the founder's 2026-10-07 rule.)
+`docs/audit/2026-11-26-hermes-oi348-landing3c.md`: four Sonnet seats (the founder's 2026-10-07 rule), nine lenses, on `e77c1933`. 0 P0, 0 P1, 6 P2, 7 P3, all terminal: the row door's missing caller guard (a DEFINER oracle about another user), `storage_path` frozen on UPDATE, the rollback rehearsed, the apply runbook completed, one "did the server answer" rule for every failed write, debug-only logs; one item filed on OI-316.

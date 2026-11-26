@@ -86,6 +86,9 @@ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_t
 DECLARE
   v_week timestamptz;
 BEGIN
+  IF auth.role() IN ('anon', 'authenticated') AND NEW.user_id IS DISTINCT FROM auth.uid() THEN
+    RETURN NEW;
+  END IF;
   NEW.created_at := COALESCE(
     (SELECT o.created_at FROM storage.objects o
       WHERE o.bucket_id = 'progress-photos'
@@ -120,6 +123,7 @@ CREATE OR REPLACE FUNCTION public.keep_progress_photo_created_at()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $fn$
 BEGIN
   NEW.created_at := OLD.created_at;
+  NEW.storage_path := OLD.storage_path;
   RETURN NEW;
 END;
 $fn$;''';
@@ -213,6 +217,13 @@ const List<(String, String, String)> _mutants = [
   ('row created_at may adopt another user\'s object', "          AND o.name LIKE NEW.user_id::text || '/%'),\n", '),\n'),
   ('row week upper bound dropped', "        AND p.created_at < v_week + interval '168 hours'\n", ''),
   ('UPDATE guard dropped', "    NEW.created_at := OLD.created_at;\n", ''),
+  ('UPDATE guard lets storage_path move (Hermes A2)', "    NEW.storage_path := OLD.storage_path;\n", ''),
+  ('row door answers for another user (Hermes A1)',
+      "    IF auth.role() IN ('anon', 'authenticated') AND NEW.user_id IS DISTINCT FROM auth.uid() THEN\n      RETURN NEW;\n    END IF;\n    NEW.created_at := COALESCE(",
+      "    NEW.created_at := COALESCE("),
+  ('row-door guard without the role test (service_role would skip the cap)',
+      "    IF auth.role() IN ('anon', 'authenticated') AND NEW.user_id IS DISTINCT FROM auth.uid() THEN",
+      "    IF NEW.user_id IS DISTINCT FROM auth.uid() THEN"),
   ('policy keeps the 154 subscription conjunct',
       "        AND (storage.foldername(name))[1] = (SELECT auth.uid())::text\n      );\n  ELSE",
       "        AND (storage.foldername(name))[1] = (SELECT auth.uid())::text\n        AND EXISTS (SELECT 1 FROM public.subscriptions s WHERE s.user_id = (SELECT auth.uid()))\n      );\n  ELSE"),

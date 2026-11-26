@@ -95,6 +95,33 @@ void main() {
         reason: 'an insert that committed and lost its response keeps its object');
   });
 
+  test('an upload that failed without an answer hands its path to the sweep '
+      '(Hermes C1): the path is noted BEFORE the upload, used only when no '
+      'object was confirmed', () {
+    final attempt = capture.indexOf('attemptedPath = storagePath;');
+    expect(attempt, greaterThan(-1));
+    expect(capture.indexOf('.uploadBinary('), greaterThan(attempt));
+    final tail = capture.substring(capture.lastIndexOf('} catch (e) {'));
+    expect(
+        tail.contains('} else if (attemptedPath != null) {\n'
+            '        noteFailedUpload(attemptedPath, e);'),
+        isTrue);
+  });
+
+  test('delete hands a failed object removal to removeDeletedPhotoObject '
+      '(Hermes C2/D1), whose behaviour is in progress_photo_free_slot_test', () {
+    final at = src.indexOf('Future<bool> delete(String id)');
+    final body = src.substring(at, src.indexOf('Future<void> removeDeletedPhotoObject(', at));
+    expect(body.contains('await removeDeletedPhotoObject(path);'), isTrue);
+    expect(body.contains('.remove([path])'), isFalse);
+  });
+
+  test('every log line in the repository is debug-only (rule 17; Hermes D2): '
+      'paths start with the user id', () {
+    expect(RegExp(r'debugPrint\(').allMatches(src).length, 1);
+    expect(src.contains('if (kDebugMode) debugPrint(message);'), isTrue);
+  });
+
   test('the free-slot pre-check is bounded: a hung listing lets the server '
       'decide instead of holding the Add spinner (PRESENCE only: '
       'ensureFreeSlotOpen needs a signed-in user)', () {

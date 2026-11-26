@@ -105,6 +105,40 @@ const Duration progressPhotoOwnOrphanMinAge = Duration(minutes: 2);
 /// decide, a cleanup leaves the path to the sweep.
 const Duration progressPhotoStorageCallTimeout = Duration(seconds: 10);
 
+final RegExp _httpStatusOnly = RegExp(r'^\d{3}$');
+
+/// Did the server ANSWER [error] with a refusal, so the write it belongs to
+/// certainly did not land? Pure (OI-348 Landing 3c, Hermes C1/C3).
+/// - `PostgrestException`: a SQLSTATE or PGRST code is PostgREST's answer
+///   (the statement failed). A bare HTTP status is a body postgrest-dart
+///   could not read (`postgrest_builder.dart`, a gateway page): only a 4xx
+///   counts, a 5xx (502 / 504) may still have committed behind the gateway.
+/// - `StorageException`: a numeric 4xx `statusCode` is Storage's answer; a
+///   5xx, or the exception's TYPE NAME (`ClientException`: storage_client's
+///   `fetch.dart` uses it for a transport failure), is not.
+/// - Anything else (timeout, socket) is not an answer.
+/// Not an answer = the outcome is unknown: the caller leaves the path to the
+/// 2-minute sweep, which reads the row first.
+bool progressPhotoServerRefused(Object error) {
+  if (error is PostgrestException) {
+    final code = error.code;
+    if (code == null || code.isEmpty) return false;
+    if (_httpStatusOnly.hasMatch(code)) return code.startsWith('4');
+    return true;
+  }
+  if (error is StorageException) {
+    final code = error.statusCode ?? '';
+    return _httpStatusOnly.hasMatch(code) && code.startsWith('4');
+  }
+  return false;
+}
+
+/// Logs only in a debug build: these lines carry storage paths, which start
+/// with the user id (CLAUDE.md 4.4 rule 17; Hermes D2).
+void _log(String message) {
+  if (kDebugMode) debugPrint(message);
+}
+
 /// The `taken_at` value sent to the `timestamptz` column: the instant in UTC,
 /// with an explicit `Z`. (OI-322: `toIso8601String()` on a local time carries no
 /// offset and Postgres read it as UTC, storing an IST user's value 5.5 h late.)
@@ -295,13 +329,14 @@ class ProgressPhotoRepository {
 
     final userId = _s.currentUser?.id;
     if (userId == null) {
-      debugPrint('[ProgressPhotoRepository.capture] no user — abort');
+      _log('[ProgressPhotoRepository.capture] no user — abort');
       return null;
     }
 
     // `uploadStage` is false until the picker has returned a file: a cancelled
     // pick (null) and a picker error are never a server refusal.
     var uploadStage = false;
+    String? attemptedPath;
     String? uploadedPath;
     try {
       final picker = ImagePicker();
@@ -322,6 +357,7 @@ class ProgressPhotoRepository {
 
       // Bytes, not dart:io File: a web pick's path is a blob URL that File
       // cannot open (web uploads failed before OI-348 Landing 3c).
+      attemptedPath = storagePath;
       await _s.client.storage.from(_bucket).uploadBinary(
             storagePath,
             bytes,
@@ -344,9 +380,11 @@ class ProgressPhotoRepository {
       }).select('id').single();
       return row['id'] as String?;
     } catch (e) {
-      debugPrint('[ProgressPhotoRepository.capture] $e');
+      _log('[ProgressPhotoRepository.capture] $e');
       if (uploadedPath != null) {
         await cleanupAfterFailedInsert(userId, uploadedPath, e);
+      } else if (attemptedPath != null) {
+        noteFailedUpload(attemptedPath, e);
       }
       if (isProgressPhotoProRefusal(
         e,
@@ -360,21 +398,32 @@ class ProgressPhotoRepository {
   }
 
   /// The object of THIS capture was uploaded and its row insert then failed
-  /// with [error]. A [PostgrestException] is the server's answer, so the
-  /// insert did not commit: clean up now ([removeIfNoRow]). Any other failure
-  /// (no network, a timeout) may still be running on the server, where the
-  /// row can commit AFTER a read that found none, and removing the object
-  /// then would leave a row with no picture: the path goes to the 2-minute
-  /// sweep ([ownFailedCleanups]), which reads the row again first. Until
-  /// then the object holds the free slot (the server counts it too).
+  /// with [error]. A server answer ([progressPhotoServerRefused]) means the
+  /// insert did not commit: clean up now ([removeIfNoRow]). Anything else
+  /// (no network, a timeout, a gateway 5xx) may still be running on the
+  /// server, where the row can commit AFTER a read that found none, and
+  /// removing the object then would leave a row with no picture: the path
+  /// goes to the 2-minute sweep ([ownFailedCleanups]), which reads the row
+  /// again first. Until then the object holds the free slot (the server
+  /// counts it too).
   @visibleForTesting
   Future<void> cleanupAfterFailedInsert(
       String userId, String path, Object error) async {
-    if (error is PostgrestException) {
+    if (progressPhotoServerRefused(error)) {
       await removeIfNoRow(userId, path);
     } else {
       ownFailedCleanups.add(path);
     }
+  }
+
+  /// The UPLOAD of [path] failed with [error] (Hermes C1). A Storage answer
+  /// means nothing was stored. Anything else may have stored the object with
+  /// only the response lost: remember the path so the 2-minute sweep (not the
+  /// hour) frees the slot if no row ever comes. A path never stored is never
+  /// listed, so remembering it costs nothing.
+  @visibleForTesting
+  void noteFailedUpload(String path, Object error) {
+    if (!progressPhotoServerRefused(error)) ownFailedCleanups.add(path);
   }
 
   /// Remove [path] so it cannot hold the free slot, but ONLY after a
@@ -391,7 +440,7 @@ class ProgressPhotoRepository {
       // Remembered for this app run: the sweep retries it after
       // [progressPhotoOwnOrphanMinAge] instead of an hour.
       ownFailedCleanups.add(path);
-      debugPrint('[ProgressPhotoRepository.capture] orphan kept: $path: $e');
+      _log('[ProgressPhotoRepository.capture] orphan kept: $path: $e');
     }
   }
 
@@ -408,7 +457,7 @@ class ProgressPhotoRepository {
     try {
       objects = await _listObjects(userId);
     } catch (e) {
-      debugPrint('[ProgressPhotoRepository] slot check failed: $e');
+      _log('[ProgressPhotoRepository] slot check failed: $e');
       return null;
     }
     final removed = await _sweepOrphans(userId, objects);
@@ -481,7 +530,7 @@ class ProgressPhotoRepository {
               .from(_bucket)
               .createSignedUrl(path, 60 * 60); // 1-hour TTL
         } catch (e) {
-          debugPrint('[ProgressPhotoRepository.list] signedUrl failed: $e');
+          _log('[ProgressPhotoRepository.list] signedUrl failed: $e');
         }
       }
       row['signed_url'] = signedUrl;
@@ -496,7 +545,7 @@ class ProgressPhotoRepository {
     try {
       return await listStrict(limit: limit);
     } catch (e) {
-      debugPrint('[ProgressPhotoRepository.list] $e');
+      _log('[ProgressPhotoRepository.list] $e');
       return const [];
     }
   }
@@ -526,23 +575,27 @@ class ProgressPhotoRepository {
           .eq('user_id', userId);
 
       if (path.isNotEmpty) {
-        try {
-          await _s.client.storage.from(_bucket).remove([path]);
-        } catch (e) {
-          debugPrint('[ProgressPhotoRepository.delete] storage remove: $e');
-          // Row is gone, object stays: an object from THIS IST week is removed
-          // by the bounded sweep (cleanupOrphanedStorage, run before a free
-          // user's next Add) once it is an hour old; an older one holds no
-          // free slot and stays. Uses debugPrint only (no SyncService
-          // dependency here).
-          debugPrint(
-              '[ProgressPhotoRepository.delete] orphaned storage object: $path — $e');
-        }
+        await removeDeletedPhotoObject(path);
       }
       return true;
     } catch (e) {
-      debugPrint('[ProgressPhotoRepository.delete] $e');
+      _log('[ProgressPhotoRepository.delete] $e');
       return false;
+    }
+  }
+
+  /// After [delete] removed a photo's ROW: remove its object. A failure
+  /// leaves an object with no row that would hold a free user's slot after
+  /// they deleted the photo to retake it (Hermes C2 / D1): the path is
+  /// remembered so the next Add's sweep removes it after 2 minutes, not an
+  /// hour. An object from an earlier week holds no slot either way.
+  @visibleForTesting
+  Future<void> removeDeletedPhotoObject(String path) async {
+    try {
+      await _removeObjects([path]).timeout(progressPhotoStorageCallTimeout);
+    } catch (e) {
+      ownFailedCleanups.add(path);
+      _log('[ProgressPhotoRepository.delete] object kept for the sweep: $path: $e');
     }
   }
 
@@ -566,7 +619,7 @@ class ProgressPhotoRepository {
       final objects = await _listObjects(userId);
       await _sweepOrphans(userId, objects);
     } catch (e, st) {
-      debugPrint(
+      _log(
           '[ProgressPhotoRepository.cleanupOrphanedStorage] scan failed: $e\n$st');
     }
   }
@@ -582,7 +635,7 @@ class ProgressPhotoRepository {
     try {
       withRow = await _rowPaths(userId, candidates);
     } catch (e, st) {
-      debugPrint(
+      _log(
           '[ProgressPhotoRepository.cleanupOrphanedStorage] scan failed: $e\n$st');
       return const {};
     }
@@ -592,16 +645,16 @@ class ProgressPhotoRepository {
         if (!withRow.contains(p)) p,
     ];
     if (orphans.isEmpty) return const {};
-    debugPrint(
+    _log(
         '[ProgressPhotoRepository.cleanupOrphanedStorage] found ${orphans.length} orphan(s): $orphans');
     try {
       await _removeObjects(orphans);
       ownFailedCleanups.removeAll(orphans);
-      debugPrint(
+      _log(
           '[ProgressPhotoRepository.cleanupOrphanedStorage] removed ${orphans.length} orphan(s)');
       return orphans.toSet();
     } catch (e, st) {
-      debugPrint(
+      _log(
           '[ProgressPhotoRepository.cleanupOrphanedStorage] remove failed: $e\n$st');
       return const {};
     }
@@ -619,7 +672,7 @@ class ProgressPhotoRepository {
           .eq('user_id', userId);
       return rows.length;
     } catch (e) {
-      debugPrint('[ProgressPhotoRepository.count] $e');
+      _log('[ProgressPhotoRepository.count] $e');
       return 0;
     }
   }

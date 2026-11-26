@@ -23,7 +23,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/profile/repositories/progress_photo_repository.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show FileObject, PostgrestException;
+import 'package:supabase_flutter/supabase_flutter.dart' show FileObject, PostgrestException, StorageException;
 
 FileObject _obj(String name, String? createdAt) => FileObject(
     name: name,
@@ -252,6 +252,90 @@ void main() {
       rowPaths = {'$_u/x.jpg'}; // the insert committed after all
       expect(await repo.freeSlotOpen(_u), isFalse);
       expect(removed, isEmpty);
+      expect(repo.ownFailedCleanups, isEmpty);
+    });
+  });
+
+  // Hermes (2026-11-26): one rule decides whether a failed write certainly did
+  // not land (a server ANSWER) or may still land (anything else).
+  group('progressPhotoServerRefused', () {
+    final cases = <(Object, bool, String)>[
+      (const PostgrestException(message: 'dup', code: '23505'), true, 'SQLSTATE'),
+      (const PostgrestException(message: 'cap', code: 'P0001'), true, 'trigger refusal'),
+      (const PostgrestException(message: 'x', code: 'PGRST116'), true, 'PostgREST code'),
+      (const PostgrestException(message: '<html>', code: '400'), true, 'bare 4xx'),
+      (const PostgrestException(message: '<html>', code: '502'), false, 'gateway 502'),
+      (const PostgrestException(message: '<html>', code: '504'), false, 'gateway 504'),
+      (const PostgrestException(message: 'x'), false, 'no code'),
+      (const StorageException('rls', statusCode: '403'), true, 'storage 403'),
+      (const StorageException('dup', statusCode: '409'), true, 'storage 409'),
+      (const StorageException('gw', statusCode: '504'), false, 'storage 504'),
+      (const StorageException('net', statusCode: 'ClientException'), false, 'transport (type name)'),
+      (const StorageException('net'), false, 'no status'),
+      (TimeoutException('t'), false, 'timeout'),
+      (Exception('SocketException'), false, 'socket'),
+    ];
+    for (final (e, want, label) in cases) {
+      test('$label -> $want', () => expect(progressPhotoServerRefused(e), want));
+    }
+  });
+
+  group('upload and delete failures (Hermes C1, C2/D1, C3)', () {
+    test('a gateway 502 on the row insert is NOT an answer: left to the sweep',
+        () async {
+      await repo.cleanupAfterFailedInsert(_u, '$_u/x.jpg',
+          const PostgrestException(message: '<html>', code: '502'));
+      expect(rowReads, isEmpty);
+      expect(removed, isEmpty);
+      expect(repo.ownFailedCleanups, {'$_u/x.jpg'});
+    });
+
+    test('an upload refused by Storage (403) stored nothing: not remembered', () {
+      repo.noteFailedUpload(
+          '$_u/x.jpg', const StorageException('rls', statusCode: '403'));
+      expect(repo.ownFailedCleanups, isEmpty);
+    });
+
+    for (final e in <Object>[
+      const StorageException('net', statusCode: 'ClientException'),
+      const StorageException('gw', statusCode: '504'),
+      TimeoutException('upload'),
+    ]) {
+      test('an upload with no answer ($e) is remembered for the 2-minute sweep',
+          () {
+        repo.noteFailedUpload('$_u/x.jpg', e);
+        expect(repo.ownFailedCleanups, {'$_u/x.jpg'});
+      });
+    }
+
+    test('a lost upload response: the stored object is swept after 2 minutes',
+        () async {
+      repo.noteFailedUpload('$_u/x.jpg', TimeoutException('upload'));
+      listing = [_obj('x.jpg', '2026-11-26T09:57:00Z')]; // 3 min old
+      expect(await repo.freeSlotOpen(_u), isTrue);
+      expect(removed, [
+        ['$_u/x.jpg']
+      ]);
+    });
+
+    test('a deleted photo whose object removal fails frees the slot after 2 minutes',
+        () async {
+      removeError = Exception('offline');
+      await repo.removeDeletedPhotoObject('$_u/x.jpg');
+      expect(repo.ownFailedCleanups, {'$_u/x.jpg'});
+      removeError = null;
+      listing = [_obj('x.jpg', '2026-11-26T09:57:00Z')];
+      expect(await repo.freeSlotOpen(_u), isTrue,
+          reason: 'the retake the founder allowed is open again');
+      expect(removed.last, ['$_u/x.jpg']);
+    });
+
+    test('a deleted photo whose object removal succeeds is not remembered',
+        () async {
+      await repo.removeDeletedPhotoObject('$_u/x.jpg');
+      expect(removed, [
+        ['$_u/x.jpg']
+      ]);
       expect(repo.ownFailedCleanups, isEmpty);
     });
   });

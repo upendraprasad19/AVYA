@@ -185,6 +185,25 @@ BEGIN
     v_r := v_r || 'W8=fail (' || v_state || ' ' || v_msg || E')\n';
   END;
 
+  -- W8b (Hermes A2): an UPDATE cannot move storage_path either (repointing the last-week row at another
+  -- path would leave this week's row door empty while the object is held).
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_n, 'role', 'authenticated')::text, true);
+    PERFORM set_config('request.jwt.claim.sub', v_n::text, true);
+    UPDATE public.progress_photos SET storage_path = v_n::text || '/w8b.jpg'
+     WHERE user_id = v_n AND storage_path = v_n::text || '/o1.jpg';
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    RESET ROLE;
+    SELECT count(*) INTO v_cnt FROM public.progress_photos
+     WHERE user_id = v_n AND storage_path = v_n::text || '/o1.jpg';
+    v_r := v_r || CASE WHEN v_rows = 1 AND v_cnt = 1 THEN E'W8b=ok\n'
+                       ELSE 'W8b=fail (rows ' || v_rows || ', o1 rows left ' || v_cnt || E')\n' END;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
+    v_r := v_r || 'W8b=fail (' || v_state || ' ' || v_msg || E')\n';
+  END;
+
   -- W9: anon writing into N's folder gets the RLS refusal, NOT the trigger's literal (no answer about N's week).
   BEGIN
     SET LOCAL ROLE anon;
@@ -211,6 +230,21 @@ BEGIN
     GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
     v_r := v_r || CASE WHEN v_state = '42501' AND v_msg LIKE '%row-level security%' THEN E'W10=ok\n'
                        ELSE 'W10=fail (' || v_state || ' ' || v_msg || E')\n' END;
+  END;
+
+  -- W10b (Hermes A1): O inserting a progress_photos ROW for N (free, holding a row this week) gets the
+  -- RLS refusal, never the cap literal: the row door must not tell O whether N is PRO or holds a photo.
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_o, 'role', 'authenticated')::text, true);
+    PERFORM set_config('request.jwt.claim.sub', v_o::text, true);
+    INSERT INTO public.progress_photos (user_id, storage_path, taken_at) VALUES (v_n, v_n::text || '/o2.jpg', now());
+    RESET ROLE;
+    v_r := v_r || E'W10b=fail (a row for another user was accepted)\n';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
+    v_r := v_r || CASE WHEN v_state = '42501' AND v_msg LIKE '%row-level security%' THEN E'W10b=ok\n'
+                       ELSE 'W10b=fail (' || v_state || ' ' || v_msg || E')\n' END;
   END;
 
   -- W11: a service_role JWT carrying O's sub, writing into N's folder, is capped by the OWNER (N, free, o2 held).
@@ -274,6 +308,20 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
     v_r := v_r || 'W14=fail (' || v_state || ' ' || v_msg || E')\n';
+  END;
+
+  -- W14b (Hermes A1): the same foreign-row insert with N now PRO gets the SAME refusal as W10b.
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_o, 'role', 'authenticated')::text, true);
+    PERFORM set_config('request.jwt.claim.sub', v_o::text, true);
+    INSERT INTO public.progress_photos (user_id, storage_path, taken_at) VALUES (v_n, v_n::text || '/p1.jpg', now());
+    RESET ROLE;
+    v_r := v_r || E'W14b=fail (a row for another user was accepted)\n';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
+    v_r := v_r || CASE WHEN v_state = '42501' AND v_msg LIKE '%row-level security%' THEN E'W14b=ok\n'
+                       ELSE 'W14b=fail (' || v_state || ' ' || v_msg || E')\n' END;
   END;
 
   -- W15: lapsed (end_date in the past) = free -> refused again.

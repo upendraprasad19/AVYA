@@ -90,7 +90,13 @@ Updated (red today once the change lands): `progress_photo_client_rules_test.dar
 ## 6. Order
 1. Code + draft SQL + tests + docs on the branch; whole-project `flutter analyze --no-fatal-infos`; gate loop.
 2. PR, CI green -> review round 2 on the diff -> B-pass.
-3. Founder go: always-aborting live rehearsal (draft + verify cases), then mint, copy (`cmp`), apply, live verify, ledger + snapshot commit.
+3. Founder go: two always-aborting live rehearsals, each ONE statement: (a) forward block + `test/sql/progress_photos_free_weekly_cap_live_verify.sql` (every W/C line `ok`); (b) forward block + the inline rollback (comment markers removed) + `test/sql/progress_photos_free_weekly_cap_rollback_verify.sql` (every R line `ok`: the rollback drops a live trigger on `storage.objects` and restores 154). Then a SEPARATE founder go for the apply, and in this order (Hermes seat B, finding 2):
+   1. `sh scripts/mint_migration.sh --stub progress_photos_free_weekly_cap`; copy the draft to `supabase/migrations/<NNN>_progress_photos_free_weekly_cap.sql`; `cmp` identical.
+   2. Apply (MCP `apply_migration`, project `dedsavbjuwgarrhphgnl` only); run the live verify plainly (every line `ok`).
+   3. `backups/applied_migrations.json` entry (hash via `dart run scripts/migration_ledger_hash.dart`); `backups/live_schema_columns.json` unchanged (no column change: confirm).
+   4. `test/contracts/progress_photos_pro_insert_rule_test.dart` `_tripwireAllow`: an entry for the new migration with its reason and `contentHash` (it ALTERs 154's policy and replaces 154's function).
+   5. Delete the draft; repoint every citation of its path to the migration file: `docs/sot_registry.yaml`, `lib/features/profile/CLAUDE.md`, `docs/architecture/subscription.md`, `docs/audit/open_issues.md` (OI-531), the live / rollback verify headers (`git grep -n free_weekly_cap_draft` must return only history: plan, diagnose, reviews).
+   6. Staged catastrophic review (`/code-review` on the staged apply commit, hash-named file), then the commit.
 4. CI green -> founder go to merge -> founder web check on app.icanbefitter.com (free account: first photo in, second refused with the snackbar; PRO: several) — this is also the live check of Storage's error mapping and the signed-upload path.
 
 ## 6a. Round 2 folds
@@ -100,6 +106,10 @@ Updated (red today once the change lands): `progress_photo_client_rules_test.dar
 - Rollback restores 154's live ACL (`GRANT EXECUTE ... TO PUBLIC, anon, authenticated, service_role`, read live 2026-11-26); the rehearsal runs the rollback block too.
 - Repository: `ownFailedCleanups` (in memory) lets this device's own failed cleanup be swept after 2 minutes instead of 60. Build: `cleanupOrphanedStorage` (the same bounded sweep) also runs, unawaited, on a PRO user's Add (round 1 #13: PRO orphans), and reads the user inside its try so it never throws; OI-315 closes on that (PRO uncapped is founder call Q3).
 - §6 step 4 adds a founder two-tab check: a free user uploading in two tabs at once ends with exactly one photo.
+
+## 6b. B-pass and Hermes folds (2026-11-26)
+- B-pass (`docs/reviews/oi348-landing3c-bpass.md`): tier catastrophic; SoT cites re-derived; the superseded doc paragraph marked; a failed insert without an answer goes to the 2-minute sweep; 10 s bounds; `168 hours`; W16.
+- Hermes (`docs/audit/2026-11-26-hermes-oi348-landing3c.md`): the row door gains the storage door's caller guard (as a definer it answered about another user's PRO state and week; W10b / W14b); the UPDATE guard also keeps `storage_path` (W8b); the rollback is rehearsed (`..._rollback_verify.sql`); the apply runbook above names every coupled edit; the header no longer calls the applied file a draft; one rule (`progressPhotoServerRefused`) decides whether a failed write certainly did not land, used for the row insert (a gateway 5xx is not an answer), the upload (a lost response hands its path to the 2-minute sweep) and a deleted photo's failed object removal; repository logs are debug-only (rule 17).
 
 ## 7. Residuals (go on the board as one minted OI, `upstream_blocked` / `blocked_on_user`)
 - Two parallel free uploads: designed (advisory lock + fresh snapshot); the founder's two-tab check (§6a) covers the standard path; reopen when a local Supabase image or a two-session harness is available.
