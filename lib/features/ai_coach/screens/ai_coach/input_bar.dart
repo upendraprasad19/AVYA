@@ -27,6 +27,7 @@ class CoachComposer extends ConsumerStatefulWidget {
     required this.onSend,
     required this.onAttach,
     required this.onListeningChanged,
+    this.onHeightGrew,
   });
 
   /// The message field's controller (the screen owns it, so a Compass prefill
@@ -47,6 +48,12 @@ class CoachComposer extends ConsumerStatefulWidget {
   /// mounted then, so the screen hides the measurement chip through this.
   final ValueChanged<bool> onListeningChanged;
 
+  /// Called once after a frame in which the composer grew taller, with the
+  /// height it gained (OI-348 Landing 3e: the field grows to six lines). The
+  /// screen keeps a chat that was at its bottom at its bottom. Never called for
+  /// the first layout or a shrink.
+  final ValueChanged<double>? onHeightGrew;
+
   @override
   ConsumerState<CoachComposer> createState() => _CoachComposerState();
 }
@@ -56,6 +63,18 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
 
   /// The shortest message the coach sends: typing "ok" sends today.
   static const int _minChars = 1;
+
+  /// The bubble's inner height for ONE line: 48 minus the 1dp border top and
+  /// bottom (OI-348 Landing 3e). Every button sits in a slot this tall, so an
+  /// IconButton keeps the 46dp tap target the fixed 48dp bubble gave it (an M3
+  /// IconButton pads itself to 48 under loose constraints, which would make a
+  /// growing bubble 60 tall), and a 36dp circle stays centred in it.
+  static const double _kRowHeight = 46;
+
+  /// A button slot: [_kRowHeight] tall, child centred. Under the rows'
+  /// `CrossAxisAlignment.end` the slots sit on the last line as the text grows.
+  static Widget _slot(Widget child) =>
+      SizedBox(height: _kRowHeight, child: Center(child: child));
 
   bool get _isLimitReached =>
       !widget.isPro && widget.messageCount >= AppConstants.freeAiMessagesPerDay;
@@ -227,7 +246,9 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
         listenable: _speech,
         builder: (context, _) {
           final busy = _speech.isBusy;
-          return Container(
+          return _HeightReporter(
+            onGrew: widget.onHeightGrew,
+            child: Container(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
             decoration: const BoxDecoration(
               color: AppColors.bg,
@@ -236,9 +257,13 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // F12 · Single 48dp rounded bubble — field + paperclip + morph button
+                // F12 · Rounded bubble, 48dp for one line — field + paperclip +
+                // morph button. It grows with the field / live words up to
+                // kDictationFieldMaxLines lines (OI-348 Landing 3e). One line is
+                // a _kRowHeight row + the 1dp border top and bottom.
                 Container(
-                  height: 48,
+                  key: const ValueKey('coach_composer_bubble'),
+                  constraints: const BoxConstraints(minHeight: 48),
                   decoration: BoxDecoration(
                     color: busy
                         ? AppColors.bad.withValues(alpha: 0.08)
@@ -292,6 +317,7 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
                 ],
               ],
             ),
+          ),
           );
         },
       ),
@@ -306,12 +332,24 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
 
     // FC8 — composer field hoisted so the limit-reached state can wrap it in a
     // paywall tap target without duplicating the field.
+    // OI-348 Landing 3e: the field grows to kDictationFieldMaxLines lines, then
+    // scrolls. `TextInputType.text` keeps the `done` action (only `multiline`
+    // gets `newline`), so the action key still sends and inserts no newline.
     final composerField = TextField(
       controller: widget.controller,
       focusNode: widget.focusNode,
       enabled: !isLimitReached && !isSending,
+      minLines: 1,
+      maxLines: kDictationFieldMaxLines,
+      keyboardType: TextInputType.text,
+      // With maxLines 1 the SDK stripped every newline (singleLineFormatter);
+      // a multi-line field no longer adds it, so a pasted line break would now
+      // reach the coach. Keep today's one-line text (B-pass 3e, seat A F1).
+      inputFormatters: [FilteringTextInputFormatter.singleLineFormatter],
+      strutStyle: kDictationStrut,
       decoration: InputDecoration(
         border: InputBorder.none,
+        hintMaxLines: 1,
         hintText: isLimitReached
             ? (showsUpgradeAffordance()
                 ? 'Daily limit reached — Go PRO'
@@ -327,15 +365,24 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
       style: AppTypography.body.copyWith(fontSize: 14),
       onSubmitted: (_) => _maybeSendText(),
     );
+    // One line stays centred against the button slots; a taller field grows
+    // upward and the buttons sit on its last line (the Row aligns to `end`).
+    final fieldBox = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: _kRowHeight),
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: composerField, // a TextField fills the width (T4e: off-text tap)
+      ),
+    );
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // Test #10 obs 5 — compass-rose button left of input.
         // Tap → segregated bottom sheet with 4 family groups.
         // Selecting a command prefills the composer; user edits
         // before sending.
-        IconButton(
+        _slot(IconButton(
           icon: const Icon(
             Icons.explore_outlined,
             color: AppColors.accent,
@@ -370,7 +417,7 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
                   ),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-        ),
+        )),
         Expanded(
           // FC8: at the daily limit the composer TextField is disabled;
           // wrap it so a tap opens the paywall (the gold "Go PRO" hint the
@@ -381,21 +428,21 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
                   behavior: HitTestBehavior.opaque,
                   onTap: () => showPaywallSheet(context,
                       feature: 'Higher daily AI coach limit'),
-                  child: composerField,
+                  child: fieldBox,
                 )
-              : composerField,
+              : fieldBox,
         ),
-        IconButton(
+        _slot(IconButton(
           icon: const Icon(Icons.attach_file,
               color: AppColors.accent, size: 20),
           onPressed: isSending ? null : widget.onAttach,
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-        ),
+        )),
         // With text already in the field, the mic is a small button BESIDE the
         // send arrow: dictating again appends.
         if (hasText && micAvailable)
-          Semantics(
+          _slot(Semantics(
             button: true,
             enabled: canMic,
             label: SpeechInputCopy.semanticsStart,
@@ -406,9 +453,9 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             ),
-          ),
+          )),
         // The morph: mic (empty field) <-> send arrow (text), 200 ms.
-        GestureDetector(
+        _slot(GestureDetector(
           onTap: () {
             if (isSending || isLimitReached) return;
             if (hasText) {
@@ -439,7 +486,7 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
               ),
             ),
           ),
-        ),
+        )),
       ],
     );
   }
@@ -453,10 +500,13 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
     final words = _speech.liveText.trim();
     final canSend = listening && words.length >= _minChars;
 
+    // The Row aligns to `end` so the buttons sit on the last line of wrapped
+    // words (OI-348 Landing 3e); the dot and the clock live in a slot-high box
+    // so they stay centred against the X button.
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Semantics(
+        _slot(Semantics(
           button: true,
           label: SpeechInputCopy.semanticsCancel,
           child: IconButton(
@@ -466,42 +516,54 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
-        ),
-        Container(
-          width: 9,
-          height: 9,
-          decoration: const BoxDecoration(
-            color: AppColors.bad,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 8),
-        ValueListenableBuilder<Duration>(
-          valueListenable: _speech.elapsed,
-          builder: (context, elapsed, _) {
-            final secs = elapsed.inSeconds;
-            final clock =
-                '${secs ~/ 60}:${(secs % 60).toString().padLeft(2, '0')}';
-            return Text(
-              clock,
-              style: AppTypography.mono.copyWith(
-                fontSize: 13,
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1,
+        )),
+        SizedBox(
+          height: _kRowHeight,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                key: const ValueKey('coach_listening_dot'),
+                width: 9,
+                height: 9,
+                decoration: const BoxDecoration(
+                  color: AppColors.bad,
+                  shape: BoxShape.circle,
+                ),
               ),
-            );
-          },
+              const SizedBox(width: 8),
+              ValueListenableBuilder<Duration>(
+                valueListenable: _speech.elapsed,
+                builder: (context, elapsed, _) {
+                  final secs = elapsed.inSeconds;
+                  final clock =
+                      '${secs ~/ 60}:${(secs % 60).toString().padLeft(2, '0')}';
+                  return Text(
+                    clock,
+                    key: const ValueKey('coach_listening_clock'),
+                    style: AppTypography.mono.copyWith(
+                      fontSize: 13,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: _LiveWords(
             text: words,
             hint: SpeechInputCopy.listeningHint,
+            minHeight: _kRowHeight,
           ),
         ),
         const SizedBox(width: 6),
-        Semantics(
+        _slot(Semantics(
           button: true,
           enabled: listening,
           label: SpeechInputCopy.semanticsStop,
@@ -521,9 +583,9 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
               ),
             ),
           ),
-        ),
+        )),
         const SizedBox(width: 6),
-        Semantics(
+        _slot(Semantics(
           button: true,
           enabled: canSend,
           label: SpeechInputCopy.semanticsSend,
@@ -544,37 +606,48 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
               ),
             ),
           ),
-        ),
+        )),
       ],
     );
   }
 }
 
-/// One line of live words, left-aligned while short and scrolled to the END
-/// once it overflows, so the newest words stay visible.
+/// The live words, wrapped (OI-348 Landing 3e, reversing voice-input-unified
+/// D4's single line). Up to [kDictationFieldMaxLines] lines every word shows;
+/// past that the box stays at that height and shows the NEWEST lines (a
+/// reversed vertical scroll holds offset 0 at the end). One line stays
+/// centred in the [minHeight] row.
 class _LiveWords extends StatelessWidget {
-  const _LiveWords({required this.text, required this.hint});
+  const _LiveWords({
+    required this.text,
+    required this.hint,
+    required this.minHeight,
+  });
 
   final String text;
   final String hint;
+  final double minHeight;
 
   @override
   Widget build(BuildContext context) {
     final empty = text.isEmpty;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          reverse: true,
-          physics: const NeverScrollableScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: Align(
-              alignment: Alignment.centerLeft,
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: minHeight),
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: dictationMaxHeight(context)),
+          child: SingleChildScrollView(
+            key: const ValueKey('coach_live_words_viewport'),
+            reverse: true,
+            physics: const NeverScrollableScrollPhysics(),
+            child: SizedBox(
+              width: double.infinity,
               child: Text(
                 empty ? hint : text,
-                maxLines: 1,
-                softWrap: false,
+                key: const ValueKey('coach_live_words'),
+                softWrap: true,
+                strutStyle: kDictationStrut,
                 style: AppTypography.body.copyWith(
                   fontSize: 14,
                   color: empty ? AppColors.textDim : AppColors.textPrimary,
@@ -582,8 +655,50 @@ class _LiveWords extends StatelessWidget {
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
+  }
+}
+
+/// Reports, once after the frame, how much taller its child grew in a layout
+/// (OI-348 Landing 3e, plan C4). The first layout only records the height; the
+/// height is recorded on EVERY layout (a shrink included) before anything is
+/// scheduled, so only a step that grows reports, by exactly that step.
+class _HeightReporter extends SingleChildRenderObjectWidget {
+  const _HeightReporter({required this.onGrew, required super.child});
+
+  final ValueChanged<double>? onGrew;
+
+  @override
+  _RenderHeightReporter createRenderObject(BuildContext context) =>
+      _RenderHeightReporter(onGrew);
+
+  @override
+  void updateRenderObject(
+      BuildContext context, _RenderHeightReporter renderObject) {
+    renderObject.onGrew = onGrew;
+  }
+}
+
+class _RenderHeightReporter extends RenderProxyBox {
+  _RenderHeightReporter(this.onGrew);
+
+  ValueChanged<double>? onGrew;
+  double? _lastHeight;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final height = size.height;
+    final previous = _lastHeight;
+    _lastHeight = height;
+    if (previous == null) return; // first layout: record only
+    final delta = height - previous;
+    if (delta <= 0 || onGrew == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!attached) return;
+      onGrew?.call(delta);
+    });
   }
 }
