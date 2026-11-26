@@ -14,6 +14,7 @@ import 'sync_service.dart';
 import 'template_identity.dart';
 import 'workout_read_service.dart';
 import 'write_result.dart';
+import 'sync/sched_unpushed_swaps.dart';
 
 /// The ONE writer for workout_logs / workout_log_exercises /
 /// workout_log_sets. All Hive `exlog_*`, `wlog_*`, and `schedule_<date>`
@@ -831,6 +832,11 @@ class WorkoutWriteService {
 
   static const String _displacedPrefix = 'displaced_';
 
+  /// OI-532 test seam: awaited inside [swapScheduledDays] after the dates are
+  /// marked unpushed and before the first row is written. Null in production.
+  @visibleForTesting
+  static Future<void> Function()? debugAfterPreMarkForTests;
+
   /// Exchanges the schedule rows of two dates — the day-swap engine's one
   /// write (spec §5.4). Takes the two-date lock in sorted order, reads both
   /// rows and both `displaced_<date>` backups as deep copies, and hands them
@@ -894,37 +900,61 @@ class WorkoutWriteService {
         dispA: plan.displacedA,
         dispB: plan.displacedB,
       };
-      final previous = <String, Object?>{
-        for (final k in writes.keys) k: box.get(k),
-      };
-      final written = <String>[];
+      // OI-532 (plan docs/plans/oi532-sched-restore-unpushed-swap.md 5.2): the
+      // two dates are in flight and marked unpushed BEFORE the first row is
+      // written (a restore takes no date lock, and every put yields), and
+      // marked again after the last, so a push that read the first token can
+      // never clear the mark. Never fails the swap.
+      final swapDates = <String>{aStr, bStr};
       try {
-        for (final e in writes.entries) {
-          if (e.value == null) {
-            if (box.containsKey(e.key)) {
-              await box.delete(e.key);
+        try {
+          await SchedUnpushedSwaps.beginSwap(box, swapDates);
+        } catch (e, st) {
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_swap_mark'));
+        }
+        final hook = debugAfterPreMarkForTests;
+        if (hook != null) await hook();
+        final previous = <String, Object?>{
+          for (final k in writes.keys) k: box.get(k),
+        };
+        final written = <String>[];
+        try {
+          for (final e in writes.entries) {
+            if (e.value == null) {
+              if (box.containsKey(e.key)) {
+                await box.delete(e.key);
+                written.add(e.key);
+              }
+            } else {
+              await box.put(e.key, e.value);
               written.add(e.key);
             }
-          } else {
-            await box.put(e.key, e.value);
-            written.add(e.key);
           }
-        }
-      } catch (_) {
-        for (final k in written.reversed) {
-          try {
-            final prev = previous[k];
-            if (prev == null) {
-              await box.delete(k);
-            } else {
-              await box.put(k, prev);
+        } catch (_) {
+          for (final k in written.reversed) {
+            try {
+              final prev = previous[k];
+              if (prev == null) {
+                await box.delete(k);
+              } else {
+                await box.put(k, prev);
+              }
+            } catch (e, st) {
+              unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                  reason: 'workout_write_service_swap_rollback'));
             }
-          } catch (e, st) {
-            unawaited(ErrorTelemetry.recordNonFatal(e, st,
-                reason: 'workout_write_service_swap_rollback'));
           }
+          rethrow;
         }
-        rethrow;
+        try {
+          await SchedUnpushedSwaps.markAll(box, swapDates);
+        } catch (e, st) {
+          unawaited(ErrorTelemetry.recordNonFatal(e, st,
+              reason: 'workout_write_service_swap_mark'));
+        }
+      } finally {
+        SchedUnpushedSwaps.endSwap(swapDates);
       }
 
       unawaited(SyncService.instance.syncWorkoutData());

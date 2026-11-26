@@ -35,6 +35,7 @@ import 'package:icanbefitter/core/services/rank_service.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
+import 'package:icanbefitter/core/services/sync/sched_unpushed_swaps.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
@@ -171,6 +172,9 @@ class SimulationService {
     ]);
     await _clearKeysWithPrefixes(HiveService.instance.healthBox,
         const ['weight_', 'sleep_log_', 'water_ml_', 'hydration_', 'step_']);
+    // OI-532: the unpushed-swap marks of the rows wiped above.
+    await HiveService.instance.workoutBox.delete(kSchedSwapUnpushedKey);
+    SchedUnpushedSwaps.resetForUser();
     await HiveService.instance.healthBox.delete('streaks');
     await HiveService.instance.healthBox.delete('steps_today');
     await HiveService.instance.healthBox.delete('steps_date');
