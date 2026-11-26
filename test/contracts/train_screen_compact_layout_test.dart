@@ -1,7 +1,7 @@
 // Train screen compaction (founder call 2026-11-01): the top of the screen is the
 // week's schedule. Removed: the "TODAY'S WORKOUT" eyebrow, the "DEPLOYMENT NN ..."
 // eyebrow, the "THIS WEEK" label. The roadmap pill (and the hold-week strip that
-// travels with it) now sits right AFTER the PRs block (`StatsGrid`).
+// travels with it) now sits right AFTER the PRs block (`PrSnapshot`, 83e031).
 //
 // Source-grep pins (presence/order only — the screen is a 600-line private-state
 // extension tree that needs the full provider graph to pump). Each pin is
@@ -40,9 +40,9 @@ void main() {
   group('roadmap pill placement', () {
     int at(String needle) => screen.indexOf(needle);
 
-    test('pill comes AFTER the PRs block (StatsGrid) and is not above the week rows',
+    test('pill comes AFTER the PRs block (PrSnapshot, 83e031) and is not above the week rows',
         () {
-      final stats = at('const StatsGrid()');
+      final stats = at('PrSnapshot(seeAll: PrSeeAll.button)');
       final pill = at('VIEW THE 12-WEEK ROADMAP');
       final weeks = at('WeekSelector(');
       expect(stats, greaterThan(-1));

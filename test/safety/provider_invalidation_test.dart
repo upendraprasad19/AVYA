@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// Task 9 of the PR review noted two gaps:
 ///  a) nutritionSummaryProvider not invalidated after food delete/restore
-///  b) workoutStatsProvider not invalidated after template delete
+///  b) Train's surfaces not invalidated after template delete
 ///
 /// Both turned out to already be present in the notifier methods. These tests
 /// confirm the invariant won't silently regress.
@@ -93,8 +93,8 @@ void main() {
     });
   });
 
-  group('Task 9b – workoutStatsProvider invalidated in TemplatesNotifier', () {
-    test('deleteTemplate invalidates workoutStatsProvider', () {
+  group('Task 9b – Train schedule surfaces invalidated in TemplatesNotifier', () {
+    test('deleteTemplate invalidates the schedule surfaces it changes', () {
       final src = _src(
           'lib/features/train/providers/train_provider.dart');
 
@@ -106,8 +106,17 @@ void main() {
       final deleteEnd = src.indexOf('\n  }', deleteStart);
       final deleteBody = src.substring(deleteStart, deleteEnd);
 
-      expect(deleteBody, contains('ref.invalidate(workoutStatsProvider)'),
-          reason: 'deleteTemplate must invalidate workoutStatsProvider');
+      // A template delete changes schedule rows only, never an exlog_* row,
+      // so no PR can change (83e031 deleted Train's own PR provider).
+      for (final p in const [
+        'currentPlanProvider',
+        'calendarWeekProvider',
+        'todayWorkoutProvider',
+        'streakProvider',
+      ]) {
+        expect(deleteBody, contains('ref.invalidate($p)'),
+            reason: 'deleteTemplate must invalidate $p');
+      }
     });
 
     test('deleteTemplate invalidates currentPlanProvider', () {

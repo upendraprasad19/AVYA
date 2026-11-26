@@ -19,7 +19,7 @@
 //   - lib/features/train/widgets/edit_workout_log_sheet.dart
 //
 // Canonical provider sets:
-//   workout = {currentPlanProvider, workoutStatsProvider,
+//   workout = {currentPlanProvider,
 //              calendarWeekProvider, streakProvider,
 //              todayWorkoutProvider, allExercisePRsProvider,
 //              aiInsightProvider}
@@ -35,7 +35,6 @@ import 'dart:io';
 
 const workoutCanonical = <String>{
   'currentPlanProvider',
-  'workoutStatsProvider',
   'calendarWeekProvider',
   'streakProvider',
   'todayWorkoutProvider',

@@ -36,11 +36,11 @@ import '../../widgets/week_selector.dart';
 import '../../widgets/hold_roadmap_strip.dart';
 import '../../widgets/plan_expired_card.dart';
 import '../../widgets/phase_generating_card.dart';
-import '../../widgets/stats_grid.dart';
 import '../../utils/set_count_label.dart';
 import '../../utils/exercise_log_detail.dart';
 import 'package:icanbefitter/core/utils/cardio_format.dart';
 import 'package:icanbefitter/features/home/widgets/streak_explainer_sheet.dart';
+import 'package:icanbefitter/features/home/widgets/pr_snapshot.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 
@@ -350,8 +350,18 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
 
                     const SizedBox(height: 14),
 
-                    // YOUR PRs section
-                    const StatsGrid(),
+                    // PERSONAL RECORDS: the same card as Home (83e031), with
+                    // Train's full-width VIEW ALL button (founder D3).
+                    const WardEyebrow(
+                      'PERSONAL RECORDS',
+                      padding: EdgeInsets.fromLTRB(
+                          AppSpacing.gutter, 0, AppSpacing.gutter, 8),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.screenPadding),
+                      child: PrSnapshot(seeAll: PrSeeAll.button),
+                    ),
 
                     const SizedBox(height: 14),
 

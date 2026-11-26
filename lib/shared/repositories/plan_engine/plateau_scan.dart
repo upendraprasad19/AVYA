@@ -87,28 +87,11 @@ class PlateauScan {
       // volume. Checked BEFORE any e1RM read (short-circuit).
       if (_fatiguePresent()) return const <String>{};
 
-      final box = HiveService.instance.workoutBox;
-      final cutoff =
-          istDateStr(nowWall().subtract(const Duration(days: _windowDays)));
-      final byExercise = buildE1rmByDate(box, cutoff: cutoff);
-      if (byExercise.isEmpty) return const <String>{};
-
       final repo = ExerciseRepository.instance;
       final groups = <String>{};
-      byExercise.forEach((name, dated) {
-        if (dated.length < _minSessions) return;
-        if (!repo.isCompoundByExactName(name)) return; // main lifts only
-        // ascending YYYY-MM-DD dates (lexical == chronological) → span + flatness
-        // over ALL qualifying sessions.
-        final dates = dated.keys.toList()..sort();
-        final span = DateTime.parse(dates.last)
-            .difference(DateTime.parse(dates.first))
-            .inDays;
-        if (span < _minSpanDays) return;
-        final values = [for (final d in dates) dated[d]!];
-        if (!isFlat(values)) return;
-        groups.addAll(_groupsFor(name, repo));
-      });
+      for (final lift in flatCompoundLifts()) {
+        groups.addAll(_groupsFor(lift.name, repo));
+      }
       return groups;
     } catch (_) {
       return const <String>{};
@@ -128,30 +111,60 @@ class PlateauScan {
       if (phase < 2) return const <String>{};
       if (_fatiguePresent()) return const <String>{};
 
-      final box = HiveService.instance.workoutBox;
-      final cutoff =
-          istDateStr(nowWall().subtract(const Duration(days: _windowDays)));
-      final byExercise = buildE1rmByDate(box, cutoff: cutoff);
-      if (byExercise.isEmpty) return const <String>{};
-
-      final repo = ExerciseRepository.instance;
-      final names = <String>{};
-      byExercise.forEach((name, dated) {
-        if (dated.length < _minSessions) return;
-        if (!repo.isCompoundByExactName(name)) return;
-        final dates = dated.keys.toList()..sort();
-        final span = DateTime.parse(dates.last)
-            .difference(DateTime.parse(dates.first))
-            .inDays;
-        if (span < _minSpanDays) return;
-        final values = [for (final d in dates) dated[d]!];
-        if (!isFlat(values)) return;
-        names.add(name.toLowerCase()); // _preferNovel compares lowercased
-      });
-      return names;
+      return {
+        // _preferNovel compares lowercased
+        for (final lift in flatCompoundLifts()) lift.name.toLowerCase(),
+      };
     } catch (_) {
       return const <String>{};
     }
+  }
+
+  /// The ONE plateau scan (8300e1): every COMPOUND lift (exact library name)
+  /// whose per-session best Epley e1RM is flat ([isFlat]) over ≥[_minSessions]
+  /// sessions spanning ≥[_minSpanDays] days inside the last [_windowDays] IST
+  /// days. NO flag / phase / fatigue gate: [plateauedGroups] and
+  /// [plateauedExerciseNames] apply theirs, and the coach's plateau insight
+  /// (`PatternDetector`) applies its own. With [recentWithinDays], a lift is
+  /// kept only when its last session is on/after that many IST days ago
+  /// (inclusive; IST day strings compared lexically, never a device-local
+  /// parse). Throws on a closed box: every caller wraps it.
+  static List<FlatLift> flatCompoundLifts({int? recentWithinDays}) {
+    final box = HiveService.instance.workoutBox;
+    final cutoff =
+        istDateStr(nowWall().subtract(const Duration(days: _windowDays)));
+    final recentCutoff = recentWithinDays == null
+        ? null
+        : istDateStr(nowWall().subtract(Duration(days: recentWithinDays)));
+    final byExercise = buildE1rmByDate(box, cutoff: cutoff);
+    if (byExercise.isEmpty) return const <FlatLift>[];
+
+    final repo = ExerciseRepository.instance;
+    final out = <FlatLift>[];
+    byExercise.forEach((name, dated) {
+      if (dated.length < _minSessions) return;
+      if (!repo.isCompoundByExactName(name)) return; // main lifts only
+      // ascending YYYY-MM-DD dates (lexical == chronological) → span + flatness
+      // over ALL qualifying sessions.
+      final dates = dated.keys.toList()..sort();
+      final span = DateTime.parse(dates.last)
+          .difference(DateTime.parse(dates.first))
+          .inDays;
+      if (span < _minSpanDays) return;
+      final values = [for (final d in dates) dated[d]!];
+      if (!isFlat(values)) return;
+      if (recentCutoff != null && dates.last.compareTo(recentCutoff) < 0) {
+        return;
+      }
+      out.add(FlatLift(
+        name: name,
+        sessions: dates.length,
+        spanDays: span,
+        bestE1rm: values.reduce((a, b) => a > b ? a : b),
+        lastDate: dates.last,
+      ));
+    });
+    return out;
   }
 
   /// (max−min)/max ≤ [_flatRelRange] ⇒ flat (no meaningful progress). Public +
@@ -193,6 +206,10 @@ class PlateauScan {
   /// (per F2). Reads `healthBox` directly (same rows/parser titration uses) so
   /// plan_engine gains no HealthReadService dependency. Any read failure bubbles
   /// to `plateauedGroups`'s outer catch → `{}` (no +sets, the safe direction).
+  /// Persistent readiness fatigue (the deload rung's signal). Public for the
+  /// coach's plateau insight (8300e1): fatigued means recover, not "plateau".
+  static bool fatiguePresent() => _fatiguePresent();
+
   static bool _fatiguePresent() {
     final hbox = HiveService.instance.healthBox;
     final cutoff =
@@ -209,4 +226,30 @@ class PlateauScan {
     }
     return n >= _minReadiness && flagged * 2 > n;
   }
+}
+
+/// One flat compound lift found by [PlateauScan.flatCompoundLifts].
+class FlatLift {
+  /// The exercise name as logged (exact library name).
+  final String name;
+
+  /// Sessions inside the window.
+  final int sessions;
+
+  /// Days from the first to the last of those sessions (>= 28).
+  final int spanDays;
+
+  /// The highest per-session best Epley e1RM in the window, kg.
+  final double bestE1rm;
+
+  /// The last session's IST day, `yyyy-MM-dd`.
+  final String lastDate;
+
+  const FlatLift({
+    required this.name,
+    required this.sessions,
+    required this.spanDays,
+    required this.bestE1rm,
+    required this.lastDate,
+  });
 }

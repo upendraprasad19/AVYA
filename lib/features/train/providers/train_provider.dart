@@ -1233,20 +1233,6 @@ class SelectedWeekNotifier extends Notifier<SelectedWeek> {
 final selectedWeekProvider = NotifierProvider<SelectedWeekNotifier, SelectedWeek>(
     SelectedWeekNotifier.new);
 
-// ── Workout Stats (PRs) ────────────────────────────────────────
-
-/// Provider for key lift PRs — watched by StatsGrid so it refreshes
-/// automatically after workout completion via ref.invalidate().
-final workoutStatsProvider =
-    Provider<Map<String, Map<String, double>>>((ref) {
-  final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
-  // A raw box read throws there; serve the empty value, and the token
-  // flipping back re-runs this with the real data.
-  if (token == '<anon>') return const <String, Map<String, double>>{};
-  return WorkoutRepository.instance.loadKeyLiftPRs();
-});
-
 // ── Past week in the Train list (docs/plans/train-past-week-in-place.md D2/D3) ──
 
 /// A past-phase week picked on the strip. [dates] are the stored `yyyy-MM-dd` strings of the chip's
@@ -2749,7 +2735,6 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     // the same synchronous frame — these won't cause separate rebuilds.
     // Each is independent (no transitive dependencies between them).
     ref.invalidate(currentPlanProvider);
-    ref.invalidate(workoutStatsProvider);
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(streakProvider);
     ref.invalidate(todayWorkoutProvider);
@@ -2950,7 +2935,6 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
     ref.invalidate(currentPlanProvider);
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(todayWorkoutProvider);
-    ref.invalidate(workoutStatsProvider);
     ref.invalidate(streakProvider);
   }
 }
