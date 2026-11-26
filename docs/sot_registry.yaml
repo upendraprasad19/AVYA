@@ -5531,10 +5531,16 @@ concepts:
     readers:
       - file: lib/features/nutrition/services/nutrition_history.dart
         line_range: 1-9999
-        method: buildNutritionDays / dayStatusOf / judgeDays / rollingAverage / weeklyBuckets / hitStats / weekdayWeekend / trainingVsRest / slotAverages / topFoods / nutritionInsights / weekIndexOfDateKey
+        method: buildNutritionDays / dayStatusOf / judgeDays / rollingAverage / weeklyBuckets / hitStats / weekdayWeekend / trainingVsRest / slotAverages / topFoods / foodFamilyOf / nutritionInsights / weekIndexOfDateKey
         semantic: historical-series
         fields_read: [date, is_saved_meal, meal_type, total_calories, total_protein, total_carbs, total_fat, total_fiber, items]
-        notes: Pure. All calendar maths on IST date keys parsed as UTC calendar dates.
+        notes: Pure. All calendar maths on IST date keys parsed as UTC calendar dates. v2 (2026-11-26) adds NutritionDay.proteinBySlot (sums to protein), runs that skip non-full days for calories and protein (60dc46) and food families in topFoods (3cfcc6).
+      - file: lib/features/nutrition/services/nutrition_history_views.dart
+        line_range: 1-9999
+        method: journeyStats / loggingRun / hitZeroReason / chartBounds / slotProteinAverages / weekdayProtein / onTargetVsLowProtein / monthlyRows
+        semantic: historical-series
+        fields_read: [via buildNutritionDays, weights]
+        notes: Pure v2 views. Behavioral tests test/features/nutrition/nutrition_history_v2_test.dart and the v2 real-Hive case in the concept's behavioral_test_path.
       - file: lib/features/nutrition/repositories/nutrition_repository.dart
         line_range: 1-9999
         method: loadHistoryInputs / mealsForDay

@@ -1,0 +1,95 @@
+# Closure ledger - nutrition-history-v2 (founder observation 3). Gate 40
+# (validate_audit_closure.dart): one terminal_state per entry, no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form.
+
+batch: nutrition-history-v2
+plan: docs/plans/nutrition-history-v2.md
+plan_review_record: docs/plan-reviews/nutrition-history-v2.md
+
+findings:
+  - id: U1
+    title: "Header: days logged, of the last 30 days, avg protein on full days (ALL days); Day N removed"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      nutrition_history_v2_test 'header' group; screen test header case; mutant M4 red.
+  - id: U2
+    title: "Runs skip non-full days for calories and protein; stale current run; water keeps break (60dc46)"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      v2 test 'runs (60dc46)'; writer_to_reader (4,3,2,1); mutants M1, M2, M3 red.
+  - id: U3
+    title: "Logging run with next-step copy in the header"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      v2 test logging run cases; screen header text; mutant M5 red.
+  - id: U4
+    title: "Zero-state reason line with one next step"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      v2 test 'zero-state'; mutant M6 red.
+  - id: U5
+    title: "Trend chart y labels (outside the tap area), gridlines, three date labels"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      Screen tap test still maps the first bar; text-scale 1.3 tests show no overflow. No mutant (plan §13).
+  - id: U6
+    title: "Calendar one block per month with labels; low protein red"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      v2 test 'calendar months'; screen tap via monthBlockIndexAt; mutant M17 red; M13 equivalent, code removed.
+  - id: U7
+    title: "Calories vs weight as two stacked labelled charts with a summary"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      chartBounds test; full-account screen test shows the section without overflow.
+  - id: U8
+    title: "Macro split 0/50/100 scale"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      Screen tests render the section without overflow at text scale 1.0 and 1.3.
+  - id: U9
+    title: "Food families, kinds, share, concentration (3cfcc6)"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      Real-Hive v2 case (three wheys -> Whey, 3 kinds, 76 g); v2 'food families'; mutants M8-M11 red.
+  - id: U10
+    title: "Protein by meal with one suggestion"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      v2 'protein by meal'; proteinBySlot sums to the day on real Hive.
+  - id: U11
+    title: "Protein hit rate by weekday"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      v2 'weekday rates'; mutant M12 red.
+  - id: U12
+    title: "On-target vs low-protein days by meal"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      v2 'on-target vs low-protein'; mutant M14 red.
+  - id: U13
+    title: "Monthly report: 6 calendar months, year folds, weight anchors"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      v2 'monthly report'; mutants M15, M16 red.
+  - id: U14
+    title: "Docs: nutrition CLAUDE.md, functionality flow NUT-21, glossary, SoT registry, diagnoses"
+    terminal_state: closed_in_commit
+    commit: nutrition-history-v2@branch
+    verification: >
+      Both diagnose docs pass validate_diagnose_doc; registry gates in the pre-commit loop.
+
+closed_count: 14

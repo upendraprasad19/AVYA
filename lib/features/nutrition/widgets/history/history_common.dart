@@ -96,7 +96,7 @@ Color statusColor(DayStatus s) {
     case DayStatus.onTarget:
       return AppColors.ok;
     case DayStatus.lowProtein:
-      return AppColors.accent;
+      return AppColors.bad; // red (founder 2026-11-26); over stays amber
     case DayStatus.under:
       return AppColors.info;
     case DayStatus.over:
