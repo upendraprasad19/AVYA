@@ -4,10 +4,50 @@
 /// `TickerMode` off for the hidden ones) or a closed sheet must not leave the
 /// microphone running, and the app going to the background must not either.
 /// Both hosts wrap their mic area in this widget.
+///
+/// This file also holds the dictation field's shared line geometry (OI-348
+/// Landing 3e): both hosts let their field grow to [kDictationFieldMaxLines]
+/// lines, and the coach's live words are capped at the same height.
 library;
 
 import 'package:flutter/widgets.dart';
 import 'package:icanbefitter/core/services/speech_input_controller.dart';
+
+/// The most lines a dictation field (coach composer, nutrition Log Food) shows
+/// before it scrolls (OI-348 Landing 3e, plan `docs/plans/oi348-landing3e.md`).
+const int kDictationFieldMaxLines = 6;
+
+/// The line height, as a multiple of the 14 dp font size, of every dictation
+/// line. Forced through [kDictationStrut], so a line is exactly
+/// `scale(14) * kDictationLineHeight` whatever the font's own metrics.
+const double kDictationLineHeight = 1.4;
+
+/// The forced strut both hosts' fields and the coach's live words use, so the
+/// live box's cap and the fields' own six-line height are the same number.
+const StrutStyle kDictationStrut = StrutStyle(
+  fontSize: 14,
+  height: kDictationLineHeight,
+  forceStrutHeight: true,
+);
+
+/// The height of [kDictationFieldMaxLines] dictation lines under [context]'s
+/// text scaler: the SAME number a text field with `maxLines:
+/// kDictationFieldMaxLines` and [kDictationStrut] takes (`RenderEditable` is
+/// `preferredLineHeight * maxLines`). Measured, not `scale(14) * 1.4 * 6`: the
+/// engine rounds a line's height (19.6 lays out as 20), so the formula was
+/// 2.4dp short of the field (build finding, OI-348 Landing 3e T3c). The strut
+/// is forced, so the font (loaded late by google_fonts) does not change it.
+double dictationMaxHeight(BuildContext context) {
+  final painter = TextPainter(
+    text: const TextSpan(text: ' ', style: TextStyle(fontSize: 14)),
+    strutStyle: kDictationStrut,
+    textDirection: TextDirection.ltr,
+    textScaler: MediaQuery.textScalerOf(context),
+  );
+  final line = painter.preferredLineHeight;
+  painter.dispose();
+  return line * kDictationFieldMaxLines;
+}
 
 class SpeechInputLifecycle extends StatefulWidget {
   const SpeechInputLifecycle({

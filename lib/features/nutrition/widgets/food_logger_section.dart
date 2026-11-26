@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/copy/speech_input_copy.dart';
@@ -46,6 +47,12 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
   final _focusNode = FocusNode();
   bool _isFocused = false;
 
+  /// The field's own scroll (OI-348 Landing 3e): the field is unfocused while
+  /// the mic is on, and an unfocused field does not follow its caret, so each
+  /// live write jumps it to the end (newest words in view).
+  final _fieldScroll = ScrollController();
+  bool _jumpScheduled = false;
+
   /// One dictation session for this field (plan `docs/plans/voice-input-unified.md`, D5).
   late final SpeechInputController _speech;
 
@@ -77,6 +84,7 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
     _speech.dispose();
     _controller.dispose();
     _focusNode.dispose();
+    _fieldScroll.dispose();
     super.dispose();
   }
 
@@ -99,8 +107,23 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
   /// they CHANGE, never on an unrelated rebuild.
   void _onSpeechChanged() {
     if (!mounted) return;
-    if (_speech.isBusy) _setFieldText(_joinSpeech(_speech.liveText));
+    if (_speech.isBusy) {
+      _setFieldText(_joinSpeech(_speech.liveText));
+      _scheduleJumpToEnd();
+    }
     setState(() {});
+  }
+
+  /// One jump per frame, after layout, only while the session still runs (a
+  /// stale jump must not fight the Stop-time caret scroll).
+  void _scheduleJumpToEnd() {
+    if (_jumpScheduled) return;
+    _jumpScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _jumpScheduled = false;
+      if (!mounted || !_speech.isBusy || !_fieldScroll.hasClients) return;
+      _fieldScroll.jumpTo(_fieldScroll.position.maxScrollExtent);
+    });
   }
 
   void _onSpeechEnd(SpeechSessionEnd end) {
@@ -296,10 +319,23 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
                       focusNode: _focusNode,
                       // The words form in the field while the mic is on.
                       readOnly: speechBusy,
+                      // OI-348 Landing 3e: grows to six lines, then scrolls.
+                      // `text` keeps the done action (Enter analyses).
+                      scrollController: _fieldScroll,
+                      minLines: 1,
+                      maxLines: kDictationFieldMaxLines,
+                      keyboardType: TextInputType.text,
+                      // Keeps today's one-line text: a pasted newline is
+                      // stripped, as the SDK did for maxLines 1.
+                      inputFormatters: [
+                        FilteringTextInputFormatter.singleLineFormatter,
+                      ],
+                      strutStyle: kDictationStrut,
                       onChanged: (_) => setState(() => _notice = null),
                       onSubmitted: (_) => _analyse(),
                       style: AppTypography.body,
                       decoration: InputDecoration(
+                        hintMaxLines: 1,
                         hintText:
                             'Type what you ate (e.g. 2 rotis with dal)...',
                         hintStyle: AppTypography.body.copyWith(
