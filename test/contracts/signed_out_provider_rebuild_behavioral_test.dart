@@ -158,7 +158,7 @@ const _kTokenWatchSites = <String, int>{
   'lib/features/profile/widgets/measurements_card_frame.dart': 1,
   'lib/features/train/providers/day_swap_provider.dart': 2,
   'lib/features/train/providers/preview_plan_provider.dart': 1,
-  'lib/features/train/providers/train_provider.dart': 6,
+  'lib/features/train/providers/train_provider.dart': 7,
   'lib/features/train/providers/video_render_provider.dart': 1,
   'lib/features/train/widgets/swap_confirm_sheet.dart': 1,
   'lib/shared/mixins/hive_tab_scaffold.dart': 1,
@@ -588,6 +588,30 @@ List<_Case> _cases() => <_Case>[
   _Case('pendingLogActionsProvider', pendingLogActionsProvider),
   _Case('pendingToolIntentsProvider', pendingToolIntentsProvider),
   _Case('selectedWeekProvider', selectedWeekProvider),
+  // train-history-sheet-style: the picked past week's rows. Its build reads schedule_<date> rows through
+  // the schedule read service; the '<anon>' guard comes BEFORE any read. The selection itself resets when
+  // the token flips (it watches selectedWeekProvider), so only the signed-out value is pinned, not a
+  // re-seeded value after the flip back.
+  _Case(
+    'pastWeekDaysProvider',
+    pastWeekDaysProvider,
+    isEmpty: (v) => v == null,
+    seed: () => HiveService.instance.workoutBox.put('schedule_2026-10-12', {
+      'date': '2026-10-12',
+      'type': 'workout',
+      'status': 'planned',
+      'workout_name': 'Push',
+      'exercises': <Map<String, dynamic>>[],
+    }),
+    listen: (c, onError) {
+      c.read(pastWeekSelectionProvider.notifier).select(const PastWeekSelection(
+          phaseNumber: 1,
+          weekInPhase: 1,
+          dates: ['2026-10-12'],
+          phaseStart: '2026-10-12'));
+      c.listen(pastWeekDaysProvider, (_, _) {}, onError: (e, _) => onError(e));
+    },
+  ),
   _Case('activeWorkoutProvider', activeWorkoutProvider),
   // Providers that do NOT watch the token themselves (they watch a guarded
   // provider, or read a box straight): the token-site count cannot see them.
