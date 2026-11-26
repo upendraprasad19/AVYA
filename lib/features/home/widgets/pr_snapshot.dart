@@ -203,12 +203,11 @@ class PrSnapshot extends ConsumerWidget {
   }
 }
 
-/// The values a sparkline draws, or an empty list when the history is too
+/// The values a sparkline draws: the personal record AS OF each logged day (a
+/// running best, so it never dips), or an empty list when the history is too
 /// short to be a trend (fewer than two logged days).
 List<double> prSparkValues(ExercisePrSeries series) =>
-    series.points.length >= 2
-        ? [for (final p in series.points) p.value]
-        : const <double>[];
+    series.points.length >= 2 ? prRunningBest(series.points) : const <double>[];
 
 /// Below this tile width, or above this text scale, a tile keeps today's
 /// layout with no sparkline (the number must stay readable).

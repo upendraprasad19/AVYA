@@ -4,6 +4,7 @@
 // test/contracts/exercise_pr_series_writer_to_reader_test.dart.
 library;
 
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -189,6 +190,63 @@ void main() {
       expect(prSparkValues(_plankSeries), isEmpty);
       expect(prSparkValues(ExercisePrSeries.empty), isEmpty);
       expect(prSparkValues(_benchSeries), [60, 75, 82.5]);
+    });
+
+    // Founder observation 2026-11-26: a PR only rises or holds. 40 kg in Jan,
+    // 35 kg in Feb (PR still 40), 42.5 kg in Mar.
+    final dip = _s([
+      ('2026-01-10', 40, 5),
+      ('2026-02-10', 35, 8),
+      ('2026-03-10', 42.5, 3),
+    ]);
+
+    test('prRunningBest: the PR as of each day never dips', () {
+      expect(prRunningBest(dip.points), [40, 40, 42.5]);
+      expect(prRunningBest(const []), isEmpty);
+    });
+
+    test('prSparkValues: the tile spark is the running PR, not the day lifted', () {
+      expect(prSparkValues(dip), [40, 40, 42.5]);
+    });
+
+    test('prJourneyLine: "now" is the standing PR after a lighter last day', () {
+      final down = _s([('2026-01-10', 40, 5), ('2026-02-10', 35, 8)]);
+      expect(prJourneyLine(down, _pr('Bench', 'weight_reps', 40)),
+          'First log 10 Jan: 40 kg · now 40 kg');
+    });
+
+    testWidgets('the sheet draws a PR step line and the lifted line, with a legend',
+        (tester) async {
+      final pr = _pr('Bench', 'weight_reps', 42.5);
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(body: PrTrendSheet(pr: pr, series: dip))));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final bars = tester.widget<LineChart>(find.byType(LineChart)).data.lineBarsData;
+      expect(bars, hasLength(2));
+      expect(bars[0].isStepLineChart, isTrue);
+      expect(bars[0].spots.take(3).map((s) => s.y), [40, 40, 42.5]);
+      expect(bars[1].isStepLineChart, isFalse);
+      expect(bars[1].spots.map((s) => s.y), [40, 35, 42.5]);
+      expect(find.byKey(const Key('pr_trend_legend')), findsOneWidget);
+    });
+
+    testWidgets('a PR set before the range still holds inside it', (tester) async {
+      // 1W is anchored to the last log (10 Nov): it shows 20 Oct (carried) and
+      // 10 Nov. The 50 kg PR from May is before both.
+      final old = _s([
+        ('2026-05-01', 50, 5),
+        ('2026-10-20', 40, 5),
+        ('2026-11-10', 45, 5),
+      ]);
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: PrTrendSheet(pr: _pr('Bench', 'weight_reps', 50), series: old))));
+      await tester.tap(find.byKey(const Key('pr_trend_range_1W')));
+      await tester.pump();
+      final bars = tester.widget<LineChart>(find.byType(LineChart)).data.lineBarsData;
+      expect(bars[1].spots.map((s) => s.y), [40, 45]);
+      expect(bars[0].spots.take(2).map((s) => s.y), [50, 50]);
     });
 
     test('W4: a range keeps its days plus ONE carried-forward day', () {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/train/services/exercise_pr_series.dart';
 import 'package:icanbefitter/shared/widgets/weight_trend_chart.dart';
@@ -37,13 +38,26 @@ String prPointLabel(PrSeriesPoint point, ExercisePR pr) {
 }
 
 /// The one-line summary under the chart, over the FULL series (never the
-/// selected range).
+/// selected range). "now" is the record that stands, not the last day lifted.
 String prJourneyLine(ExercisePrSeries series, ExercisePR pr) {
   final pts = series.points;
   if (pts.length < 2) return 'Log it again to see your trend';
   return 'First log ${prDayLabel(pts.first.date)}: '
       '${prValueLabel(pts.first.value, pr)} · '
-      'now ${prValueLabel(pts.last.value, pr)}';
+      'now ${prValueLabel(prRunningBest(pts).last, pr)}';
+}
+
+/// The personal record as of each of [points] (oldest first): the running
+/// best. A PR only ever rises or holds, so this never dips, whatever a later
+/// day lifted.
+List<double> prRunningBest(List<PrSeriesPoint> points) {
+  final out = <double>[];
+  var best = double.negativeInfinity;
+  for (final p in points) {
+    if (p.value > best) best = p.value;
+    out.add(best);
+  }
+  return out;
 }
 
 /// The points to draw for [window] (null = all): the shared trend window, so a
@@ -90,8 +104,9 @@ Future<void> showPrTrendSheet(
   );
 }
 
-/// Bottom sheet: the best value per workout day of one exercise, with range
-/// chips, the PR point marked and a first-log-to-now line. Reads nothing: the
+/// Bottom sheet: two lines over one exercise's history, the personal record as
+/// a step (it only rises or holds) and the best set of each workout day, with
+/// range chips, the PR point marked and a first-log-to-now line. Reads nothing: the
 /// caller passes the PR and its series (both already local).
 class PrTrendSheet extends StatefulWidget {
   const PrTrendSheet({super.key, required this.pr, required this.series});
@@ -102,6 +117,9 @@ class PrTrendSheet extends StatefulWidget {
   @override
   State<PrTrendSheet> createState() => _PrTrendSheetState();
 }
+
+/// Index of the lifted line in the chart's bars (0 is the PR step).
+const _liftedBar = 1;
 
 class _PrTrendSheetState extends State<PrTrendSheet> {
   String _range = 'All';
@@ -219,6 +237,16 @@ class _PrTrendSheetState extends State<PrTrendSheet> {
               ),
               const SizedBox(height: 14),
               SizedBox(height: 190, child: _chart()),
+              const SizedBox(height: 8),
+              Wrap(
+                key: const Key('pr_trend_legend'),
+                spacing: 16,
+                runSpacing: 4,
+                children: [
+                  _legend(AppColors.accent, 'Personal record'),
+                  _legend(AppColors.textDim, 'Best set that day'),
+                ],
+              ),
             ],
             const SizedBox(height: 14),
             Text(
@@ -231,6 +259,16 @@ class _PrTrendSheetState extends State<PrTrendSheet> {
       ),
     );
   }
+
+  Widget _legend(Color color, String label) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 14, height: 2.5, color: color),
+          const SizedBox(width: 6),
+          Text(label,
+              style: AppTypography.monoXs.copyWith(color: AppColors.textMute)),
+        ],
+      );
 
   Widget _chart() {
     final pr = widget.pr;
@@ -255,14 +293,31 @@ class _PrTrendSheetState extends State<PrTrendSheet> {
           p.value,
         ),
     ];
-    final values = shown.map((p) => p.value);
+    // The PR as of each shown day, over the FULL series (a PR set before the
+    // range still holds inside it).
+    final running = prRunningBest(widget.series.points);
+    final bestByDate = {
+      for (var i = 0; i < running.length; i++)
+        widget.series.points[i].date: running[i],
+    };
+    final prSpots = [
+      for (var i = 0; i < shown.length; i++)
+        FlSpot(spots[i].x, bestByDate[shown[i].date]!),
+    ];
+    // The record still stands today: carry the step on to today.
+    final today = DateTime.tryParse(istTodayStr());
+    if (today != null) {
+      final todayX = today.difference(first).inDays.toDouble();
+      if (todayX > prSpots.last.x) prSpots.add(FlSpot(todayX, prSpots.last.y));
+    }
+    final values = [...shown.map((p) => p.value), ...prSpots.map((s) => s.y)];
     final lo = values.reduce((a, b) => a < b ? a : b);
     final hi = values.reduce((a, b) => a > b ? a : b);
     // 10 % head and foot room; a flat history gets a fixed band around it.
     final pad = hi == lo ? 1.0 : (hi - lo) * 0.1;
     final minY = lo - pad;
     final maxY = hi + pad;
-    final maxX = spots.last.x;
+    final maxX = prSpots.last.x;
 
     return LineChart(
       LineChartData(
@@ -317,48 +372,60 @@ class _PrTrendSheetState extends State<PrTrendSheet> {
           touchTooltipData: LineTouchTooltipData(
             getTooltipItems: (touched) => [
               for (final s in touched)
-                LineTooltipItem(
-                  prPointLabel(shown[s.spotIndex], pr),
-                  AppTypography.bodySm.copyWith(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+                // One tooltip per day, on the lifted line, naming the PR that
+                // stood that day.
+                s.barIndex == _liftedBar
+                    ? LineTooltipItem(
+                        '${prPointLabel(shown[s.spotIndex], pr)}\n'
+                        'PR ${prValueLabel(prSpots[s.spotIndex].y, pr)}',
+                        AppTypography.bodySm.copyWith(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      )
+                    : null,
             ],
           ),
         ),
         lineBarsData: [
+          // 0: the personal record, a step: flat until a new PR, then a jump.
           LineChartBarData(
-            spots: spots,
-            // Straight segments: each point is a real logged day, and a curve
-            // would draw values nobody lifted between them.
-            isCurved: false,
+            spots: prSpots,
+            isStepLineChart: true,
             color: AppColors.accent,
             barWidth: 2.5,
             dotData: FlDotData(
               show: true,
-              checkToShowDot: (spot, bar) {
-                final i = bar.spots.indexOf(spot);
-                return i == marker || bar.spots.length <= 30;
-              },
-              getDotPainter: (s, pct, bar, i) => i == marker
-                  ? FlDotCirclePainter(
-                      radius: 5.5,
-                      color: AppColors.accent,
-                      strokeWidth: 2,
-                      strokeColor: AppColors.textPrimary,
-                    )
-                  : FlDotCirclePainter(
-                      radius: 3,
-                      color: AppColors.accent,
-                      strokeWidth: 1,
-                      strokeColor: AppColors.bg,
-                    ),
+              checkToShowDot: (spot, bar) => bar.spots.indexOf(spot) == marker,
+              getDotPainter: (s, pct, bar, i) => FlDotCirclePainter(
+                radius: 5.5,
+                color: AppColors.accent,
+                strokeWidth: 2,
+                strokeColor: AppColors.textPrimary,
+              ),
             ),
             belowBarData: BarAreaData(
               show: true,
               color: AppColors.accent.withValues(alpha: 0.06),
+            ),
+          ),
+          // 1: the best set actually lifted each day. Straight segments: each
+          // point is a real logged day.
+          LineChartBarData(
+            spots: spots,
+            isCurved: false,
+            color: AppColors.textDim,
+            barWidth: 1.5,
+            dotData: FlDotData(
+              show: true,
+              checkToShowDot: (spot, bar) => bar.spots.length <= 30,
+              getDotPainter: (s, pct, bar, i) => FlDotCirclePainter(
+                radius: 2.5,
+                color: AppColors.textDim,
+                strokeWidth: 1,
+                strokeColor: AppColors.bg,
+              ),
             ),
           ),
         ],

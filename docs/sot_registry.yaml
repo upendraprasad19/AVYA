@@ -5603,17 +5603,21 @@ concepts:
         method: PrSnapshot tiles and list rows (prSparkValues)
         semantic: display-only
         fields_read: [points.value]
+        notes: 592da4 — the spark draws prRunningBest(points), the PR as of each day; it never dips.
       - file: lib/features/home/widgets/pr_trend_sheet.dart
         line_range: 1-9999
-        method: PrTrendSheet (prWindowPoints / prMarkerIndex / prPointLabel / prJourneyLine)
+        method: PrTrendSheet (prRunningBest / prWindowPoints / prMarkerIndex / prPointLabel / prJourneyLine)
         semantic: display-only
         fields_read: [points.date, points.value, points.reps]
+        notes: 592da4 — two bars. Bar 0 the PR, a step line of the running best over the FULL series by date, carried on to today (istTodayStr), with the PR marker. Bar 1 the best set each day. The journey line's "now" is the standing PR.
     regression_test: test/features/home/pr_trend_widgets_test.dart
     provider_invalidation_set: [allExercisePRsProvider]
     class_constraints: |
       One value rule for the PR and its chart: never value a row for the
       series with anything but exercisePrValueOfRow. A sparkline needs two
       logged days. The series is in the PR's unit only.
+      A line labelled as the PR is the running best (prRunningBest): it
+      only rises or holds. The per-day values are the lifted line (592da4).
 
   - concept: water_logs
     domain: nutrition
