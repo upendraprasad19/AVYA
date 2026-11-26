@@ -15,9 +15,9 @@ import 'package:icanbefitter/features/nutrition/providers/nutrition_history_prov
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/nutrition/screens/nutrition_history_screen.dart';
 import 'package:icanbefitter/features/nutrition/services/nutrition_history.dart';
+import 'package:icanbefitter/features/nutrition/services/nutrition_history_views.dart';
 import 'package:icanbefitter/features/nutrition/widgets/history/history_day_sheet.dart';
 import 'package:icanbefitter/features/nutrition/widgets/history/history_heatmap.dart';
-import 'package:icanbefitter/features/nutrition/widgets/history/history_sections.dart';
 import 'package:icanbefitter/features/nutrition/widgets/history/history_trend_chart.dart';
 import 'package:icanbefitter/features/nutrition/widgets/insights_section.dart';
 import 'package:icanbefitter/features/nutrition/widgets/weekly_chart_card.dart';
@@ -127,9 +127,14 @@ void main() {
       (tester) async {
     final data = _data(10, skip: (ago) => ago == 3);
     await _pump(tester, data);
-    expect(find.text('TRACKING SINCE ${_dayLabelUpper(_key(9))}'), findsOneWidget);
-    expect(find.descendant(
-        of: find.byKey(const Key('history_day_n')), matching: find.text('10')),
+    expect(find.text('SUPPLY LOG · SINCE ${_dayLabelUpper(_key(9))}'),
+        findsOneWidget);
+    expect(find.byKey(const Key('history_day_n')), findsNothing,
+        reason: '"Day N" is gone (founder 2026-11-26)');
+    expect(find.byKey(const Key('history_logged_30')), findsNothing,
+        reason: 'a 10-day history would repeat days logged');
+    // Days 0..2 logged (3 ago skipped): a run of 3, today included.
+    expect(find.text('Logged 3 days in a row, today included. Best: 6.'),
         findsOneWidget);
     expect(find.descendant(
         of: find.byKey(const Key('history_days_logged')),
@@ -184,7 +189,14 @@ void main() {
     expect(find.text('On target'), findsNothing);
     expect(find.text('Logged'), findsOneWidget);
     expect(find.byKey(const Key('history_macro_split')), findsOneWidget);
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('history_top_foods')), 300,
+        scrollable: find.descendant(
+            of: find.byKey(const Key('history_list')),
+            matching: find.byType(Scrollable)).first);
     expect(find.byKey(const Key('history_top_foods')), findsOneWidget);
+    expect(find.byKey(const Key('history_weekday_protein')), findsNothing);
+    expect(find.byKey(const Key('history_on_target_compare')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -201,20 +213,28 @@ void main() {
   testWidgets('a full account shows every section', (tester) async {
     await _pump(tester, _data(120, skip: (ago) => ago > 60 && ago % 2 == 0));
     for (final key in const [
-      'history_trend', 'history_consistency', 'history_hit_rates',
-      'history_macro_split', 'history_weight_overlay', 'history_patterns',
-      'history_top_foods', 'history_insights',
+      // Screen order: scrollUntilVisible only scrolls down.
+      'history_trend', 'history_consistency', 'history_insights',
+      'history_hit_rates', 'history_protein_by_meal',
+      'history_weekday_protein', 'history_macro_split',
+      'history_weight_overlay', 'history_patterns', 'history_top_foods',
+      'history_monthly_report',
     ]) {
       await tester.scrollUntilVisible(find.byKey(Key(key)), 300,
           scrollable: find.descendant(
               of: find.byKey(const Key('history_list')),
               matching: find.byType(Scrollable)).first);
       expect(find.byKey(Key(key)), findsOneWidget, reason: key);
+      if (key == 'history_patterns') {
+        expect(find.byKey(const Key('history_pattern_weekend')), findsOneWidget);
+        expect(find.byKey(const Key('history_pattern_training')),
+            findsOneWidget);
+        expect(find.byKey(const Key('history_pattern_slots')), findsOneWidget);
+      }
     }
-    expect(find.byKey(const Key('history_pattern_weekend')), findsOneWidget);
-    expect(find.byKey(const Key('history_pattern_training')), findsOneWidget);
-    expect(find.byKey(const Key('history_pattern_slots')), findsOneWidget);
-    expect(find.text('Dal Rice'), findsWidgets);
+    // Top foods folds "Dal Rice" into the Dal family (3cfcc6).
+    expect(find.text('Dal'), findsWidgets);
+    expect(find.text('Dal Rice'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -238,13 +258,18 @@ void main() {
 
     // Heatmap: 2026-11-25 is a Wednesday (row 2); the 7 days start on
     // Thursday 19 Nov (column 0, row 3) and today is column 1, row 2.
-    expect(heatmapIndexAt(data.days, 0, 3), 0);
-    expect(heatmapIndexAt(data.days, 1, 2), 6);
-    expect(heatmapIndexAt(data.days, 0, 2), isNull);
-    expect(heatmapIndexAt(data.days, 1, 3), isNull);
-    final heat = tester.getRect(find.byKey(const Key('history_heatmap')));
     const step = kHeatCell + kHeatGap;
-    await tester.tapAt(heat.topLeft + const Offset(step * 1 + 5, step * 2 + 5));
+    final blocks = monthBlocks(data.days, (_) => 20);
+    expect(blocks, hasLength(1));
+    const y0 = kHeatLabelRow;
+    expect(monthBlockIndexAt(blocks, 5, y0 + step * 3 + 5), 0);
+    expect(monthBlockIndexAt(blocks, step + 5, y0 + step * 2 + 5), 6);
+    expect(monthBlockIndexAt(blocks, 5, y0 + step * 2 + 5), isNull);
+    expect(monthBlockIndexAt(blocks, step + 5, y0 + step * 3 + 5), isNull);
+    expect(monthBlockIndexAt(blocks, 5, 4), isNull, reason: 'label row');
+    final heat = tester.getRect(find.byKey(const Key('history_heatmap')));
+    await tester.tapAt(
+        heat.topLeft + const Offset(step * 1 + 5, y0 + step * 2 + 5));
     await tester.pumpAndSettle();
     expect(tester.widget<HistoryDaySheet>(find.byType(HistoryDaySheet)).day.date,
         _today);
@@ -295,8 +320,10 @@ void main() {
         waterTargetMl: 2500);
     expect(water.bars.first.target, 2500);
     expect(water.bars.last.counted, isFalse, reason: 'today');
-    expect(proteinThisMonth(d92, _today), 25 * 105.0,
-        reason: '1..25 Nov, 105 g a day');
+    final js = journeyStats(d92);
+    expect(js.logged, 92);
+    expect(js.logged30, 30, reason: 'last 30 days including today');
+    expect(js.avgProtein30, 105.0, reason: '29 full days, today excluded');
   });
 
   testWidgets('the Insights card: history row always visible, weekly cards on '

@@ -13,7 +13,9 @@ import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 import '../../providers/nutrition_history_provider.dart';
 import '../../services/nutrition_history.dart';
+import '../../services/nutrition_history_views.dart';
 import 'history_common.dart';
+import 'history_trend_chart.dart' show YAxisLabels, yAxisWidth;
 
 TextStyle get _value => AppTypography.titleS.copyWith(color: AppColors.textPrimary);
 TextStyle get _dim => AppTypography.bodySm.copyWith(color: AppColors.textDim);
@@ -21,16 +23,17 @@ TextStyle get _mute => AppTypography.bodySm.copyWith(color: AppColors.textMute);
 
 // ── 1. Journey header ────────────────────────────────────────────
 
-/// Protein eaten in the calendar month of [todayKey] (every logged day).
-double proteinThisMonth(List<JudgedDay> days, String todayKey) {
-  final month = todayKey.substring(0, 7);
-  var sum = 0.0;
-  for (final j in days) {
-    if (j.date.startsWith(month)) sum += j.day.protein;
-  }
-  return sum;
+/// The header eyebrow: `SUPPLY LOG · SINCE 1 MAY`, with the year when it is
+/// not the current year.
+String historySinceLabel(String fromDay, String todayKey) {
+  final base = historyDayLabel(fromDay).toUpperCase();
+  final year = fromDay.substring(0, 4);
+  return year == todayKey.substring(0, 4)
+      ? 'SUPPLY LOG · SINCE $base'
+      : 'SUPPLY LOG · SINCE $base $year';
 }
 
+/// Header over ALL days, never the range chip (plan §11).
 class HistoryJourneyHeader extends StatelessWidget {
   const HistoryJourneyHeader({super.key, required this.data});
 
@@ -38,14 +41,15 @@ class HistoryJourneyHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final protein = proteinThisMonth(data.days, data.todayKey);
+    final s = journeyStats(data.days);
+    final run = loggingRun(data.days, data.todayKey);
     return WardCard(
       variant: WardCardVariant.standard,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'TRACKING SINCE ${historyDayLabel(data.fromDay).toUpperCase()}',
+            historySinceLabel(data.fromDay, data.todayKey),
             key: const Key('history_since'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -56,12 +60,22 @@ class HistoryJourneyHeader extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Stat('Day', '${data.days.length}', key: const Key('history_day_n')),
-              _Stat('Days logged', '${data.daysLogged}',
+              _Stat('Days logged', '${s.logged}',
                   key: const Key('history_days_logged')),
-              _Stat('Protein this month', '${groupedInt(protein.round())} g'),
+              if (s.logged30 != null)
+                _Stat('Of the last 30 days', '${s.logged30}',
+                    key: const Key('history_logged_30')),
+              _Stat(
+                  'Avg protein, full days, last 30',
+                  s.avgProtein30 == null
+                      ? '—'
+                      : '${s.avgProtein30!.round()} g',
+                  key: const Key('history_avg_protein_30')),
             ],
           ),
+          const SizedBox(height: 10),
+          Text(loggingRunLine(run),
+              key: const Key('history_logging_run'), style: _dim),
         ],
       ),
     );
@@ -113,14 +127,22 @@ class HistoryMacroSplit extends StatelessWidget {
     return HistorySection(
       key: const Key('history_macro_split'),
       title: 'MACRO SPLIT BY WEEK',
-      note: 'Share of calories from protein, carbs and fat.',
+      note: 'Share of calories (%) from protein, carbs and fat.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            height: 90,
-            width: double.infinity,
-            child: CustomPaint(painter: _SplitPainter(weeks)),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 90,
+                  child: CustomPaint(painter: _SplitPainter(weeks)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              const YAxisLabels(
+                  labels: ['100', '50', '0'], height: 90, width: 24),
+            ],
           ),
           const SizedBox(height: 6),
           Row(
@@ -179,7 +201,7 @@ class _SplitPainter extends CustomPainter {
   bool shouldRepaint(_SplitPainter old) => old.weeks != weeks;
 }
 
-// ── 5. Hit-rate and streaks ──────────────────────────────────────
+// ── 5. Hit-rate and runs ─────────────────────────────────────────
 
 /// Calories and protein rows need a known target and at least one judged day;
 /// the water row at least one day with water. Hidden when no row shows.
@@ -198,7 +220,8 @@ class HistoryHitRates extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = <Widget>[];
-    void add(String label, String rule, HitStats s, Color color, Key key) {
+    void add(String label, String rule, String runWord, HitStats s,
+        Color color, Key key, String? reason) {
       if (s.counted == 0) return;
       rows.add(Padding(
         key: key,
@@ -209,7 +232,7 @@ class HistoryHitRates extends StatelessWidget {
             Row(
               children: [
                 Expanded(child: Text(label, style: _value)),
-                Text('${(s.rate! * 100).round()}%',
+                Text('${s.hits} of ${s.counted}',
                     style: _value.copyWith(color: color)),
               ],
             ),
@@ -225,29 +248,51 @@ class HistoryHitRates extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '${s.hits} of ${s.counted} days $rule · best run ${s.bestRun} · '
-              'current ${s.currentRun}',
+              '$rule · ${(s.rate! * 100).round()}% · best run ${s.bestRun} · '
+              'current ${s.currentRun} ($runWord)',
               style: _dim,
             ),
+            if (reason != null) ...[
+              const SizedBox(height: 6),
+              Text(reason, key: Key('${(key as ValueKey).value}_reason'),
+                  style: AppTypography.bodySm
+                      .copyWith(color: AppColors.textPrimary)),
+            ],
           ],
         ),
       ));
     }
 
-    add('Calories', 'within 10% of target',
+    add(
+        'Calories',
+        'full days within 10% of target',
+        'full days in a row',
         hitStats(days, HitKind.calories, todayKey),
-        metricColor(NutritionMetric.calories), const Key('history_hit_calories'));
-    add('Protein', 'at 90% of target or more',
+        metricColor(NutritionMetric.calories),
+        const Key('history_hit_calories'),
+        hitZeroReason(days, HitKind.calories, todayKey));
+    add(
+        'Protein',
+        'full days at 90% of target or more',
+        'full days in a row',
         hitStats(days, HitKind.protein, todayKey),
-        metricColor(NutritionMetric.protein), const Key('history_hit_protein'));
-    add('Water', "at today's water target",
+        metricColor(NutritionMetric.protein),
+        const Key('history_hit_protein'),
+        hitZeroReason(days, HitKind.protein, todayKey));
+    add(
+        'Water',
+        "days at today's water target",
+        'days in a row at your water target',
         hitStats(days, HitKind.water, todayKey, waterTargetMl: waterTargetMl),
-        metricColor(NutritionMetric.water), const Key('history_hit_water'));
+        metricColor(NutritionMetric.water),
+        const Key('history_hit_water'),
+        null);
     if (rows.isEmpty) return const SizedBox.shrink();
     return HistorySection(
       key: const Key('history_hit_rates'),
-      title: 'HIT RATE & STREAKS',
-      note: 'Full days only. Today and half-logged days are not counted.',
+      title: 'HIT RATE & RUNS',
+      note: 'Calories and protein count full days only; days you did not log '
+          'are skipped. Today is not counted.',
       child: Column(children: rows),
     );
   }
@@ -256,6 +301,7 @@ class HistoryHitRates extends StatelessWidget {
 // ── 6. Calories vs weight ────────────────────────────────────────
 
 /// Needs at least two weigh-ins and two days with a 7-day average in range.
+/// Two stacked charts on one date axis, each with its own labelled scale.
 class HistoryWeightOverlay extends StatelessWidget {
   const HistoryWeightOverlay({
     super.key,
@@ -278,64 +324,124 @@ class HistoryWeightOverlay extends StatelessWidget {
       for (var i = 0; i < roll.length; i++)
         if (roll[i] != null) (i, roll[i]!),
     ];
-    final byDay = <String, double>{};
-    for (final w in weights) {
-      if (w.date.length < 10) continue;
-      final day = w.date.substring(0, 10);
-      if (day.compareTo(from) < 0 || day.compareTo(to) > 0) continue;
-      byDay[day] = w.weight; // the list is oldest first: the last one wins
-    }
     final kg = <(int, double)>[
-      for (final e in byDay.entries)
-        if (index[e.key] != null) (index[e.key]!, e.value),
-    ]..sort((a, b) => a.$1.compareTo(b.$1));
+      for (final (day, w) in weighIns([for (final e in weights) (e.date, e.weight)]))
+        if (day.compareTo(from) >= 0 &&
+            day.compareTo(to) <= 0 &&
+            index[day] != null)
+          (index[day]!, w),
+    ];
     if (kcal.length < 2 || kg.length < 2) return const SizedBox.shrink();
 
-    String kgText(double v) => '${v.toStringAsFixed(1)} kg';
+    final target = latestTarget(days)?.calories;
+    final kb = chartBounds([for (final p in kcal) p.$2],
+        target: target, step: 100);
+    final wb = chartBounds([for (final p in kg) p.$2], step: 0.5);
+    String kgL(double v) => v.toStringAsFixed(1);
+    final kLabels = [groupedInt(kb.hi.round()), groupedInt(kb.lo.round())];
+    final wLabels = [kgL(wb.hi), kgL(wb.lo)];
+    final axis = yAxisWidth(context, [...kLabels, ...wLabels]);
+
+    final firstW = kg.first, lastW = kg.last;
+    final spanDays = parseDayKey(days[lastW.$1].date)!
+        .difference(parseDayKey(days[firstW.$1].date)!)
+        .inDays;
+    final between = [
+      for (var i = firstW.$1; i <= lastW.$1; i++)
+        if (days[i].isComplete) days[i].day.calories,
+    ];
+    final avgK = between.isEmpty
+        ? null
+        : between.reduce((a, b) => a + b) / between.length;
+    final span = spanDays < 14 ? '$spanDays days' : '${spanDays ~/ 7} weeks';
+    final summary = '${kgL(firstW.$2)} kg to ${kgL(lastW.$2)} kg over $span'
+        '${avgK == null ? '' : ' while averaging ${groupedInt(avgK.round())} kcal'}.';
+
+    Widget chart(String title, List<String> labels, Widget plot) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: _mute),
+            const SizedBox(height: 4),
+            Row(children: [
+              YAxisLabels(labels: labels, height: 70, width: axis),
+              Expanded(child: SizedBox(height: 70, child: plot)),
+            ]),
+          ],
+        );
+
     return HistorySection(
       key: const Key('history_weight_overlay'),
       title: 'CALORIES VS WEIGHT',
-      note: 'Each line is drawn on its own scale.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 120,
-            width: double.infinity,
-            child: CustomPaint(painter: _OverlayPainter(kcal, kg, days.length)),
-          ),
-          const SizedBox(height: 10),
-          HistoryLegend([
-            (metricColor(NutritionMetric.calories),
-                'Calories, 7-day average: ${groupedInt(kcal.first.$2.round())} '
-                    'to ${groupedInt(kcal.last.$2.round())} kcal'),
-            (AppColors.info,
-                'Weight: ${kgText(kg.first.$2)} to ${kgText(kg.last.$2)}'),
-          ]),
-        ],
+      child: Semantics(
+        label: 'Calories, 7-day average, and weight. $summary',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            chart(
+                'Calories, 7-day average (kcal)',
+                kLabels,
+                CustomPaint(
+                    painter: _LinePainter(kcal, days.length, kb.lo, kb.hi,
+                        metricColor(NutritionMetric.calories),
+                        target: target))),
+            const SizedBox(height: 10),
+            chart(
+                'Weight (kg)',
+                wLabels,
+                CustomPaint(
+                    painter: _LinePainter(
+                        kg, days.length, wb.lo, wb.hi, AppColors.info,
+                        endDot: true))),
+            const SizedBox(height: 6),
+            Padding(
+              padding: EdgeInsets.only(left: axis),
+              child: Row(children: [
+                Expanded(child: Text(historyDayLabel(from), style: _mute)),
+                Text(historyDayLabel(to), style: _mute),
+              ]),
+            ),
+            const SizedBox(height: 8),
+            Text(summary,
+                key: const Key('history_weight_summary'), style: _dim),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _OverlayPainter extends CustomPainter {
-  _OverlayPainter(this.kcal, this.kg, this.n);
-  final List<(int, double)> kcal, kg;
-  final int n;
+class _LinePainter extends CustomPainter {
+  _LinePainter(this.pts, this.n, this.lo, this.hi, this.color,
+      {this.target, this.endDot = false});
 
-  void _line(Canvas canvas, Size size, List<(int, double)> pts, Color color) {
-    var lo = pts.first.$2, hi = pts.first.$2;
-    for (final p in pts) {
-      lo = math.min(lo, p.$2);
-      hi = math.max(hi, p.$2);
+  final List<(int, double)> pts;
+  final int n;
+  final double lo, hi;
+  final Color color;
+  final double? target;
+  final bool endDot;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    double x(int i) => n <= 1 ? 0.0 : i / (n - 1) * size.width;
+    double y(double v) => size.height - (v - lo) / (hi - lo) * size.height;
+    final grid = Paint()..color = AppColors.border;
+    canvas.drawLine(const Offset(0, 0.5), Offset(size.width, 0.5), grid);
+    canvas.drawLine(Offset(0, size.height - 0.5),
+        Offset(size.width, size.height - 0.5), grid);
+    if (target != null) {
+      final ty = y(target!);
+      final tp = Paint()
+        ..color = AppColors.textDim
+        ..strokeWidth = 1;
+      for (var dx = 0.0; dx < size.width; dx += 6) {
+        canvas.drawLine(Offset(dx, ty), Offset(math.min(dx + 3, size.width), ty), tp);
+      }
     }
-    final span = hi - lo;
     final path = Path();
     for (var i = 0; i < pts.length; i++) {
-      final x = n <= 1 ? 0.0 : pts[i].$1 / (n - 1) * size.width;
-      final t = span == 0 ? 0.5 : (pts[i].$2 - lo) / span;
-      final y = size.height - 6 - t * (size.height - 12);
-      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+      final o = Offset(x(pts[i].$1), y(pts[i].$2));
+      i == 0 ? path.moveTo(o.dx, o.dy) : path.lineTo(o.dx, o.dy);
     }
     canvas.drawPath(
       path,
@@ -345,17 +451,15 @@ class _OverlayPainter extends CustomPainter {
         ..strokeWidth = 2
         ..strokeJoin = StrokeJoin.round,
     );
+    if (endDot) {
+      canvas.drawCircle(Offset(x(pts.last.$1), y(pts.last.$2)), 3,
+          Paint()..color = color);
+    }
   }
 
   @override
-  void paint(Canvas canvas, Size size) {
-    _line(canvas, size, kcal, metricColor(NutritionMetric.calories));
-    _line(canvas, size, kg, AppColors.info);
-  }
-
-  @override
-  bool shouldRepaint(_OverlayPainter old) =>
-      old.kcal != kcal || old.kg != kg || old.n != n;
+  bool shouldRepaint(_LinePainter old) =>
+      old.pts != pts || old.lo != lo || old.hi != hi || old.target != target;
 }
 
 // ── 7. Top foods ─────────────────────────────────────────────────
@@ -381,7 +485,10 @@ class HistoryTopFoods extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(f.name,
+                      child: Text(
+                          f.isFamily && f.kinds >= 2
+                              ? '${f.name} · ${f.kinds} kinds'
+                              : f.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.bodyM
@@ -397,7 +504,9 @@ class HistoryTopFoods extends StatelessWidget {
     return HistorySection(
       key: const Key('history_top_foods'),
       title: 'TOP FOODS · ALL TIME',
-      note: 'Counted from the items of your logged meals.',
+      note: 'Counted from the items of your logged meals. Similar foods '
+          '(whey, eggs, dal...) are grouped; % = share of the protein in your '
+          'itemised meals.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -405,7 +514,19 @@ class HistoryTopFoods extends StatelessWidget {
           if (foods.topProtein.isNotEmpty) ...[
             const SizedBox(height: 8),
             list('Top protein sources', foods.topProtein,
-                (f) => '${groupedInt(f.protein.round())} g'),
+                (f) => '${groupedInt(f.protein.round())} g · '
+                    '${(f.proteinShare * 100).round()}%'),
+            if (foods.concentration != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${foods.concentration!.foods} '
+                '${foods.concentration!.foods == 1 ? 'food gives' : 'foods give'} '
+                '${(foods.concentration!.share * 100).round()}% of the protein '
+                'in your itemised meals.',
+                key: const Key('history_food_concentration'),
+                style: _dim,
+              ),
+            ],
           ],
           if (foods.mealsWithoutItems > 0) ...[
             const SizedBox(height: 4),

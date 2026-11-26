@@ -13,19 +13,104 @@ import 'history_common.dart';
 const double kHeatCell = 14;
 const double kHeatGap = 3;
 
-/// Column (week) and row (weekday, Monday 0) of every day; [days] continuous.
-({int columns, int firstRow}) heatmapShape(List<JudgedDay> days) {
-  if (days.isEmpty) return (columns: 0, firstRow: 0);
-  final firstRow = parseDayKey(days.first.date)!.weekday - 1;
-  return (columns: ((firstRow + days.length) / 7).ceil(), firstRow: firstRow);
+const double kHeatMonthGap = 10;
+const double kHeatLabelRow = 16;
+
+/// One month of the calendar: its label, the weekday row of its first day
+/// (Monday 0), where its days start in [days], how many, its x offset and its
+/// width (cells, or the label when wider).
+typedef MonthBlock = ({
+  String label,
+  int firstRow,
+  int start,
+  int length,
+  double x,
+  double width,
+});
+
+/// Columns (weeks) a block of [length] days starting on [firstRow] spans.
+int monthColumns(int firstRow, int length) => ((firstRow + length) / 7).ceil();
+
+/// The ONE layout of the calendar, used by the painter AND the tap mapping
+/// (plan §9 U6). [labelWidth] measures a label (the widget passes a text
+/// measure under the ambient text scale). The year joins the first block and
+/// every January when the calendar spans more than one year.
+List<MonthBlock> monthBlocks(
+  List<JudgedDay> days,
+  double Function(String) labelWidth,
+) {
+  if (days.isEmpty) return const [];
+  const step = kHeatCell + kHeatGap;
+  final spans =
+      days.first.date.substring(0, 4) != days.last.date.substring(0, 4);
+  final out = <MonthBlock>[];
+  var x = 0.0;
+  var i = 0;
+  while (i < days.length) {
+    final ym = days[i].date.substring(0, 7);
+    var n = 0;
+    while (i + n < days.length && days[i + n].date.startsWith(ym)) {
+      n++;
+    }
+    final m = int.parse(ym.substring(5, 7));
+    var label = kHistoryMonthNames[m - 1];
+    if (spans && (out.isEmpty || m == 1))
+      label = '$label ${ym.substring(0, 4)}';
+    final firstRow = parseDayKey(days[i].date)!.weekday - 1;
+    final cells = monthColumns(firstRow, n) * step - kHeatGap;
+    final width = cells > labelWidth(label) ? cells : labelWidth(label);
+    out.add((
+      label: label,
+      firstRow: firstRow,
+      start: i,
+      length: n,
+      x: x,
+      width: width,
+    ));
+    x += width + kHeatMonthGap;
+    i += n;
+  }
+  return out;
 }
 
-/// The index in [days] of the cell at ([column], [row]), or null.
-int? heatmapIndexAt(List<JudgedDay> days, int column, int row) {
-  final shape = heatmapShape(days);
-  if (row < 0 || row > 6 || column < 0 || column >= shape.columns) return null;
-  final i = column * 7 + row - shape.firstRow;
-  return (i < 0 || i >= days.length) ? null : i;
+const List<String> kHistoryMonthNames = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/// Total width of [blocks].
+double monthBlocksWidth(List<MonthBlock> blocks) =>
+    blocks.isEmpty ? 0 : blocks.last.x + blocks.last.width;
+
+/// The index in [days] of the cell under ([dx], [dy]) (label row included in
+/// [dy]), or null for a gap, the label row, or the empty part of a block.
+int? monthBlockIndexAt(List<MonthBlock> blocks, double dx, double dy) {
+  const step = kHeatCell + kHeatGap;
+  final y = dy - kHeatLabelRow;
+  if (y < 0) return null;
+  final row = (y / step).floor();
+  if (row > 6 || y - row * step > kHeatCell) return null;
+  for (final b in blocks) {
+    if (dx < b.x || dx >= b.x + b.width) continue;
+    final lx = dx - b.x;
+    final col = (lx / step).floor();
+    // A column past the block's cells always gives k >= length (below).
+    if (lx - col * step > kHeatCell) return null;
+    final k = col * 7 + row - b.firstRow;
+    if (k < 0 || k >= b.length) return null;
+    return b.start + k;
+  }
+  return null;
 }
 
 /// The heatmap in words (the cells are painted, so colour needs a text twin):
@@ -56,10 +141,21 @@ class HistoryHeatmap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shape = heatmapShape(days);
+    final scaler = MediaQuery.textScalerOf(context);
+    final labelStyle = AppTypography.monoXs.copyWith(color: AppColors.textMute);
+    double measure(String text) {
+      final tp = TextPainter(
+        text: TextSpan(text: text, style: labelStyle),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+      )..layout();
+      return tp.width;
+    }
+
+    final blocks = monthBlocks(days, measure);
     const step = kHeatCell + kHeatGap;
-    final width = shape.columns * step - kHeatGap;
-    const height = 7 * step - kHeatGap;
+    final width = monthBlocksWidth(blocks);
+    const height = kHeatLabelRow + 7 * step - kHeatGap;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,16 +163,17 @@ class HistoryHeatmap extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              height: height,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  for (final d in const ['M', 'W', 'F', 'S'])
-                    Text(d,
-                        style: AppTypography.monoXs
-                            .copyWith(color: AppColors.textMute)),
-                ],
+            Padding(
+              padding: const EdgeInsets.only(top: kHeatLabelRow),
+              child: SizedBox(
+                height: 7 * step - kHeatGap,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    for (final d in const ['M', 'W', 'F', 'S'])
+                      Text(d, style: labelStyle),
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -84,25 +181,26 @@ class HistoryHeatmap extends StatelessWidget {
               child: SingleChildScrollView(
                 key: const Key('history_heatmap_scroll'),
                 scrollDirection: Axis.horizontal,
-                reverse: true, // open on the newest weeks
+                reverse: true, // open on the newest months
                 child: GestureDetector(
                   key: const Key('history_heatmap'),
                   behavior: HitTestBehavior.opaque,
                   onTapUp: onDayTap == null
                       ? null
                       : (d) {
-                          final i = heatmapIndexAt(
-                            days,
-                            (d.localPosition.dx / step).floor(),
-                            (d.localPosition.dy / step).floor(),
+                          final i = monthBlockIndexAt(
+                            blocks,
+                            d.localPosition.dx,
+                            d.localPosition.dy,
                           );
                           if (i != null) onDayTap!(days[i].date);
                         },
                   child: Semantics(
                     label: heatmapSummary(days),
+                    excludeSemantics: true,
                     child: CustomPaint(
-                      size: Size(width < 0 ? 0 : width, height),
-                      painter: _HeatPainter(days, shape.firstRow),
+                      size: Size(width, height),
+                      painter: _HeatPainter(days, blocks, labelStyle, scaler),
                     ),
                   ),
                 ),
@@ -114,8 +212,10 @@ class HistoryHeatmap extends StatelessWidget {
         HistoryLegend([
           if (hasTargets) ...[
             (statusColor(DayStatus.onTarget), statusLabel(DayStatus.onTarget)),
-            (statusColor(DayStatus.lowProtein),
-                statusLabel(DayStatus.lowProtein)),
+            (
+              statusColor(DayStatus.lowProtein),
+              statusLabel(DayStatus.lowProtein),
+            ),
             (statusColor(DayStatus.under), statusLabel(DayStatus.under)),
             (statusColor(DayStatus.over), statusLabel(DayStatus.over)),
           ] else
@@ -129,30 +229,45 @@ class HistoryHeatmap extends StatelessWidget {
 }
 
 class _HeatPainter extends CustomPainter {
-  _HeatPainter(this.days, this.firstRow);
+  _HeatPainter(this.days, this.blocks, this.labelStyle, this.scaler);
 
   final List<JudgedDay> days;
-  final int firstRow;
+  final List<MonthBlock> blocks;
+  final TextStyle labelStyle;
+  final TextScaler scaler;
 
   @override
   void paint(Canvas canvas, Size size) {
     const step = kHeatCell + kHeatGap;
     final paint = Paint();
-    for (var i = 0; i < days.length; i++) {
-      final cell = i + firstRow;
-      final col = cell ~/ 7, row = cell % 7;
-      paint.color = statusColor(days[i].status);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(col * step, row * step, kHeatCell, kHeatCell),
-          const Radius.circular(3),
-        ),
-        paint,
-      );
+    for (final b in blocks) {
+      final tp = TextPainter(
+        text: TextSpan(text: b.label, style: labelStyle),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+      )..layout();
+      tp.paint(canvas, Offset(b.x, 0));
+      for (var k = 0; k < b.length; k++) {
+        final cell = k + b.firstRow;
+        final col = cell ~/ 7, row = cell % 7;
+        paint.color = statusColor(days[b.start + k].status);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(
+              b.x + col * step,
+              kHeatLabelRow + row * step,
+              kHeatCell,
+              kHeatCell,
+            ),
+            const Radius.circular(3),
+          ),
+          paint,
+        );
+      }
     }
   }
 
   @override
   bool shouldRepaint(_HeatPainter old) =>
-      old.days != days || old.firstRow != firstRow;
+      old.days != days || old.blocks != blocks;
 }
