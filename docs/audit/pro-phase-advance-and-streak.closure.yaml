@@ -1,0 +1,98 @@
+# Closure ledger - pro-phase-advance-and-streak (Piece A of the PRO phase-advance work)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no deferred key.
+# `<branch>@branch` is the in-branch commit form. Piece B is a separate unit of the SAME plan
+# and gets its own ledger when it is built; nothing in it is a finding of Piece A.
+
+batch: pro-phase-advance-and-streak
+plan_review_record: docs/plan-reviews/pro-phase-advance-and-streak.md
+bpass_review: docs/reviews/pro-phase-advance-and-streak-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-16-pro-phase-ensure-after-restore-d9b3e7.md
+
+total: 17
+closed_count: 17
+
+findings:
+  - id: R1-1
+    title: "P1 - a lazy Train rebuild regenerates the OLD phase over the half-written new window (the v10 deletion)"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "Reproduced by a failing test first (test/contracts/pro_phase_ensure_current_behavioral_test.dart A3); fixed by phaseAdvanceInFlight + the Train wait; A3/A5 green; 3 mutants red."
+  - id: R1-2
+    title: "P2 - owner change during generation lets the progress commit land in the other account"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "commitPhaseAdvance(expectedUid) + outcome declined; A4 swaps the account inside the awaited push; 2 mutants red. The per-write part is X-1."
+  - id: R1-3
+    title: "P2 - restore resolve between the window writes and the blob write reverts the window; Edit Profile stamps phase 1"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "localWindowPinned in PlanWindowReanchor.resolve + planWindowPinnedByAdvance; Edit Profile reads user_progress (presence pin); plan_window_reanchor_test.dart; 5 mutants red."
+  - id: R1-4
+    title: "P3 - proPhaseEvidenceGap accepted a double the advance would throw on"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "strict int; group F test; mutant red."
+  - id: R1-5
+    title: "P3 - a declined commit was reported as generated"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "_runAdvanceWith returns {generated, committed}; outcome declined; A4; mutant red."
+  - id: R1-6
+    title: "P3 - diagnose claim 'no isPro() writer in the ref-free path' false; busy is silent"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "diagnose forbidden_patterns_checked corrected; busy documented in impact_analysis."
+  - id: R1-7
+    title: "P3 - isPhaseExpired scanned twice per Train build"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "one read into phaseExpired; train_expired_state_test and the pins green."
+  - id: R2-1
+    title: "P2 - the stale-rows report awaited an unbounded network call inside the advance lock"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: ".timeout(10 s) on the report; presence pin; mutant red."
+  - id: R2-2
+    title: "P2 - the Train wait and the restore pin were outside the kill switch"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "both gated on disable_pro_phase_ensure; A5 tests incl. the old-path-reachable case; 3 mutants red."
+  - id: R2-3
+    title: "P2 - a PRO expiresAt of 2027-10-01 in the new test is a clock bomb"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "relative to the real clock; grep 2027 in the test -> 0 hits."
+  - id: R2-4
+    title: "P2 - the Train-rebuild test depended on a scheduler race"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "deterministic held-lock companion tests (A5), bounded polls, _settleHive between tests; 4 parallel runs green."
+  - id: R2-5
+    title: "P2 - the account-swap test swaps after every row write and the diagnose over-claimed"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "diagnose cross_account_guard text corrected; the residual is X-1."
+  - id: R2-6
+    title: "P3 - event dedupe suppressed repeat generated/declined/failed events"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "only deferred/skipped dedupe; A5 test; 2 mutants red."
+  - id: R2-7
+    title: "P3 - the window pin was read once"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "re-checked before each of the two window writes in both callers; presence pins; 3 mutants red."
+  - id: R2-8
+    title: "P3 - a declined build did not repaint"
+    terminal_state: closed_in_commit
+    commit: pro-phase-advance-and-streak@branch
+    verification: "tick bumped on declined; A4 asserts it; mutant red."
+  - id: R2-9
+    title: "P3 - N whenComplete closures for N Train rebuilds"
+    terminal_state: verified_clean
+    evidence: "Reviewer's own check: they coalesce into one refresh (Riverpod skips an element that is no longer dirty) and are released when the completer completes. No change."
+  - id: X-1
+    title: "Per-write owner check inside generateAndSchedule (a sign-out plus sign-in inside one generation window can write rows into the other account; older, shared with the splash and card paths)"
+    terminal_state: blocked_on_user
+    reason: "Needs an OI number minted (sh scripts/mint_oi.sh reserves a remote oi/N ref, an outward action I did not take unprompted) and a founder call on scope: a guard inside the shared generateAndSchedule row loop also changes the splash and card paths."

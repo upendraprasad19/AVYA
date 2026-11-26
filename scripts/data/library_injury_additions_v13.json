@@ -1,0 +1,13 @@
+{
+  "_meta": {
+    "decision": "Founder decision 2026-10-22: apply all five safety-direction tags live (plan docs/plans/2026-10-22-library-core-list-pool.md Ruling 3(b), Task 1b). Additions only; existing tags are never removed.",
+    "diagnose": "docs/diagnoses/2026-10-22-library-injury-undertag-v13-c2d5e8.md"
+  },
+  "additions": {
+    "E061": ["knee"],
+    "E070": ["shoulder", "elbow"],
+    "E121": ["wrist", "shoulder"],
+    "E127": ["lower_back"],
+    "E173": ["lower_back"]
+  }
+}

@@ -1,0 +1,119 @@
+# Closure ledger - cardio-duration-distance (OI-389 Batch 1a; closes OI-380, OI-382).
+# Plan docs/plans/cardio-duration-distance.md rev 12; review record docs/plan-reviews/cardio-duration-distance.md.
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the branch state until the batch commit exists.
+
+batch: cardio-duration-distance
+plan_review_record: docs/plan-reviews/cardio-duration-distance.md
+total_findings: 19
+closed_count: 19
+
+findings:
+  - id: U1-EXERCISESET-KM
+    title: "ExerciseSet carries distanceKm (km <= 0 canonicalised to null in fromMap / the normaliser / exerciseSetFromInput, never in the const constructor); copyWith(clearDuration, clearDistance); dedup compares km"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T1, T2, T3, T29; mutants M2, M4, M8, M26, M43"
+
+  - id: U2-TYPE-TABLE-AND-BOUNDS
+    title: "one type table fieldsClearedFor (cardio keeps duration/km/weight, the reps rule) shared by the normaliser, exerciseSetFromInput and the heal; bounds 0..21600 s / 0..300 km on RAW values (OI-382)"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T1, T3, T18, T23; mutants M1, M18, M31, M31b"
+
+  - id: U3-ORDER-KM-TOTAL
+    title: "logExercise: type over existing ∪ incoming (library → slot hint → stored cardio/distance → shape), normalise both sides, dedup, distance_km = Σ per-set only when > 0; editLog per-set bounds after the sets_detail translation and km recompute; aggregateDistanceKm reader"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T2, T8, T9, T18, T24, T28b, T28c; mutants M10, M11, M23, M29, M30, M32, M36, M37, M39b, M39c, M41, M59"
+
+  - id: U3-MOVE-MERGE
+    title: "moveExerciseLogs collision: each side via perSetList, km = merged per-set sum else the two sides' aggregateDistanceKm, stale sets_detail removed (W15)"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T19 (a)-(g) in Hive and through the stub server; reschedule_week_terminal_row_test.dart unchanged and green; mutants M28, M56, M58, M62"
+
+  - id: U3-READ-GATE
+    title: "no bare top-level log['distance_km'] read outside the reader, the writer and the push"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "test/contracts/no_top_level_distance_km_reads_test.dart green on the tree"
+
+  - id: U5-CAPTURE-D2
+    title: "decimal minutes (founder D2, 2026-10-22): cardioMinutesToSeconds at capture (_valuesOf), secondsToMinutesInput on restore, validateSetInputs bounds and the 1 s minimum; completeWorkout passes the slot hint; receipt / liveVolumeKg through exerciseSetFromInput"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T5, T6, T28, T29, T32, T32b; log_exercise_logic_test.dart repointed; mutants M3, M19, M39, M42, M47, M50, M51, M53, M65, M66, M67, M73"
+
+  - id: U7-READERS
+    title: "formatter pair + cardioDistanceDetail for the expanded row (incl. the distance branch, OI-380), week selector, chips, receipt, preview; ExercisePR.unit, two-pass cardio PR, StatsGrid via formattedValue, graduation kg-first"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T1, T4, T4b, T11, T16a-c, T25, T26, T29; expanded_exercise_log_row_test.dart repointed to exactly 20<nbsp>min; mutants M9, M12, M20, M21, M22, M27, M33, M34, M44, M45, M49, M63"
+
+  - id: U7-EDIT-SHEET
+    title: "edit sheet: decimal MIN in and out on both paths, no seconds hint, km guard twins, malformed minutes refused, failure / partial copy, stays open, invalidates on a partial failure"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T8 (pure + rendered), T20, T30; mutants M17, M24, M25, M38, M40, M46, M52, M55, M60, M64, M68, M69, M70, M72"
+
+  - id: U8-HEAL-ZEROING
+    title: "healedExlog edits sets in place through fieldsClearedFor and no longer zeroes cardio minutes; the heal's footprint (dead on disk rows) unchanged"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T10, T10b; mutants M5, M48, M54"
+
+  - id: W16-REPAIR-GUARD
+    title: "LoggingTypeRepairMigrator._dataDrivenRepair leaves a stored custom cardio / distance row alone"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T31; mutant M57"
+
+  - id: T22-OI382-SEAM
+    title: "chat-card fixture badPlank moved to a valid 60 s set + a filtered -100 s set (logExercise now refuses a negative duration)"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "test/ai_coach/workout_log_confirm_card_saved_signal_test.dart: the three dependent tests keep their status (52/52 green)"
+
+  - id: OI-380
+    title: "a distance row read 'N sets · 0 reps · X kg'"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T4 (1 set · 40 m · 40.0 kg); mutant M20"
+
+  - id: OI-382
+    title: "negative / absurd duration or km accepted"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "T18 (logExercise, editLog per set + legacy, validateSetInputs); mutants M18, M19, M29, M42"
+
+  - id: D4-SNAPSHOT-CARDIO-FIELDS
+    title: "AI snapshot duration_min (one decimal) + distance_km for cardio / distance rows, kill switch disable_snapshot_cardio_fields (T17, T27; mutants M13, M35, M61, M71)"
+    terminal_state: closed_in_commit
+    commit: "cardio-duration-distance (uncommitted)"
+    verification: "founder D4 = yes 2026-10-23; AiSnapshotBuilder.snapshotLoggedExercise; test/contracts/snapshot_cardio_fields_test.dart (T17, T27, end to end through buildAiContext); mutants M13, M35, M61, M71"
+
+  - id: SPLIT-1B-COACH-PATHS
+    title: "Batch 1b: coach logSet / LogWorkoutSheet / chat-card cardio conversion, customBox lookup, empty-set guard (OI-389 stays OPEN for it)"
+    terminal_state: blocked_on_user
+    reason: "order ratified by the founder (D10, 2026-10-22): 1b is the next batch after 1a lands; it needs its own plan approval"
+
+  - id: SPLIT-OI-391
+    title: "Batch 2: the cloud per-set duration cap (wls_duration_secs_realistic 0..3600)"
+    terminal_state: blocked_on_user
+    reason: "minted 2026-10-22 (D9) and ordered (D10, 2026-10-22); needs a live migration apply, which needs its own founder go"
+
+  - id: SPLIT-OI-392
+    title: "Batch 3: the coach logCardio tool (and the snapshot old-path deletion, §4.6 step 4)"
+    terminal_state: blocked_on_user
+    reason: "minted 2026-10-22 (D9) and ordered (D10, 2026-10-22); needs an ai-proxy deploy, which needs its own founder go"
+
+  - id: SPLIT-OI-393
+    title: "(d) a set logged on top of a restore-shaped or F5 row resets its totals; the move merge's mixed shape"
+    terminal_state: blocked_on_user
+    reason: "minted 2026-10-22 (D9) and ordered (D10, 2026-10-22); 0 such rows live; scheduled after 1b by the founder's order"
+
+  - id: SPLIT-OI-394
+    title: "(e) the live exlog type heal: cast fix, kill switch disable_exlog_type_heal, aggregates, sets_detail, updated_at_ms"
+    terminal_state: blocked_on_user
+    reason: "minted 2026-10-22 (D9) and ordered (D10, 2026-10-22); a live heal with a kill switch needs its own plan approval"

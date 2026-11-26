@@ -1,0 +1,56 @@
+part of 'screen.dart';
+
+extension _PerformSignOut on _ProfileScreenState {
+
+  /// Sign out Supabase -> clear Hive -> route to auth screen.
+  ///
+  /// C-10 (audit-2026-05-11) — routed through
+  /// `AuthNotifier.signOut()` so we get the canonical teardown:
+  /// telemetry → `UserRepository.clearAllData()` →
+  /// `HiveUserSession.deleteAllFilesForCurrentUser()` (DELETES the
+  /// per-user namespaced box files, not just clears the contents) →
+  /// `_supabase.client.auth.signOut()` → state reset to idle.
+  ///
+  /// Pre-fix this method bypassed `AuthNotifier.signOut()` entirely and
+  /// skipped `deleteAllFilesForCurrentUser`. Per-user namespaced Hive
+  /// files survived on disk — re-opening the cross-account leak class
+  /// CLAUDE.md believes closed by namespacing. Same class as the
+  /// splash-time guard bug fixed in C-6.
+  Future<void> _performSignOut() async {
+    try {
+      await ref.read(authNotifierProvider.notifier).signOut();
+    } catch (e) {
+      debugPrint('[ProfileScreen._performSignOut] AuthNotifier.signOut: $e');
+      // Defensive fallback — if the notifier path fails partway, still
+      // try a raw supabase signOut so the auth state is at least
+      // partially terminated before we route.
+      try {
+        await SupabaseService.instance.client.auth
+            .signOut(scope: SignOutScope.local);
+      } catch (e) {
+        debugPrint('[ProfileScreen._performSignOut] fallback signOut: $e');
+      }
+      // OI-51 round 2: this fallback runs precisely BECAUSE the notifier path
+      // failed -- possibly before it reached the unbind. Releasing here is the
+      // difference between "sign-out mostly worked" and a device left bound.
+      await releaseDeviceSessionIdentity();
+    }
+
+    if (mounted) {
+      context.go('/sign-in');
+    }
+  }
+
+// _showDeleteAccountDialog removed — Task H1 (APK Test #11).
+// Hard-delete replaced with 2-step confirm screen at /profile/delete-account.
+// The old soft-flag helper in UserRepository is now @Deprecated (no callers here).
+
+  // Unit 3B (d73): the goal is named from the one FitnessGoals table (Build / Cut / Maintain; a legacy token keeps
+  // its own label until LegacyGoalHealer moves it).
+  String _formatGoal(String goal) {
+    if (FitnessGoals.isKnown(goal)) return FitnessGoals.label(goal);
+    return goal.isNotEmpty
+        ? goal[0].toUpperCase() + goal.substring(1).replaceAll('_', ' ')
+        : 'Building Foundation';
+  }
+}

@@ -1,0 +1,108 @@
+# Closure ledger — library-batch-m1 (Batch M1, media data and storage of the exercise-library programme)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+# Plan docs/plans/2026-10-27-library-batch-m1-media-data.md (r6), executed inline on branch library-batch-m.
+# `library-batch-m@branch` is the in-branch commit form for the commits that cannot cite their own SHA
+# (this file's commit, and the plan-review record that follows it). Merge and worktree retirement are
+# pipeline steps recorded in the retrospective memory file, not entries here.
+
+batch: library-batch-m1
+plan_review_record: docs/plan-reviews/library-batch-m.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-27-library-batch-m1-b4e7a2.md
+
+findings:
+  # ── Tasks ────────────────────────────────────────────────────────
+  - id: T0
+    title: "Baseline and setup"
+    terminal_state: verified_clean
+    evidence: "Baselines reproduced before any change: 616 animation files, 253,550,820 bytes, 0 sha mismatches against the Wardroom ledger; .env copied into the worktree. Recorded in the diagnose doc Task 1 section."
+
+  - id: T1
+    title: "Provenance table and builder"
+    terminal_state: closed_in_commit
+    commit: 449575dc
+    verification: "scripts/data/library_media_v16.json (617 rows, 616 files, 253,550,820 bytes, largest 987,558) built by scripts/build_library_media_v16.js; test/scripts/library_media_builder_test.dart and test/contracts/library_media_table_test.dart, each protection neutered once and reddened."
+
+  - id: T2
+    title: "Importer media stage, library v16, seed v16"
+    terminal_state: closed_in_commit
+    commit: ebd0935b
+    verification: "Three optional keys (media_slug, media_version, media_source) on 617 mapped rows; stripped library equals the old one row by row (914 rows, 0 differing); seed constant 15 to 16 with library_seed_v16_upgrade_behavioral_test (constant back to 15 reddens 2 of 3); SoT registry concept exercise_media_fields."
+
+  - id: T3
+    title: "Cloud-copy proof"
+    terminal_state: closed_in_commit
+    commit: ebd0935b
+    verification: "test/contracts/exercise_library_cloud_tuples_match_test.dart: SQL generated from the committed library equals migration 164 line for line (0 differing of 954); sandbox mutations redden."
+
+  - id: T4
+    title: "Intake tool, the x form, swap and versioning (moved to M1c)"
+    terminal_state: upstream_blocked
+    blocker: "Its inputs, the 40 core animations and any replacement file, do not exist yet; cut from M1 in plan r4. Filed as OI-441."
+    reopen_when: "The first new animation file lands, or M1b's picture check yields a corrected file."
+
+  - id: T5
+    title: "Upload tool"
+    terminal_state: closed_in_commit
+    commit: 50806541
+    verification: "scripts/upload_exercise_media.js with a fake-server test suite (132 tests at the end); every protection neutered once. Later fixes: 9de228a2, e27be17b, 4d0fa7cd, 2cac0be0 (review rounds) and ee7152d7 (Linux ENOTDIR found by the first CI run)."
+
+  - id: T6
+    title: "Docs, blast-radius rules, probe SQL, migration draft, privacy contract, board entries"
+    terminal_state: closed_in_commit
+    commit: 91ae7c84
+    verification: "docs/operations/EXERCISE_MEDIA.md, blast_radius.yaml rules (account) with their mutation, test/sql live-verify and rehearsal files, test/contracts/exercise_media_bucket_private_test.dart (89 tests at the end), OI-440 to OI-445 minted with scripts/mint_oi.sh."
+
+  - id: T7
+    title: "Gate loop, B-pass, three delta passes, draft PR, CI"
+    terminal_state: closed_in_commit
+    commit: 93fc66d7
+    verification: "docs/reviews/library-batch-m-bpass.md: 62 findings, 0 P0, 3 P1, 27 P2, 32 P3, all fixed or decided (finding 11, the migration tier, by the founder at go (a)). Whole-project analyze 0 warnings; full local suite 12,000 passed, 35 skipped, 3 known Windows-only failures (OI-415 x2, OI-446). CI on PR 183 green on ee7152d7 after one real fix."
+
+  - id: T8
+    title: "Bucket migration 165 (live action 1)"
+    terminal_state: closed_in_commit
+    commit: 27a37b06
+    verification: "Rehearsed in place (FILE 1 PASS, FILE 2 mutated 5 of 5 reddened, nothing persisted), applied on the founder's go at 22:33 IST (HTTP 201), read back (private bucket, 1,500,000 bytes, image/webp, one authenticated read policy), FILE 1 plain against the applied state PASS. Ledger entry 165, Gate 39 PASS."
+
+  - id: T9
+    title: "Upload of 616 objects (live actions 2 and 3)"
+    terminal_state: closed_in_commit
+    commit: library-batch-m@branch
+    verification: "Dry run clean (616 objects, 253,550,820 bytes, 0 missing, 0 sha mismatch); key probe 200; public-bucket control 200; canary on the founder's go (b): three uploads read back equal, repost refused as a duplicate (HTTP 400 body 409), one delete, no-credential probes 400 on both routes, anon-key request refused; bulk upload on go (c): uploaded 616, alreadyEqual 0, failed 0; --verify 616 of 616 match by length and sha256; FILE 1 PASS again after the upload; three files decoded and animated in the browser pane; storage 258,172,324 bytes in 639 objects (bucket 618: 616 plus two canaries). Signed links carry no Cache-Control (founder kept the private default). Evidence: diagnose doc Task 9 results."
+
+  - id: T10
+    title: "Plan-review record"
+    terminal_state: closed_in_commit
+    commit: library-batch-m@branch
+    verification: "docs/plan-reviews/library-batch-m.md in the commit after this one (review_rounds 7, ground_truth_verified, verdict converged, bpass accepted, bpass_review docs/reviews/library-batch-m-bpass.md)."
+
+  # ── Decisions and carried items ──────────────────────────────────
+  - id: CORE-ANIMATIONS
+    title: "40 core animations and the six non-core rows without an animation (N02 N03 N04 N05 N07 N08)"
+    terminal_state: blocked_on_user
+    reason: "The founder's Wardroom pipeline has not produced these files; reopen when the animation files exist (OI-442)."
+
+  - id: M1B-PICTURE-CHECK
+    title: "Picture check of the 522 shipped rows that have an animation"
+    terminal_state: blocked_on_user
+    reason: "The founder's decision on method and the corrections it yields (OI-437)."
+
+  - id: M2-APP-DELIVERY
+    title: "Batch M2: the app reads the fields, caches the files, plays them"
+    terminal_state: upstream_blocked
+    blocker: "M1b merged, or the founder's waiver in chat. Filed as OI-440 with the M2 trap in EXERCISE_MEDIA.md section 9."
+    reopen_when: "M1b is merged or the founder waives it."
+
+  - id: OLD-ROWS-MEDIA
+    title: "Media for the 285 old rows"
+    terminal_state: blocked_on_user
+    reason: "The founder's export (OI-443); the builder's --old-rows input does not exist yet."
+
+  - id: SUPABASE-PLAN-SPEND-CAP
+    title: "Supabase Pro before launch, Spend Cap OFF with a usage alert, CAPTCHA at sign-up"
+    terminal_state: blocked_on_user
+    reason: "Founder dashboard actions at store launch (GO_LIVE_CHECKLIST 5.5 to 5.8, OI-444, OI-445). The founder chose Spend Cap OFF in chat on 2026-10-27."
+
+total_findings: 16
+closed_count: 16

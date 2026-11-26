@@ -1,0 +1,137 @@
+# Closure ledger — start-prefill-fixes (founder web observations, 2026-11-21)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. `start-prefill-fixes@branch` is the in-branch commit form.
+
+batch: start-prefill-fixes
+plan_review_record: docs/plan-reviews/start-prefill-fixes.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-21-day-sheet-start-and-prefill-reps-7c3e91.md
+
+findings:
+  - id: O1
+    title: "Home calendar day sheet: START WORKOUT only closed the sheet"
+    terminal_state: closed_in_commit
+    commit: start-prefill-fixes@branch
+    verification: >
+      The button was `Navigator.pop()` only since ef878afb (2026-03-24). It now closes the
+      sheet and calls the host's `onStart` (home_screen `_startTodayWorkout`, shared with the
+      Today card); without `onStart` it is disabled. Tests: day_detail_sheet_start_behavioral_test
+      (mutation M1: 1 red).
+
+  - id: O1b
+    title: "Why it was missed: START buttons were swept by caller of startWorkout, not by label"
+    terminal_state: closed_in_commit
+    commit: start-prefill-fixes@branch
+    verification: >
+      test/contracts/start_button_inventory_test.dart lists every lib file that spells a
+      START/RESUME label with its route (mutations M5 and M6 red). Two Train widgets with a START
+      label (day_card.dart, train/widgets/today_workout_card.dart) are built by no screen; the test
+      fails if one is imported. Train and Home CLAUDE.md rows updated.
+
+  - id: O2a
+    title: "Squat prefilled 110 kg x 35: stored test data (4 May session and its copies)"
+    terminal_state: verified_clean
+    evidence: >
+      26 rows of workout_log_exercises soft-deleted for the founder's account by exact id (6 of
+      the 2026-05-04 session, 17 live rows of the 2026-10-25 03:57-04:01 UTC burst, 3 copies from
+      2026-11-03), each checked first for an earlier identical row. Re-queried after: 0 live
+      squat rows with 110 kg (4 live squat rows remain, 40-80 kg), deleted_at set on exactly
+      26 rows today. Undo SQL kept in the session scratchpad.
+
+  - id: O2b
+    title: "Push Up to Side Plank borrowed Push Up's history (fuzzy contains-match)"
+    terminal_state: closed_in_commit
+    commit: start-prefill-fixes@branch
+    verification: >
+      logsForExercise(exactNameOnly: true) in the prefill and the sparkline; the default stays
+      fuzzy for other callers (none exist today). prefill_exact_name_and_reps_ceiling_test:
+      borrowed-history and mirror cases (mutation M2: 2 red).
+
+  - id: O2c
+    title: "One stray stored value was prefilled into every later session"
+    terminal_state: closed_in_commit
+    commit: start-prefill-fixes@branch
+    verification: >
+      prefillReps ignores a last value above twice the plan's top reps (founder approved the
+      rule 2026-11-21). Pure table test plus the real card (mutations M3: 4 red, M4: 1 red).
+
+  - id: O2d
+    title: "The TRY line suggested the stray stored reps back (found in plan-review round 1)"
+    terminal_state: closed_in_commit
+    commit: start-prefill-fixes@branch
+    verification: >
+      exercise_last_try_lines.dart printed `lastPerf.lastReps ?? fallbackReps` (so "TRY: 112.5KG x 35").
+      It now uses triedRepsText, the same rule as prefillReps, and takes loggingType at its 3 call sites.
+      Card test asserts "TRY: 112.5KG x 8" (mutation M7: 1 red). The LAST line stays the real history.
+
+  - id: O3a
+    title: "25 Oct 'session' rows were copies of older rows, not a workout"
+    terminal_state: closed_in_commit
+    commit: 4ef08379
+    verification: >
+      The 2026-10-25 03:57-04:01 UTC burst is the founder's private-window launch of that day
+      (09:02 IST), diagnosed as b9e4d7 (a restored device re-sent its history) and fixed by
+      4ef08379 the same evening, which is in main. Every live row in that burst had an earlier
+      identical row (checked row by row). Not proven here: why the copies carry the 25 Oct
+      workout_log_id; the rows are cleaned (O2a).
+
+  - id: O3b
+    title: "A second copy burst of 25 rows on 2026-11-03 06:38 UTC, after the b9e4d7 fix"
+    terminal_state: blocked_on_user
+    reason: >
+      Needs what the founder did at about 12:08 IST on 3 Nov (a fresh or private window, a new
+      sign-in, a deploy of an older build?). Without that the mechanism cannot be separated from
+      the b9e4d7 class by reading code. Evidence is in the diagnose-doc impact_analysis.
+
+  - id: O3c
+    title: "22 other copies of older live rows from the 2026-11-03 burst remain in the cloud"
+    terminal_state: blocked_on_user
+    reason: >
+      Outside the scope the founder approved (the 4 May test session and its copies). They are
+      exact copies under the 25 Oct workout_log_id, so they add duplicate volume to a bogus
+      25 Oct day. Deleting them needs the founder's go.
+
+  - id: O3d
+    title: "The browser's local copy still holds the cleaned rows"
+    terminal_state: blocked_on_user
+    reason: >
+      The prefill reads the browser's own Hive. Sign out and back in on the web app to reload
+      from the cleaned cloud (any local-only unsynced data would be lost). Not done by the agent.
+
+  - id: V1
+    title: "Runtime check on the web app"
+    terminal_state: blocked_on_user
+    reason: >
+      Owed by the founder after the web deploy: tap today's calendar day and START; open Active
+      Workout on Barbell Back Squat and on Push Up to Side Plank and read the reps boxes. The
+      fixes are proven in widget and provider tests only.
+
+  - id: B1
+    title: "B-pass F1: the weight half of a stray last row is still prefilled (reps-only ceiling)"
+    terminal_state: blocked_on_user
+    reason: >
+      The founder approved a reps rule only. Treating the whole latest row as untrusted (no weight
+      prefill, no TRY suggestion from it) is a product call. The stored stray row is already soft-deleted.
+
+  - id: B2
+    title: "B-pass F2: sheet START enabled while the day does not resolve (silent no-op)"
+    terminal_state: closed_in_commit
+    commit: start-prefill-fixes@branch
+    verification: >
+      home_screen passes a null onStart when workoutDayForDate(today) is null, so the sheet disables
+      START. Pinned by a source regex in day_detail_sheet_start_behavioral_test.
+
+  - id: B3
+    title: "B-pass F3, F4, F5: test name overstated order; exercise_card registry ranges; diagnose blast radius"
+    terminal_state: closed_in_commit
+    commit: start-prefill-fixes@branch
+    verification: >
+      Test renamed to what it asserts; four exercise_card.dart line_range entries shifted +2 in
+      docs/sot_registry.yaml; diagnose blast_radius set to account.
+
+  - id: B4
+    title: "B-pass F6: planTopReps ignores 8-12 reps, 10-12/side, en dash, 30s"
+    terminal_state: verified_clean
+    evidence: >
+      Such plans get no ceiling, the pre-change behavior, so the new code is never worse; written into
+      the diagnose-doc residuals. Reviewer verified planTopReps('8–12') and ('10-12/side') return null.

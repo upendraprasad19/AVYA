@@ -1,0 +1,134 @@
+# Closure ledger — library-batch-c (Batch C1, the additions half of the exercise-library programme)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+# Plan docs/plans/2026-10-25-library-batch-c-new-rows.md (r9), executed inline on branch library-batch-c;
+# `library-batch-c@branch` is the in-branch commit form for the close-out commits (this file's own commit
+# cannot cite its SHA). Tasks 6 and 8 of the plan are not entries: their commits cannot cite themselves.
+# Task 7 (the cloud migration) closed with the founder's go in chat (2026-10-26): the commit that adds the
+# migration file and its ledger entry is the one that records it, so T7 cites `library-batch-c@branch`.
+
+batch: library-batch-c
+plan_review_record: docs/plan-reviews/library-batch-c.md
+diagnose_docs:
+  - docs/diagnoses/2026-10-26-library-batch-c1-c1d7a4.md
+
+findings:
+  # ── Tasks ────────────────────────────────────────────────────────
+  - id: T0
+    title: "Plan r9, C2 removals draft, glossary terms"
+    terminal_state: closed_in_commit
+    commit: 485329c4
+    verification: "docs/plans/2026-10-25-library-batch-c-new-rows.md (converged after eight review rounds), docs/plans/2026-10-25-library-batch-c2-removals.md (draft, own worktree later), docs/naming_conventions.md terms. Solo base timings recorded in the diagnose doc: golden 160 s, core pool gate 18 s, scorecard gate 14 s, B2 gate 135 s, injury sweep 754 s."
+
+  - id: T1
+    title: "Source file (708 rows), picture triage, identity reads, scope contract C1 to C6"
+    terminal_state: closed_in_commit
+    commit: 8a432f38
+    verification: "scripts/data/library_batch_c_source.json, scripts/library_batch_c_scope.js (--write, --check), test/contracts/library_batch_c_source_test.dart. 100 picture entries and 22 identity entries first-hand at this commit (the ninth picture hold, G3672, came with the injury table commit); holds at the end of the batch 79 (13 token, 4 name_collision, 53 low_confidence, 9 picture); 629 shipped; core levels 56 / 47 / 31 (134 level slots on 83 rows). A read that returned 'media removed' was discarded and redone."
+
+  - id: T2
+    title: "Injury table for 629 rows (hard gate), builder, coverage test"
+    terminal_state: closed_in_commit
+    commit: bfcbd0bd
+    verification: "scripts/data/library_injury_additions_v15.json founder-approved 2026-10-26 ('approve all'; nine rear-delt rows gain shoulder, four more already carried it; G0602, G0993, G0359 safe pool); safe_pool_additions 29 = 4.6 percent untagged against 11.6 percent of the original 285-row library (6.8 percent of the 914-row library). Builder mutations: rewrite-existing reddens 3, drop safe_pool_additions reddens 2; coverage 21 and source 47 green."
+
+  - id: T3
+    title: "Core coaching text for 14 core rows"
+    terminal_state: closed_in_commit
+    commit: b534b6f3
+    verification: "coaching_cues of 14 core rows rewritten from the reviewed file in the source file; scope --write and --check OK; library_batch_c_source_test and library_batch_c_injury_coverage_test 68 of 68."
+
+  - id: T4
+    title: "Importer, the 914-row library, seed v15, E274, equipment audit, pins"
+    terminal_state: closed_in_commit
+    commit: 0677987f
+    verification: "scripts/add_library_batch_c_v15.js --check is byte equality; library_batch_c_rows_contract_test 37 green with importer mutations; library_seed_v15_upgrade_behavioral_test; 36 row-specific equipment-audit waivers (37 after the B-pass added G1432's); E274 target_focus Upper Back to Mid Back (frozen reference re-recorded by id, the only kept row that changed); kV14SafePool 33 to 62; Renegade Row, Hip Adduction Machine and five thin-day personas re-pointed after a reach search, never loosened."
+
+  - id: T5
+    title: "Generator evidence on the 914-row library: golden, split injury sweep, baselines, reports"
+    terminal_state: closed_in_commit
+    commit: 52783c3b
+    verification: "Golden re-recorded (998 personas, 943 changed, 50 distinct new ids, top pick G0380 59.0 percent) with R6 (i) to (iii) and mutations; injury sweep five files x four tiers, 7,200 runs, 0 unsafe / empty / thin, worst test 3:06 solo, the OI-408 ratchets deleted (mutation: deleting the new rows brings back exactly 2 and 6 thin days); scorecard baselines regenerated; core gate R9 four ids and report; B2 gate and report. Numbers in the diagnose doc."
+
+  - id: T7
+    title: "Cloud: upsert-only migration for the 629 rows, rollback by one UPDATE, ledger hash"
+    terminal_state: closed_in_commit
+    commit: library-batch-c@branch
+    verification: "Migration 164 (530,455 bytes, Destructive: yes, inline rollback) rehearsed in place on dedsavbjuwgarrhphgnl (in-transaction counts 921 total / 914 active / 629 gif-set, aborted, live re-read 292 / 285 / 0), then applied on the founder's explicit go (HTTP 201); live after: 921 / 914 active / 7 inactive / 629 gif-set all active, only constraint exercise_library_pkey, no triggers. Ledger entry 164 (sha256 17be7e36...) in the same commit; Gate 39 passes on 172 records; the three cloud-seeded checks that were red on the PR are the ones this file satisfies."
+
+  # ── Decisions and carried items ──────────────────────────────────
+  - id: C2
+    title: "Removals, aliases, plates and the four name-collision rows (Batch C2)"
+    terminal_state: upstream_blocked
+    blocker: "C1 ships first: C2's depth rule needs the shipped C1 tag table and library."
+    reopen_when: "C1 is merged."
+
+  - id: HELD-TOKEN
+    title: "13 rows held for a token that does not exist yet"
+    terminal_state: upstream_blocked
+    blocker: "The equipment or tag tokens belong to Batch D (OI-437)."
+    reopen_when: "Batch D tokens are shipped."
+
+  - id: HELD-NAME-COLLISION
+    title: "4 rows held because they share a name with a row C2 removes (G1368, G1489, G2567, G0474)"
+    terminal_state: upstream_blocked
+    blocker: "Batch C2 owns the removals and the aliases that settle the names (OI-437)."
+    reopen_when: "C2 is merged."
+
+  - id: HELD-LOW-CONFIDENCE
+    title: "53 rows the sheet marked low-confidence"
+    terminal_state: blocked_on_user
+    reason: "The founder's GIF review of the 53 rows, then the release protocol in OI-437."
+
+  - id: HELD-PICTURE
+    title: "9 rows whose picture and row disagree (G0016 G0555 G0730 G0870 G1352 G1708 G1772 G3221 G3672)"
+    terminal_state: blocked_on_user
+    reason: "The founder looks at each picture and decides the row, then the release protocol in OI-437."
+
+  - id: SHIPPED-UNCHECKED
+    title: "529 shipped rows that no picture or identity read covers (130 with a doubting word in their source note)"
+    terminal_state: blocked_on_user
+    reason: "The founder's GIF review of the shipped rows, or a first-hand image read in a session that can see images (OI-437)."
+
+  - id: OI-404
+    title: "Retiring 7 duplicate rows lowered the uninjured scorecard and was never re-baselined"
+    terminal_state: closed_in_commit
+    commit: 52783c3b
+    verification: "Re-measured after C1 and re-baselined: aggregate volume 70.4 against 69.1 and the original 69.6; 90 of the 176 moved personas now above the original, 86 below (mean +0.42 over the 176; mean -2.72 over the 86, worst -12.0, 74 of them uninjured). Closed on the aggregate re-measure the OI allowed, not on its Done-when steps, which are superseded because the pool changed (the closed_issues.md paragraph says so, with the per-persona figures). Moved to closed_issues.md with the closes-oi trailer."
+
+  - id: OI-408
+    title: "Bodyweight beginner with shoulder + lower_back injuries had 2-exercise upper days"
+    terminal_state: closed_in_commit
+    commit: 52783c3b
+    verification: "0 thin days in all 7,200 sweep runs; kPairsThinBaseline and kPairs46ThinBaseline deleted; mutation (new rows deleted) reddens pairs[bodyweight] and pairs 4/6[bodyweight] with the old 2 and 6. The VolumeFilter trim to 4 slots is unchanged; the hard zero is the guard."
+
+  - id: E274
+    title: "E274 Prone T Raise target_focus Upper Back relabelled Mid Back"
+    terminal_state: closed_in_commit
+    commit: 0677987f
+    verification: "Importer relabels by id; library_seed_v15_upgrade_behavioral_test reads E274 Mid Back after the v14 to v15 upgrade; the cloud table has no target_focus column (backups/live_schema_columns.json)."
+
+  - id: SMITH-COMMENT
+    title: "equipment_vocab.dart said no library row uses the smith machine token; 39 new rows do, all full_gym"
+    terminal_state: closed_in_commit
+    commit: library-batch-c@branch
+    verification: "Comment corrected; the tier table puts smith machine in full_gym alone and equipment_tier_consistency_test stays green."
+
+  - id: OI-435
+    title: "Scorecard progression is a binary one-set proxy: 100.0 to 62.9 on the 914-row library"
+    terminal_state: upstream_blocked
+    blocker: "Changing what the scorer measures is test tooling outside this plan's reviewed scope; OI-435 carries the two fix shapes (prescribed sets, or a tolerance a one-set swap cannot cross). The baselines were regenerated honestly and the scoring was not touched."
+    reopen_when: "OI-435 is scheduled."
+
+  - id: OI-436
+    title: "B1 core-list flip criteria still unmet: emergencyAnyLevel 2 golden personas, 58 of 576 multi-injury runs; refilled 34 of 576"
+    terminal_state: upstream_blocked
+    blocker: "The enable_core_list_pool flip review decides (plan Task 5.5: C1 ships anyway and the gap is filed). B1 stays OFF."
+    reopen_when: "The enable_core_list_pool flip review, or a library batch adding bodyweight shoulder-safe rows."
+
+  - id: OI-438
+    title: "getFormCues has no is_active filter, so a deactivated row still serves cues"
+    terminal_state: blocked_on_user
+    reason: "The Edge Function change is agent work, but its deploy needs the founder's explicit go (CLAUDE.md 4.3); it must land before the C1 rollback or the C2 removals deactivate a row."
+
+total_findings: 20
+closed_count: 20

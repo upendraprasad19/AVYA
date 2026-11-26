@@ -1,0 +1,157 @@
+# Closure ledger — generator-step1-1bf (Unit 1B-F: the core-list pool becomes the only picker; plan
+# docs/plans/2026-11-10-generator-1bf-flip.md v19 + Ruling 5c, section 7). Gate 40 (validate_audit_closure.dart):
+# one terminal_state per entry, no `deferred:` key. Measurements: plan section 5 Task 5, recorded 2026-11-12 on the
+# final tree (scratchpad dumps; sha256 named where the plan asks).
+
+batch: generator-step1-1bf
+plan: docs/plans/2026-11-10-generator-1bf-flip.md
+plan_review_record: docs/plan-reviews/generator-step1-1bf.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-12-generator-1bf-timed-hold-clock-39eb2a.md
+
+findings:
+  - id: 1B-1
+    title: "Flip enable_core_list_pool: the flag and PlanEngineFlags.coreListPoolEnabled deleted; pickV4 = _pickCoreList then topUpDays (Ruling 1)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "core_list_pool_gate_test.dart green over 1,036 personas (998 golden + 12 exclude-everything + 26 scorecard); generator_golden_test.dart re-recorded (1,010 personas); docs/ship_dark_pending_review.yaml entry moved to resolved with flip_review_record."
+  - id: 1B-2
+    title: "Delete the old path: the cascade body of pickV4, _fillSlots, _applyHistoryAdjustments, the universal pool, the V3 pick, the mirrors (Ruling 2, Ruling 7's table)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "Every deleted test has its row in Ruling 7's table; final grep of every deleted name over lib/ test/ scripts/ integration_test/ supabase/ .claude/skills (history comments only); queryV4's rules re-pinned on the real repository (test/contracts/query_v4_rules_behavioral_test.dart, 7 mutants red)."
+  - id: 1B-3
+    title: "The exercise-seam gate entry (scripts/exercise_seam_lib.dart) re-pointed"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "The pre-commit gate loop green on the staged tree (Ruling 9)."
+  - id: 1B-4
+    title: "docs/sot_registry.yaml lines naming deleted symbols re-pointed or removed (Ruling 9)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "check_sot_registry_parity / Gate 42 green; ranges recomputed from anchors; the core_list_pool entry names 1,010 golden / 1,036 gate personas."
+  - id: 1B-5
+    title: "The hasCoreFields v12 guard deleted; a library without core_levels picks nothing (Ruling 4)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "core_list_pool_behavioral_test.dart 'a library without core_levels picks nothing'; the 12 exclude-everything golden personas hold the no-empty-day zero (gate mutant M4: one persona forced empty, red)."
+  - id: 1B-6
+    title: "The R6 last-resort refill deleted (Ruling 3); CI hard test over the 2,637 runs it used to act on"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "8 files test/plan_generator/r6_removed_runs_*_test.dart (fixture test/fixtures/r6_removed_runs.txt): 0 empty days, 0 unsafe / unperformable / retired / skill / olympic picks, 0 Ruling 12 jump rows for hip runs; exact (thin, one-exercise) ratchets r9 284 / 16, ext 182 / 6 (the plan's no-R6 measurement for the extension). Mutants M1 (retired row injected), M2 (another tier's ratchet), M3a (forced empty day) red; M3b shows the empty-day assertion is the only guard."
+  - id: 1B-12_OI-489
+    title: "OI-489: a hold ranked after a time-starved slot spent its time first (Ruling 5, H3 guards); closed on MAJOR muscles, the reading stated"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "Audit on the final tree: 0 plans with a major at 0 in weeks 1-3 where live has sets; build_muscle|3|advanced|bodyweight|30|2 and |3 Chest weeks 2 and 4 0 -> 2; lose_fat / general_fitness|3|advanced|bodyweight|30|1 Hamstrings weeks 1-4 0 -> 2. Real-engine pin test/plan_generator/oi489_timed_hold_real_engine_test.dart; behavioral test/contracts/allocator_timed_hold_eviction_behavioral_test.dart. The board text's 'weeks 1 to 3' Hamstrings and 'week 2' Chest are corrected to the measured weeks 1-4 and weeks 2 and 4; its first hypothesis (the Single Leg Glute Bridge target() filter) is superseded by plan section 2. Diagnose 39eb2a."
+  - id: RULING_5C
+    title: "Build finding: the empty-day guard forced its lead past a clock the holds had spent (32.6 min vs 30 + 2); the holds ranked after the lead give way under pass A's guards minus the first-credit condition"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "session_set_budget_gate_test.dart green with every goal on the core-list pool; oi489_timed_hold_real_engine_test.dart (two 30 + 2 pins); Ruling 5c group in allocator_timed_hold_eviction_behavioral_test.dart (13 mutants red, plan section 9). Cost on the final tree (audit vs prototype H, 5 plans changed, all 5c): 4 Back cells in 3 plans newly below live by 1-2 sets (lose_fat / general_fitness|4|advanced|bodyweight|30|1 week 4, strength|3|advanced|bodyweight|30|1 weeks 2 and 4), those 3 plans worse on summed major shortfall; Core -12 and Back -20 set-weeks vs H; each day goes from 32-34 to 29-30 minutes. Accepted trade (the day keeps its minutes)."
+  - id: RULING_5_COSTS
+    title: "Ruling 5 costs on the final tree (2,304-plan audit vs live and main ON)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "Cells newly below live (all 10 muscles) 6 in 4 plans: prototype H's 2 (strength|3|intermediate|bodyweight|30|1 Biceps weeks 2 and 4, live 4 -> 2) plus 5c's 4 Back cells; deepened cells 0; worse plans 3 (all 5c); zero cells newly against main ON 0; net set-weeks vs main ON Chest +10, Back -7, Shoulders +4, Quads +2, Hamstrings +16, Glutes +18, Core -107, Biceps +25, Triceps +10, Calves +4. Issue codes equal prototype H's exactly; 0 empty days over 41,472 day-weeks. Accepted trade as measured."
+  - id: OI-485_1
+    title: "OI-485 (1): no plyometric / high-impact lead for uninjured users; for injured users the hip pairs' jump-led days (Ruling 12, d19)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "Audit: jump rows in week 1 0 (as the lead 0). Ruling 12's 14 rows gain hip (seed v25); the hard test and the floor sweep assert 0 jump rows for every hip-injured run (r9 and ext 0; floor sweep 0); the injured grid's hip-pair count is in the Task 5 record (plan section 9)."
+  - id: OI-485_2
+    title: "OI-485 (2): no week of 0 Hamstrings sets"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "Audit on the final tree: 0 plans with a week of 0 Hamstrings (main ON 2, prototype H 0)."
+  - id: OI-485_3
+    title: "OI-485 (3): iso_first, 12 strength|4|advanced|bodyweight Squat Days flagged because the audit read the library type of E143 Skater Squat"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "The audit dump records each row's built type (x[7]) and the classifier reads it (plan_audit_lib_test.dart: three cases, 2 mutants red). Re-measured on the final tree: iso_first 12 -> 0 plans / days; the 2,304 plans are identical to the first final-tree audit apart from the new field."
+  - id: OI-436
+    title: "OI-436: emergencyAnyLevel and refilled flip criteria; read as a class with counts per block"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "refilled has no subject (R6 deleted); the gate report (core_list_pool_report.md, 2026-11-12): emergencyAnyLevel 0 golden personas, 16 of the 576 multi-injury runs (reported), retired and skill / olympic picks in the built lists none. The class (an injured bodyweight user whose slot has no core row at their level takes a core row of any level) is stated with counts per block in plan section 4; run keys in the eight r6_removed_runs fixtures."
+  - id: 1B-8_OI-148_WEIGHTED
+    title: "OI-148: the 3 weighted rows"
+    terminal_state: upstream_blocked
+    blocker: "Batch D's plan (founder d11): the weighted rows need Batch D's load tokens."
+    reopen_when: "Batch D's plan lands."
+  - id: 1B-8_OI-148_REST
+    title: "OI-148: the other 11 of the 23 rows (not in d10's approved list)"
+    terminal_state: blocked_on_user
+    reason: "d10's approved list did not include them, so adding any of them is the founder's pick; OI-148 stays open for them (nine loaded versions shipped in S1b-2)."
+  - id: 1B-9
+    title: "OI-147: E053 Donkey Calf Raise retired"
+    terminal_state: verified_clean
+    notes: "Closed by Library Batch S1b-3 before this unit; no work here (plan section 4)."
+  - id: 1B-10
+    title: "Core-vs-suitable_for disagreements"
+    terminal_state: verified_clean
+    notes: "E010 / E045 widened by S1b-2; E255 has no core_levels; E134 advanced-only in both fields. The regenerated report: core-vs-suitable_for disagreements picked none."
+  - id: 1B-7_1B-11
+    title: "The overlay copy (slot_focus / slot_pattern into target_focus / movement_pattern) and the seed + cloud re-seed it needs"
+    terminal_state: upstream_blocked
+    blocker: "Unit 1B-F2 (OI-495), a separate unit split out under section 4.12.1 (three review rounds kept finding overlay pins); its cloud migration then waits on the founder's live-apply go. Nothing in 1B-F needs the copy: the picker reads the overlay labels; the mixed-label state is stated in plan section 4."
+    reopen_when: "1B-F merged (OI-495's start condition)."
+  - id: D13_RULING_6
+    title: "d13: the injured shoulder + wrist bodyweight Push day is built from core rows by the top-up once R6 is gone"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "test/plan_generator/injured_push_day_core_test.dart (48 runs, every Push-type day of weeks 1-2 non-empty, core rows only, injury-safe); mutant: the top-up off, red. Measured before code over the 15-pair grid: 354 such days, all core rows."
+  - id: MINOR_MUSCLE_RESIDUE
+    title: "Minor-muscle zero weeks against live (d14)"
+    terminal_state: upstream_blocked
+    blocker: "OI-496 (owner: step 2's weekly floor, founder d14)."
+    reopen_when: "Step 2's weekly floor lands."
+    notes: "Final tree, per muscle (cells / plans): Triceps 308 / 86, Core 132 / 52, Biceps 116 / 36, Calves 18 / 9, equal to prototype H (the 5 plans the final tree changes hold none of them); per-cause table in plan section 4. Zero cells newly against main ON: 0."
+  - id: INJURED_THIN_DAYS
+    title: "Injured thin and one-exercise days after R6 (Ruling 8, d16 / d17 / d23)"
+    terminal_state: upstream_blocked
+    blocker: "OI-452 (the 3-exercise day floor; its own plan next, founder d16 'Ship, OI-452 next' and d23)."
+    reopen_when: "OI-452's plan lands."
+    notes: "Recorded ratchets: kThinCeilings (pairs 20 / 30 / 20 thin and 2 / 2 / 0 one-exercise; pairs46 and repeat bodyweight 0; f_repeat_pairs30 60/8, 120/2, 94/2, 27/0); the hard test r9 284 thin / 16 one-exercise, ext 182 / 6 (all 9 injuries on bodyweight, d17). The 15-pair grid tables at 30 / 45 / 60 minutes are appended to OI-452."
+  - id: INJURED_GRID
+    title: "Injured grid on the final tree: the 15-pair grid at 30 / 45 / 60 minutes against live, H3 and main ON, and the nine-block grid"
+    terminal_state: verified_clean
+    evidence: "15-pair grid (103,680 day-weeks per length; zz probes in scratch trees at f86dce17's plan engine, sha256 m30 ef57d9d10e1def49..., m45 a03ef5ed6b5429b6..., m60 4bdc830d8a4687cd...): 0 empty at every length; thin 427 -> 520 / 341 -> 344 / 341 -> 352 and one-exercise 8 -> 20 at each, equal to H3 and main ON on every count (m30 292 lines differ from H3, all Ruling 5c's hold evictions; m45 identical); hip-pair day-weeks with a jump row 1,529 / 1,321 / 1,318 -> 0. Nine-block grid (46,512 runs, 418,608 day-weeks, injured_grid_dump sha256 3af07f41...): 0 empty, 0 unsafe or unperformable, 0 hip jump rows, 0 unknown names; thin 2,286, one-exercise 94 (OI-452's, INJURED_THIN_DAYS). The B-pass allocator change moved no plan: the 2,304-plan audit re-run is byte-identical (7c49ba92...) and the golden unchanged. Tables on OI-452."
+  - id: COMMUNITY_ROWS
+    title: "Approved community rows (source community, no core_levels) leave generation with the cascade"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "core_list_pool_behavioral_test.dart 'community and custom rows never selected'. A product change of the flip, stated."
+  - id: STALE_LIBRARY
+    title: "A device holding a library without core_levels (a v12-era box) picks nothing until it re-seeds (Ruling 3)"
+    terminal_state: upstream_blocked
+    blocker: "Store launch: the app is not live, every tester re-seeds from the bundle (seed v25 on first launch)."
+    reopen_when: "Store launch (Play internal testing)."
+  - id: PLAN_GENERATOR_COMMENTS
+    title: "plan_generator.dart: the two applyInjuryUniversalFilter call-site lines removed (d15) and stale comments reworded (d18, d21)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "Diff of plan_generator.dart limited to d15's two lines and d18 / d21's comments; flutter analyze clean."
+  - id: GATE_ORACLE_EXCLUDEALL
+    title: "Build finding: the core-list gate's oracle read the raw exclusion tokens for the exclude-everything personas and flagged 488 bodyweight picks"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "The oracle reads EquipmentVocab.floorSanitizedExclusions (the generator's own set); gate green; mutant M4 red."
+  - id: FOCUS_GRID
+    title: "Guard (e) over the five-set focus grid (5,760 plans) against prototype H3"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "test/plan_generator/focus_grid_dump_test.dart (FOCUS_GRID_OUT): sha256 final 6b51f8753e2a9c3be9213e57432d514d374e73a12b43dfef26fa004191ba3506, H3 24503d56efe5688e5f94f0537f8843daf4aac02abf65a7191de0dcc4621533f6; 70 of 103,680 lines differ, all in the 5 Ruling 5c plan keys (one hold removed from the Pull + Core / Upper Pull day), every focus set; every other line identical."
+  - id: GOLDEN
+    title: "Golden re-recorded once (Ruling 11)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "All 998 previous keys changed against the committed live-world hashes and every one equals main's pre-flip ON world, prototype H3's and the flip + 5c snapshot (Rulings 5, 5c and 12 change no golden key); 12 exclude-everything keys added; record label 'Unit 1B-F (the core-list pool the only picker, seed v25)', 1,010 personas."
+  - id: BPASS
+    title: "B-pass (4 Sonnet seats on f86dce17): 0 P0 / P1, 9 P2, 11 P3; every one fixed or answered (docs/reviews/generator-step1-1bf-bpass.md)"
+    terminal_state: closed_in_commit
+    commit: generator-step1-1bf@branch
+    verification: "Code / test fixes each mutated red: guard (c)'s 1e-6 tolerance through fitsAfterEviction (tolerance removed; pass A's exact re-check), rowsSeen on a copied B day (counter dropped), the hip warm-up test (Jumping Jacks without hip), the sixth sweep block in the block-file guard (minutes 45), the R6 scan reading the run's exclusions (generator not excluded). The golden, the session-budget gate, the OI-489 pins and the 2,304-plan audit re-run on the fixed tree."
+
+closed_count: 29
