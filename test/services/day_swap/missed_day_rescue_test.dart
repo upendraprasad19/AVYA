@@ -180,6 +180,25 @@ void main() {
       expect(row(fri)!['workout_name'], 'Legs');
     });
 
+    test('T1c B-pass F2: a day before the user had the app is never missed',
+        () async {
+      // Onboarded on Thu: the Wed plan row is a plan-generator artefact.
+      await HiveService.instance.userBox.put('profile', {
+        'id': 'A',
+        'onboarding_completed_at': '2026-09-24T05:00:00Z',
+      });
+      expect(locks()[wed], DaySwapRefusal.past);
+      final before = row(wed);
+      expectRefused(await swap(wed, fri), DaySwapRefusal.past, wed);
+      expect(row(wed), before);
+      // The onboarding day itself is the anchor, not before it.
+      await HiveService.instance.userBox.put('profile', {
+        'id': 'A',
+        'onboarding_completed_at': '2026-09-23T05:00:00Z',
+      });
+      expect(locks()[wed], isNull);
+    });
+
     test('T2 today is a workout day: refused past, nothing written', () async {
       await put(fri, workout(fri, 'Pull'));
       final before = row(wed);
@@ -358,13 +377,44 @@ void main() {
       expect(prog()['streak_freezes_available'], 3);
     });
 
-    test('T7e2 already at the cap: marked, nothing given, no refund toast',
+    test('T7e2 already at the cap: nothing given, NOT marked, no refund toast',
         () async {
       await progress(available: 1, used: [wed]);
       final r = await swap(wed, fri, isPro: false);
       expect((r as DaySwapDone).freezeRefunded, isFalse);
       expect(prog()['streak_freezes_available'], 1);
+      // B-pass F6a: a date the cap held back stays owed (no marker).
+      expect(ledger(), isNot(contains(FreezeLedger.marker(wed))));
+    });
+
+    test('T7e3 a refund the cap (or a tier misread) held back is paid later',
+        () async {
+      await progress(available: 2, used: [wed]);
+      // The rollover heal reads a PRO user as free: cap 1, nothing given.
+      await swap(wed, fri, isPro: true);
+      // swapDays settled with the right tier already; reset to the misread.
+      await progress(available: 2, used: [wed]);
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: false),
+          0);
+      expect(ledger(), isNot(contains(FreezeLedger.marker(wed))));
+      // The next settle with the tier read right still pays it, once.
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: true),
+          1);
+      expect(prog()['streak_freezes_available'], 3);
       expect(ledger(), contains(FreezeLedger.marker(wed)));
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: true),
+          0);
+    });
+
+    test('T7e4 two owed dates, room for one: only the paid date is marked',
+        () async {
+      await put(tue, {...rest(tue), DaySwapRules.rescuedIntoKey: thu});
+      await put(wed, {...rest(wed), DaySwapRules.rescuedIntoKey: fri});
+      await progress(available: 0, used: [tue, wed]);
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: false),
+          1);
+      final marks = ledger().where(FreezeLedger.isMarker).toList();
+      expect(marks, [FreezeLedger.marker(tue)]);
     });
 
     test('T7f a rescued day of LAST week is never refunded on the new week',
@@ -391,16 +441,45 @@ void main() {
           0);
     });
 
-    test('T7h a hold / copy-week copy of a rescued row earns nothing', () async {
-      await put(wed, {
-        ...rest(wed),
-        'is_swapped': false,
-        'original_date': null,
+    test('T7h a copy of a rescued row in ANOTHER week earns nothing', () async {
+      // rescued_into is never re-dated, so a copy lands in a week its own
+      // rescued_into is not in (and earlier than the copy's date).
+      setTestClockTo(DateTime.utc(2026, 10, 2, 4, 30)); // Fri 2 Oct
+      const wedNext = '2026-09-30';
+      await put(wedNext, {
+        ...rest(wedNext),
+        'is_swapped': true,
+        'original_date': '2026-10-02',
         DaySwapRules.rescuedIntoKey: fri,
       });
-      await progress(available: 0, used: [wed]);
+      await progress(available: 0, used: [wedNext]);
       expect(StreakProgressService.instance.settleRescueRefunds(isPro: false),
           0);
+    });
+
+    test('T7i B-pass F1: a rescue that sends swapped content HOME is refunded',
+        () async {
+      // Tue: the user swapped a rest Wed with a workout Fri (PRO, 3 a week).
+      setTestClockTo(DateTime.utc(2026, 9, 22, 4, 30)); // Tue 22
+      await put(wed, rest(wed));
+      await put(fri, workout(fri, 'Pull'));
+      expect(await swap(wed, fri), isA<DaySwapDone>());
+      expect(row(wed)!['workout_name'], 'Pull');
+      // Fri: the Pull on Wed was missed and a freeze covered Wed.
+      setTestClockTo(DateTime.utc(2026, 9, 25, 4, 30)); // Fri 25
+      await progress(available: 0, used: [wed]);
+      final r = await swap(wed, fri);
+      expect(r, isA<DaySwapDone>());
+      // Both contents are home again, so neither carries the swap markers...
+      final w = row(wed)!;
+      expect(w['type'], 'rest');
+      expect(w['is_swapped'], isNot(true));
+      expect(w[DaySwapRules.rescuedIntoKey], fri);
+      expect(row(fri)!['workout_name'], 'Pull');
+      // ...and the freeze still comes back.
+      expect((r as DaySwapDone).freezeRefunded, isTrue);
+      expect(prog()['streak_freezes_available'], 1);
+      expect(ledger(), contains(FreezeLedger.marker(wed)));
     });
   });
 

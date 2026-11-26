@@ -126,14 +126,21 @@ class StreakProgressService {
   /// freeze spent on a day whose missed workout was RESCUED into a later day
   /// of the same week. DERIVED and idempotent: it looks for the plain ledger
   /// dates D of this IST week (Monday <= D < today) with no `refund:D`
-  /// marker, whose `schedule_<D>` row is the rescued past day (type rest,
-  /// `is_swapped`, and a `rescued_into` date later than D in D's own week),
-  /// so a crash between the swap write and this call is healed by the next
-  /// rollover. The plain date STAYS in the ledger (the day stays "covered",
+  /// marker, whose `schedule_<D>` row is the rescued past day (type rest and
+  /// a `rescued_into` date later than D in D's own week; NOT `is_swapped`:
+  /// a rescue that sends earlier-swapped content back to its origin lands
+  /// without the swap markers, B-pass F1), so a crash between the swap write
+  /// and this call is healed by the next rollover. A copy of the row in
+  /// another week fails the same-week test, since `rescued_into` is never
+  /// re-dated.
+  /// The plain date STAYS in the ledger (the day stays "covered",
   /// so a device whose schedule lags never spends on it again); the marker
   /// is what lets [mergeFreezeProgress] count the refund. Capped by tier and
-  /// never lowers a count already above the cap. Returns how many freezes
-  /// were actually given back (0 when capped). Off under the kill switch.
+  /// never lowers a count already above the cap; only the dates actually
+  /// given back get a marker, so a date the cap held back stays owed and a
+  /// later settle (room freed, or a tier read right) still pays it (B-pass
+  /// F6a). Returns how many freezes were given back (0 when capped). Off
+  /// under the kill switch.
   int settleRescueRefunds({required bool isPro}) {
     if (!missedDayRescueEnabled()) return 0;
     final today = istTodayStr();
@@ -150,7 +157,7 @@ class StreakProgressService {
       if (refunded.contains(d)) continue;
       final raw = HiveService.instance.workoutBox.get('schedule_$d');
       if (raw is! Map) continue;
-      if (raw['type'] != 'rest' || raw['is_swapped'] != true) continue;
+      if (raw['type'] != 'rest') continue;
       final into = raw[DaySwapRules.rescuedIntoKey];
       if (into is! String ||
           into.compareTo(d) <= 0 ||
@@ -168,6 +175,7 @@ class StreakProgressService {
     var after = before + owed.length;
     if (after > cap) after = before > cap ? before : cap;
     final given = after - before;
+    if (given <= 0) return 0;
 
     final unshown = progress['streak_freeze_just_used'] == true;
     final rawCount = progress['streak_freeze_just_used_count'];
@@ -180,7 +188,7 @@ class StreakProgressService {
       'streak_freezes_available': after,
       'streak_freeze_used_dates': [
         ...used,
-        for (final d in owed) FreezeLedger.marker(d),
+        for (final d in owed.take(given)) FreezeLedger.marker(d),
       ],
       if (unshown && given > 0) ...{
         'streak_freeze_just_used': noticeLeft > 0,
@@ -190,7 +198,8 @@ class StreakProgressService {
     unawaited(SyncService.instance.syncFreezes());
     unawaited(ErrorTelemetry.logEvent(
       'streak_freeze_refund_done',
-      message: 'before=$before after=$after dates=${owed.join(",")}',
+      message: 'before=$before after=$after given=$given '
+          'dates=${owed.join(",")}',
     ));
     return given;
   }

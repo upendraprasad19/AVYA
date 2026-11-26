@@ -3,8 +3,12 @@
 // OI-348 P3 (docs/plans/oi348-landing3d.md §3.1): the kill switch of the
 // missed-day rescue. `configBox['disable_missed_day_rescue'] == true` turns
 // the rescue off everywhere (engine rules, the freeze refund, the picker /
-// drag pair rule, the footer); absent = ON. With it set, every day-swap
-// state, preview and swap is exactly what it was before the rescue existed.
+// drag pair rule, the footer); absent = ON. With it set, the engine's
+// states, previews and swaps are what they were before the rescue existed.
+// Two picker changes of the same landing are NOT behind it, on purpose: a
+// locked SOURCE day says why instead of listing targets the swap would
+// refuse (a pre-existing Home long-press bug), and a swap refreshes the
+// streak-freeze chip.
 
 import '../hive_service.dart';
 

@@ -213,7 +213,10 @@ class SwapService {
 
   /// The lock of one date. A date today or later, or any date while
   /// [rescue] is off, is [DaySwapRules.lockOf] verbatim. A past date in a
-  /// week whose today hosts a rescue is [DaySwapRules.rescueLockOf].
+  /// week whose today hosts a rescue is [DaySwapRules.rescueLockOf], except
+  /// a date before the user's anchor (onboarding / first log, the same
+  /// anchor the streak and adherence walks stop at): a plan row from before
+  /// the user had the app is never "missed" (B-pass F2), so it stays `past`.
   DaySwapRefusal? _lockFor(
     String date,
     Map<String, dynamic>? row, {
@@ -221,6 +224,7 @@ class SwapService {
     required String? inProgressDate,
     required bool rescue,
     required Set<String> Function() logDates,
+    required String? Function() anchorKey,
   }) {
     if (!rescue || date.compareTo(today) >= 0) {
       return DaySwapRules.lockOf(
@@ -230,6 +234,10 @@ class SwapService {
         hasLoggedSets: _hasLoggedSets(date, today),
         inProgressDate: inProgressDate,
       );
+    }
+    final anchor = anchorKey();
+    if (anchor != null && date.compareTo(anchor) < 0) {
+      return DaySwapRefusal.past;
     }
     return DaySwapRules.rescueLockOf(
       date: date,
@@ -244,6 +252,19 @@ class SwapService {
   static Set<String> Function() _lazyLogDates() {
     Set<String>? cache;
     return () => cache ??= WorkoutReadService.instance.datesWithExerciseLogs();
+  }
+
+  /// Lazy, memoized user anchor date key for one call (null = no anchor).
+  static String? Function() _lazyAnchorKey() {
+    var done = false;
+    String? cache;
+    return () {
+      if (!done) {
+        cache = WorkoutRepository.instance.earliestUserAnchorKey();
+        done = true;
+      }
+      return cache;
+    };
   }
 
   DaySwapRefused? _firstLock(
@@ -278,12 +299,14 @@ class SwapService {
       inProgressDate: inProgressDate,
     );
     final logDates = _lazyLogDates();
+    final anchorKey = _lazyAnchorKey();
     for (final (date, row) in [(dateA, rowA), (dateB, rowB)]) {
       final lock = _lockFor(date, row,
           today: today,
           inProgressDate: inProgressDate,
           rescue: rescue,
-          logDates: logDates);
+          logDates: logDates,
+          anchorKey: anchorKey);
       if (lock != null) return DaySwapRefused(reason: lock, date: date);
     }
     // Every date may move on its own; a past one may move ONLY with today.
@@ -320,13 +343,15 @@ class SwapService {
           inProgressDate: inProgressDate,
         );
     final logDates = _lazyLogDates();
+    final anchorKey = _lazyAnchorKey();
     return [
       for (final date in dates)
         _stateOf(date, rows[date],
             today: today,
             inProgressDate: inProgressDate,
             rescue: rescue,
-            logDates: logDates),
+            logDates: logDates,
+            anchorKey: anchorKey),
     ];
   }
 
@@ -337,6 +362,7 @@ class SwapService {
     String? inProgressDate,
     required bool rescue,
     required Set<String> Function() logDates,
+    required String? Function() anchorKey,
   }) =>
       DaySwapDayState(
         date: date,
@@ -345,7 +371,8 @@ class SwapService {
             today: today,
             inProgressDate: inProgressDate,
             rescue: rescue,
-            logDates: logDates),
+            logDates: logDates,
+            anchorKey: anchorKey),
         isMoved: DaySwapRules.isMoved(row),
         title: DaySwapCopy.titleOf(row),
       );

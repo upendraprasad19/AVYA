@@ -104,16 +104,8 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
           else
             for (final d in week)
               if (d.date != widget.sourceDate && d.lock != DaySwapRefusal.noRow)
-                _dayRow(d,
-                    todayStr: todayStr,
-                    weekStart: weekStart,
-                    // OI-348 P3: a past day moves only with today.
-                    lock: d.lock ??
-                        (rescueOn
-                            ? DaySwapRules.pairLock(
-                                    widget.sourceDate, d.date, todayStr)
-                                ?.reason
-                            : null)),
+                _targetRow(d, todayStr: todayStr, weekStart: weekStart,
+                    rescueOn: rescueOn),
           if (_error != null) ...[
             const SizedBox(height: 4),
             Text(_error!,
@@ -142,10 +134,33 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
     );
   }
 
+  /// One target row. OI-348 P3: a past day moves only with today, so a pair
+  /// the engine would refuse is locked here too. When the refusal is about
+  /// the SOURCE (a missed day paired with a day that is not today), the
+  /// target is not past itself: it says TODAY ONLY (B-pass F5).
+  Widget _targetRow(DaySwapDayState d,
+      {required String todayStr,
+      required String weekStart,
+      required bool rescueOn}) {
+    if (d.lock != null || !rescueOn) {
+      return _dayRow(d, todayStr: todayStr, weekStart: weekStart, lock: d.lock);
+    }
+    final pair = DaySwapRules.pairLock(widget.sourceDate, d.date, todayStr);
+    return _dayRow(d,
+        todayStr: todayStr,
+        weekStart: weekStart,
+        lock: pair?.reason,
+        chip: pair == null || pair.date == d.date
+            ? null
+            : DaySwapCopy.pickerTodayOnlyChip);
+  }
+
   Widget _dayRow(DaySwapDayState d,
       {required String todayStr,
       required String weekStart,
-      required DaySwapRefusal? lock}) {
+      required DaySwapRefusal? lock,
+      String? chip}) {
+    final chipLabel = chip ?? lock?.label;
     final locked = lock != null;
     final selected = _target == d.date;
     final label = '${DaySwapCopy.dayShort(d.date)}'
@@ -192,8 +207,8 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
                     ],
                   ),
                 ),
-                if (locked && lock.label != null)
-                  WardChip(label: lock.label!, tone: WardChipTone.neutral)
+                if (locked && chipLabel != null)
+                  WardChip(label: chipLabel, tone: WardChipTone.neutral)
                 else if (selected)
                   const Icon(Icons.swap_horiz_rounded,
                       color: AppColors.accent, size: 20),

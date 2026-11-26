@@ -168,12 +168,15 @@ void main() {
       expect(find.text(DaySwapCopy.pickerFooterRescue), findsOneWidget);
     });
 
-    testWidgets('from the missed Wed: only today; Sat is PAST-locked',
+    testWidgets('from the missed Wed: only today; Sat says TODAY ONLY',
         (tester) async {
       await openPicker(tester, wed);
       await tester.tap(find.text('Legs + Core'));
       await tester.pumpAndSettle();
       expect(button(wed, sat), findsNothing);
+      // B-pass F5: Sat is not past (its chip says TODAY ONLY); past days
+      // still say PAST.
+      expect(find.text(DaySwapCopy.pickerTodayOnlyChip), findsOneWidget);
       expect(find.text('PAST'), findsWidgets);
       await tester.tap(find.textContaining('· ${DaySwapCopy.pickerTodayTag}'));
       await tester.pumpAndSettle();

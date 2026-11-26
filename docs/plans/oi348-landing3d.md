@@ -113,16 +113,19 @@ plain date STAYS (still "covered", so a device whose schedule lags never spends 
   a swap made earlier on another device arriving by restore after this device's walk spent on that day): inside the
   swap `build`, on a rescue, the past date's landed row gets `rescued_into: <today>` (a string key, written after
   `landed`; added to `DaySwapRules.markerKeys` so `contentOf` never carries it to another date (R3-2); new key
-  appended to `docs/naming_conventions.md`). The hold-week and copy-week writers copy whole rows but reset
-  `is_swapped` to false (`workout_schedule_write_service.dart:338-348`, `:525-539`), so the refund test below also
-  requires `is_swapped == true`.
+  appended to `docs/naming_conventions.md`). The hold-week and copy-week writers copy whole rows
+  (`workout_schedule_write_service.dart:338-348`, `:525-539`), always by a whole number of weeks k != 0, and never
+  re-date `rescued_into`, so a copy is refused by the same-week test below. (R3-2 had also required
+  `is_swapped == true`; the B-pass (F1) showed that breaks a real rescue: one that sends earlier-swapped content
+  back to its origin lands without the swap markers. Dropped; T7i, T7h.)
 - DERIVED, idempotent refund (R1-5: a crash between the swap write and the refund cannot lose it):
   `settleRescueRefunds({required bool isPro})` -> number refunded. For each plain ledger date D with
   `DaySwapRules.mondayOf(today) <= D < today` (R2-5: the current week only, so a Monday rollover never refunds last
   week's day against the new stock; R3-3: the string form, equal to `istMondayKey(nowWall())` that `commitRefill`
-  stamps) and no `refund:D`, whose `schedule_<D>` row has `type == 'rest'`, `is_swapped == true` and a string
+  stamps) and no `refund:D`, whose `schedule_<D>` row has `type == 'rest'` and a string
   `rescued_into` with `D < rescued_into` in D's own week:
-  `available = min(available + 1, isPro ? 3 : 1)`, add `refund:D`. One `updateProgress` write for all, notice count
+  `available = min(available + 1, isPro ? 3 : 1)`, add `refund:D` for the dates actually paid (B-pass F6a: a date
+  the cap holds back stays owed, so a settle with room, or with the tier read right, still pays it; T7e2-T7e4). One `updateProgress` write for all, notice count
   lowered (flag cleared at 0), `syncFreezes()`, event `streak_freeze_refund_done before= after= dates=`. Callers: the
   engine after a rescue and `DayRolloverObserver._doRolloverWithRef` after `refillIfNewWeek`, before the reckon
   (tier from the PURE `SubscriptionService.instance.proStateSnapshot()`), both behind the rescue switch. It only
@@ -262,3 +265,11 @@ coach card drops `origin: coach` (coach card test).
 | R3-3 `istMondayKey` takes a DateTime | P2 | `DaySwapRules.mondayOf(today)` |
 | R3-4 confirm sheet origin; card untested | P2 | sheet passes `widget.origin`; coach card test, mutation n |
 | R3-5 restore undoing a rescue keeps the refund | P2 | stated in section 6, T8b |
+| B-F1 refund needs `is_swapped`; a rescue sending content home has none | P1 | R3-2's `is_swapped` test dropped (copies fail the same-week test: whole-week shift, `rescued_into` never re-dated); T7i, T7h |
+| B-F2 a day before the user's anchor offered as missed | P2 | engine `_lockFor`: before `earliestUserAnchorKey` -> `past`; T1c |
+| B-F3 stale SoT line ranges | P2 | 22 cites re-anchored through the diff hunks; parity gate green |
+| B-F4 kill switch claimed byte-identical | P3 | flag comment says the source-lock line and the chip refresh are not behind it, on purpose |
+| B-F5 a missed source labels future days PAST | P3 | `TODAY ONLY` chip when the refusal is about the source; widget test |
+| B-F6a capped refund marked and lost | P3 | marker only for dates paid; T7e2/T7e3/T7e4 |
+| B-F6b a settle past Sunday midnight skips last week | P3 | verified clean: Monday's refill restores the stock anyway |
+| B-F7 manifest missing readers | P3 | `sync_restore_completeness.dart` and `commitConsume` added |

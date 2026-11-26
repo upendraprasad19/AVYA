@@ -189,6 +189,11 @@ class DaySwapCopy {
   /// NEW (OI-348 P3): appended to the swap toast when a rescue gave the
   /// streak freeze back.
   static const freezeRefundedLine = 'Your Streak Freeze is back.';
+
+  /// OI-348 P3 (B-pass F5): the chip on a day a MISSED source cannot swap
+  /// with, because a past day moves only with today. The day itself is not
+  /// past, so the `PAST` chip would mislabel it.
+  static const pickerTodayOnlyChip = 'TODAY ONLY';
   static const spentTitleFree = "This week's swap is spent.";
   static const spentBodyFree =
       'Your allowance resets Monday. PRO gets 3 swaps a week, from the Train tab, Home, or by asking the coach.';
