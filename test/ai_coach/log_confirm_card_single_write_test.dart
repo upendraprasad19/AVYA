@@ -22,6 +22,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart';
 import 'package:icanbefitter/features/ai_coach/services/coach_meal_log.dart';
 import 'package:icanbefitter/features/ai_coach/widgets/log_confirm_card.dart';
@@ -49,6 +50,7 @@ void main() {
     ErrorTelemetry.debugOnLogEventForTests = null;
     ErrorTelemetry.debugOnRecordNonFatalForTests = null;
     SyncService.pausedForSimulation = false;
+    resetTestClock();
     if (_dir != null) await tearDownHiveForTests(_dir!);
   });
 
@@ -86,6 +88,9 @@ void main() {
       displayText: 'Upma — Breakfast',
       createdAt: DateTime.utc(2026, 11, 12, 3),
     );
+    // OI-348 Landing 3b: a food card waits for CONFIRM for at most an hour
+    // (PendingLogAction.foodCardTtl); tap inside it.
+    setTestClockTo(DateTime.utc(2026, 11, 12, 3, 10));
     final c = ProviderContainer(overrides: [
       authUserIdTokenProvider.overrideWithValue('u'),
       pendingLogActionsProvider.overrideWith(() => _Seeded(action)),
@@ -111,7 +116,7 @@ void main() {
     expect(_nlogKeys(), hasLength(1));
     expect(action.isLogged, isTrue,
         reason: 'a card rebuilt for this action must see it logged and not '
-            'start its countdown save again');
+            'start a second save');
     expect(c.read(pendingLogActionsProvider), isEmpty,
         reason: 'the logged action is cleared even though its card was gone');
   });

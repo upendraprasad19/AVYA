@@ -41,6 +41,13 @@ export interface WriteClaimDetection {
   typed_other: number;
   legacy_workout: number;
   legacy_auto: number;
+  /**
+   * OI-348 Landing 3b: the `log_food` tags among them. With the meal-items
+   * rule on (DISABLE_COACH_MEAL_ITEMS_RULE unset) a food tag waits for
+   * CONFIRM instead of the 5 s countdown, so its queued line differs.
+   * Additive: `legacy_auto` keeps counting it.
+   */
+  legacy_food: number;
   replay: boolean;
   user_question: boolean;
 }
@@ -191,6 +198,7 @@ export function detectWriteClaim(
       const n = actionName(a);
       return typeof n === "string" && LEGACY_AUTO.has(n);
     }).length,
+    legacy_food: actions.filter((a) => actionName(a) === "log_food").length,
     replay: ctx.replay === true,
     user_question: ctx.userAskedQuestion === true,
   };

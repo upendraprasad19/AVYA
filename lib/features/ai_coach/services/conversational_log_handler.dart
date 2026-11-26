@@ -49,6 +49,23 @@ class ConversationalLogHandler {
   @visibleForTesting
   static int get debugInFlightCount => _inFlight.length;
 
+  /// Whether a save for [actionId] is running (OI-348 Landing 3b): the
+  /// stale-food sweep in `PendingLogActionsNotifier.addActions` never removes
+  /// an action whose save is still in flight, so `markLogged` still finds it.
+  static bool isInFlight(String actionId) => _inFlight.containsKey(actionId);
+
+  /// Test seam (OI-348 Landing 3b): holds [actionId] in flight on [save]
+  /// (null removes it), so the sweep's in-flight exemption can be tested
+  /// without racing a real Hive write.
+  @visibleForTesting
+  static void debugSetInFlight(String actionId, Future<bool>? save) {
+    if (save == null) {
+      _inFlight.remove(actionId);
+    } else {
+      _inFlight[actionId] = save;
+    }
+  }
+
   /// Execute a pending log action. Returns true on success.
   ///
   /// One action, one write (OI-493 Landing B, B6): a second call for the same
@@ -127,13 +144,17 @@ class ConversationalLogHandler {
   /// estimate (never a food-database substitute, never invented defaults),
   /// the slot by the screen's clock rule when the tag names none, and the day
   /// of [at], the card's creation (its 5 s countdown can cross midnight).
+  ///
+  /// OI-348 Landing 3b: a tag may list `items[]`, one per food
+  /// ([coachItemsFromTag]; the flat-key item when it lists none, or with the
+  /// card's kill switch on). Null = nothing to log, as before.
   Future<bool> _logFood(Map<String, dynamic> data, DateTime at) async {
-    final item = coachItemFromTag(data);
-    if (item == null) return false;
+    final items = coachItemsFromTag(data);
+    if (items == null) return false;
     final r = await CoachMealLog.write(
       at: at,
-      mealType: data['meal_type'] as String?,
-      items: [item],
+      mealType: coachMealTypeOf(data),
+      items: items,
     );
     if (r.success) {
       // logMeal refreshes the core nutrition providers; the weekly chart is

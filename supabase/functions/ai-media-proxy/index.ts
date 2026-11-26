@@ -7,6 +7,7 @@ import { COACH_REPLIES } from "../_shared/coach_replies.ts";
 import { sanitizeClientKey } from "../_shared/client_key.ts";
 import { istDayStartIso } from "../_shared/ist_date.ts";
 import {
+  isCoachMealItemsRuleDisabled,
   isWriteClaimRuleDisabled,
   mediaIcbfLogInstructions,
   writeClaimSuffix,
@@ -732,6 +733,10 @@ export async function handleRequest(req: Request): Promise<Response> {
     // coach-log-truth: the write-claim rule, read ONCE per request
     // (DISABLE_WRITE_CLAIM_RULE exactly "true" disables; OFF = today's bytes).
     const ruleOn = !isWriteClaimRuleDisabled();
+    // OI-348 Landing 3b: the meal-items rule, read ONCE per request
+    // (DISABLE_COACH_MEAL_ITEMS_RULE exactly "true" disables). The food tag
+    // carries items[] and waits for CONFIRM in the app.
+    const mealOn = !isCoachMealItemsRuleDisabled();
 
     // Build system prompt (same as ai-proxy-pro + image analysis instructions)
     let systemPrompt = asAuthoredPrompt(
@@ -747,7 +752,8 @@ export async function handleRequest(req: Request): Promise<Response> {
       "\n- If it's a grocery/ingredient photo: identify items, suggest meal ideas, note macro-friendly options." +
       "\n- If it's a nutrition label: parse the label and assess if it fits the user's goals." +
       "\n- For any other photo: relate your analysis to the user's fitness journey." +
-      mediaIcbfLogInstructions(ruleOn) + writeClaimSuffix(ruleOn, { tools: false }));
+      mediaIcbfLogInstructions(ruleOn, { mealItems: mealOn }) +
+      writeClaimSuffix(ruleOn, { tools: false, mealItems: mealOn }));
 
     if (snapshot_json) {
       // OI-47. `ai-proxy` hardened exactly this concatenation under FC7

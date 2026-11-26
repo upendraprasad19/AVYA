@@ -152,6 +152,13 @@ export interface ToolLoopOptions {
    * are byte-identical to before.
    */
   writeClaimRule?: boolean;
+  /**
+   * OI-348 Landing 3b: the coach meal-items rule (DISABLE_COACH_MEAL_ITEMS_RULE,
+   * read once per request by the handler). `undefined` = false (no change).
+   * Only matters with `writeClaimRule` false: logMealByText's description
+   * then stops promising a 5-second auto-confirm.
+   */
+  mealItemsRule?: boolean;
 }
 
 export interface ToolLoopResult {
@@ -338,6 +345,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   const visibleTools = applyWriteClaimDescriptions(
     allTools(opts.ctx.isPro, opts.capabilities),
     writeClaimRule,
+    { mealItems: opts.mealItemsRule === true },
   ).map(toolToFunctionDeclaration);
 
   for (let round = 0; round < maxRounds; round++) {

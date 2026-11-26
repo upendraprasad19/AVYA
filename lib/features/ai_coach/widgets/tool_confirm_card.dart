@@ -4,11 +4,14 @@ import '../../../core/services/day_swap/day_swap_copy.dart';
 import '../../../core/services/day_swap/day_swap_result.dart';
 import '../../../core/services/day_swap/day_swap_rules.dart';
 import '../../../core/services/hive_service.dart';
+import '../../../core/services/nutrition_write_service.dart';
 import '../../../core/services/swap_service.dart' show ShortenDayResult;
 import '../../../core/utils/injury_vocab.dart';
 import '../../../core/theme/colors.dart';
 import '../models/tool_intent.dart';
 import '../providers/pending_tool_intents_provider.dart';
+import '../services/coach_meal_log.dart';
+import 'coach_meal_items_view.dart';
 import '../../train/providers/day_swap_provider.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 
@@ -139,10 +142,13 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            summary,
-            style: AppTypography.titleS.copyWith(color: AppColors.textPrimary),
-          ),
+          if (intent.type == 'log_meal_by_text' && coachMealItemsCardEnabled())
+            _buildMealItems(intent)
+          else
+            Text(
+              summary,
+              style: AppTypography.titleS.copyWith(color: AppColors.textPrimary),
+            ),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -275,6 +281,26 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
           ),
         ],
       ),
+    );
+  }
+
+  /// OI-348 Landing 3b (founder P5): the meal card shows each parsed food and
+  /// the total the dispatcher will store (the same override parse and the
+  /// same `logMeal` rule), not one line of totals.
+  Widget _buildMealItems(ToolIntent intent) {
+    final p = intent.payload;
+    final overrides = coachToolOverrides(p);
+    final items = coachItemsFromParsedMeal(p);
+    final totals = NutritionWriteService.mealTotals(items,
+        overrideCals: overrides.cals, overrideProtein: overrides.protein);
+    final slot = resolveCoachMealSlot(coachMealTypeOf(p), intent.createdAt);
+    return CoachMealItemsView(
+      items: items,
+      totalKcal: totals.kcal,
+      totalProtein: totals.protein,
+      slot: slot[0].toUpperCase() + slot.substring(1),
+      showGrams: false,
+      lowConfidence: p['confidence']?.toString() == 'low',
     );
   }
 
