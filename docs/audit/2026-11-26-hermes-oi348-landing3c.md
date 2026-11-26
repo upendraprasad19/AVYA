@@ -96,3 +96,6 @@ None needed: no finding reverses a founder decision; all fixed or filed by the a
   users' rows; every DEFINER trigger keyed on a client-supplied id needs the caller guard, not only the one the
   author was thinking about. Seat A found it on the row door after three plan rounds and a B-pass had reviewed the
   same guard on the storage door.
+
+## Delta B-pass of the fix commit
+`docs/reviews/oi348-landing3c-hermes-delta-bpass.md` (one fresh Sonnet seat on `e77c1933..e474ed8e`): 0 P0, 0 P1, 5 P2/P3: the rollback verify R4 now checks `proconfig` and the absence of the guard, R5 the exact ACL; the live-verify header lists every pre-apply `fail`; a 408 / 499 is not an answer (mutant: 3 red); one no-change.

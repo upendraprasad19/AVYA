@@ -11,7 +11,9 @@
 --     EXECUTE <the draft's commented rollback DO statement, with the leading "-- " removed>;
 --     EXECUTE <this DO statement>;
 --   END $rh2$;
--- so all three roll back with this block's abort and nothing persists. Every line must read `ok`.
+-- Each EXECUTE takes its DO statement as a dollar-quoted string whose tag none of the three uses ($x1$, $x2$,
+-- $x3$; the inner tags are $mig$, $fn$, $rb$, $rv$). All three roll back with this block's abort and nothing
+-- persists. Every line must read `ok`.
 -- (Run plainly on the live database BEFORE the apply, it also reads all `ok`: that is 154's state today.)
 
 DO $rv$
@@ -20,6 +22,7 @@ DECLARE
   v_cnt int;
   v_txt text;
   v_def boolean;
+  v_acl text[];
 BEGIN
   -- R1: neither new trigger exists.
   SELECT count(*) INTO v_cnt FROM pg_trigger
@@ -38,20 +41,24 @@ BEGIN
    WHERE tgname = 'trg_progress_photo_pro' AND tgrelid = 'public.progress_photos'::regclass;
   v_r := v_r || CASE WHEN v_cnt = 1 THEN E'R3=ok\n' ELSE 'R3=fail (' || v_cnt || E')\n' END;
 
-  -- R4: the row function is SECURITY INVOKER again, with 154's body (subscriptions read, no week logic).
+  -- R4: the row function is SECURITY INVOKER again, with 154's body (subscriptions read, no week logic, no
+  -- caller guard) and 154's pinned search_path (a CREATE OR REPLACE without SET would reset proconfig).
   SELECT p.prosecdef, p.prosrc INTO v_def, v_txt FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-   WHERE n.nspname = 'public' AND p.proname = 'enforce_progress_photo_pro';
+   WHERE n.nspname = 'public' AND p.proname = 'enforce_progress_photo_pro'
+     AND p.proconfig = ARRAY['search_path=public, pg_temp'];
   v_r := v_r || CASE WHEN v_def = false AND v_txt LIKE '%public.subscriptions%'
                            AND v_txt NOT LIKE '%progress_photo_week_start%' AND v_txt NOT LIKE '%advisory%'
-                     THEN E'R4=ok\n' ELSE 'R4=fail (definer ' || coalesce(v_def::text, 'absent') || E')\n' END;
+                           AND v_txt NOT LIKE '%auth.role%'
+                     THEN E'R4=ok\n' ELSE 'R4=fail (definer ' || coalesce(v_def::text, 'absent or search_path changed') || E')\n' END;
 
-  -- R5: its ACL is the live one before the migration: EXECUTE for PUBLIC (so anon and authenticated) and service_role.
-  SELECT count(*) INTO v_cnt FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-   WHERE n.nspname = 'public' AND p.proname = 'enforce_progress_photo_pro'
-     AND has_function_privilege('anon', p.oid, 'execute')
-     AND has_function_privilege('authenticated', p.oid, 'execute')
-     AND has_function_privilege('service_role', p.oid, 'execute');
-  v_r := v_r || CASE WHEN v_cnt = 1 THEN E'R5=ok\n' ELSE E'R5=fail (EXECUTE not restored)\n' END;
+  -- R5: its ACL is EXACTLY the live one before the migration (read 2026-11-26), compared as a sorted set
+  -- so the order GRANT leaves the entries in does not matter.
+  SELECT (SELECT array_agg(a::text ORDER BY a::text COLLATE "C") FROM unnest(p.proacl) a) INTO v_acl
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'enforce_progress_photo_pro';
+  v_r := v_r || CASE WHEN v_acl = ARRAY['=X/postgres', 'anon=X/postgres', 'authenticated=X/postgres',
+                                        'postgres=X/postgres', 'service_role=X/postgres']
+                     THEN E'R5=ok\n' ELSE 'R5=fail (' || coalesce(v_acl::text, 'absent') || E')\n' END;
 
   -- R6: the Storage INSERT policy carries 154's subscription conjunct and the own-folder test again.
   SELECT with_check INTO v_txt FROM pg_policies

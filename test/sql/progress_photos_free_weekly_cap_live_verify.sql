@@ -10,6 +10,7 @@
 -- the founder's go through execute_sql; every line of VERIFY_RESULTS must read `ok`. As the REHEARSAL
 -- before the apply it runs AFTER the draft inside one statement:
 --   DO $rh$ BEGIN EXECUTE <the draft's DO statement>; EXECUTE <this DO statement>; END $rh$;
+-- (each EXECUTE string dollar-quoted with a tag neither block uses, e.g. $x1$ / $x2$; inner tags: $mig$, $fn$, $v$)
 -- so the draft's DDL is rolled back with the verify's abort.
 --
 -- WHO IS N. A real user (auth.users joined to public.users) with no subscriptions row, no progress_photos
@@ -23,7 +24,8 @@
 -- case asserts ROW_COUNT = 1. Timestamps inside one transaction all equal now(), so the week cases
 -- BACKDATE an object or row as postgres to put it in last week.
 --
--- BEFORE the apply (rehearsal skipped, plain run): W2, W8, W12a, W12b and the catalog lines read `fail`
+-- BEFORE the apply (rehearsal skipped, plain run): W2, W8, W8b, W10b, W12a, W12b, W14b and the catalog lines read `fail`
+-- (W10b / W14b: 154's INVOKER row trigger raises P0001 before RLS where the new guard leaves it to RLS)
 -- (no trigger yet; the 154 policy refuses a free user at W1 instead, so W1 fails too). AFTER: every line ok.
 
 DO $v$

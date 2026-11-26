@@ -107,12 +107,19 @@ const Duration progressPhotoStorageCallTimeout = Duration(seconds: 10);
 
 final RegExp _httpStatusOnly = RegExp(r'^\d{3}$');
 
+/// A 4xx that a proxy or the client side can produce while the request may
+/// still be running behind it (408 request timeout, 499 client closed): not
+/// an answer about the write.
+bool _isAnswering4xx(String code) =>
+    code.startsWith('4') && code != '408' && code != '499';
+
 /// Did the server ANSWER [error] with a refusal, so the write it belongs to
 /// certainly did not land? Pure (OI-348 Landing 3c, Hermes C1/C3).
 /// - `PostgrestException`: a SQLSTATE or PGRST code is PostgREST's answer
 ///   (the statement failed). A bare HTTP status is a body postgrest-dart
 ///   could not read (`postgrest_builder.dart`, a gateway page): only a 4xx
-///   counts, a 5xx (502 / 504) may still have committed behind the gateway.
+///   counts, a 5xx (502 / 504), a 408 or a 499 may still have committed
+///   behind the proxy.
 /// - `StorageException`: a numeric 4xx `statusCode` is Storage's answer; a
 ///   5xx, or the exception's TYPE NAME (`ClientException`: storage_client's
 ///   `fetch.dart` uses it for a transport failure), is not.
@@ -123,12 +130,12 @@ bool progressPhotoServerRefused(Object error) {
   if (error is PostgrestException) {
     final code = error.code;
     if (code == null || code.isEmpty) return false;
-    if (_httpStatusOnly.hasMatch(code)) return code.startsWith('4');
+    if (_httpStatusOnly.hasMatch(code)) return _isAnswering4xx(code);
     return true;
   }
   if (error is StorageException) {
     final code = error.statusCode ?? '';
-    return _httpStatusOnly.hasMatch(code) && code.startsWith('4');
+    return _httpStatusOnly.hasMatch(code) && _isAnswering4xx(code);
   }
   return false;
 }
