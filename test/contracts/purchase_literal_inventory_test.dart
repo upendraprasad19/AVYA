@@ -28,6 +28,7 @@ import 'package:flutter_test/flutter_test.dart';
 const Map<String, int> kExpected = {
   'lib/core/constants/purchase_mode.dart': 1,
   'lib/core/copy/payment_copy.dart': 1,
+  'lib/core/copy/progress_photo_copy.dart': 1,
   'lib/core/copy/purchase_copy.dart': 18,
   'lib/core/copy/referral_copy.dart': 4,
   'lib/core/copy/wardroom_copy.dart': 5,

@@ -1,5 +1,10 @@
 -- test/sql/progress_photos_pro_insert_rule_live_verify.sql
 --
+-- HISTORICAL. This file proves migration 154's PRO-only rule as applied on 2026-10-07. OI-348 Landing 3c
+-- replaces that rule (free users may hold one photo per IST week); its verify is
+-- test/sql/progress_photos_free_weekly_cap_live_verify.sql. Do not run this file after that migration:
+-- the free-user refusals it expects no longer hold.
+--
 -- Live-Postgres verification of the progress-photo PRO INSERT rule (migration 154, unit B1 of the
 -- 2026-10-06 progress-photos batch; plan docs/plans/progress-photos-pro-server-rule.md, D8).
 --

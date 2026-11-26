@@ -10,7 +10,9 @@ import 'package:icanbefitter/core/theme/typography.dart';
 /// Reusable PRO locked overlay that wraps any content widget.
 ///
 /// Displays: blur(4) + dark overlay + gold lock badge + gold CTA.
-/// Used by the Progress Photos screen's locked state (its only user today).
+/// The design system's PRO locked card. No screen uses it today: the Progress
+/// Photos screen, its only user, lost its locked state in OI-348 Landing 3c
+/// (free users get one photo a week).
 ///
 /// The text column is centred while it fits and scrolls when it does not (a short
 /// window, a landscape phone, a large text scale), so the CTA is never clipped out

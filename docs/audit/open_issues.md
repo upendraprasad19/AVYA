@@ -4956,15 +4956,6 @@ The repo root has no allowlist, so a command that writes a file there (a stray s
 - **Verified**: 2026-10-06 - code read: no code path resets the field except the debug-only `simulation_service.dart` reset; badge readers (`badge_service.dart` 4/8/12-week badges) and the AI snapshot (`ai_snapshot_builder.dart`) read it as a lifetime count. Founder decision A, 2026-10-06 ("lifetime counter, restore never lowers it").
 - **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `claude/avya-streak-data-check-b506de`
 
-## OI-315 — ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the 5/day progress-photo cap is client-side only: a PRO caller can upload unlimited 8 MiB objects
-
-- **Status**: OPEN
-- **Blocked on**: a plan: a server-side per-day cap is a schema change (a BEFORE INSERT trigger like the AI-coach caps, or a Storage-side limit), and wiring or deleting the sweeper needs a decision on when it may run.
-- **Verified**: 2026-10-06 - `git grep -n cleanupOrphanedStorage -- lib test supabase` finds no caller in `lib/` or `supabase/` (the definition is `progress_photo_repository.dart:240`; the only other hits are source-grep assertions in `test/sync/closeout_maintenance_test.dart`); `capture()` uploads first (`:128`) and inserts the row second (`:137`), so an object whose row insert fails is an orphan that nothing removes. The 5/day cap is a client-side count before the pick (`:85-99`); no trigger or policy enforces it.
-- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
-
-Residuals (i) and (iii) of the B1 plan's D1: a PRO caller can upload an unbounded number of objects of up to 8 MiB each, and failed captures leave orphan objects. Found by the B1 plan review round 1 (finding 12).
-
 ## OI-316 — The progress-photos bucket and its SELECT/DELETE/INSERT policies have no repo migration, and no recurring live check detects a dashboard edit of them (the OI-283 class)
 
 - **Status**: OPEN
@@ -4973,6 +4964,8 @@ Residuals (i) and (iii) of the B1 plan's D1: a PRO caller can upload an unbounde
 - **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
 
 Residual (iv) of the B1 plan's D1, the OI-283 class: a dashboard edit of the progress-photos policies (a new permissive INSERT policy, a widened UPDATE policy) would silently reopen the door B1 closes. Propose a scheduled catalog snapshot compared with a committed expectation.
+
+**OI-348 Landing 3c (2026-11-26).** The free weekly cap lives in a trigger on `storage.objects` (`trg_progress_photo_object_cap`): a dashboard edit or a Storage platform migration that drops it leaves every free user UNCAPPED with no alert (migration 154's policy conjunct failed closed; this fails open). The live verify (`test/sql/progress_photos_free_weekly_cap_live_verify.sql`, C3) catches it once, at apply time; the recurring check this OI asks for should include the trigger.
 
 ## OI-323 — weekly-report has no server-side per-day cap for PRO: consume_quota runs only for non-PRO (weekly-report/index.ts:716), so the client once-per-IST-day cap is bypassed by a direct API call or a second device and each call is a thinking-on Gemini call - product decision needed on a PRO cap
 
@@ -6964,3 +6957,12 @@ Found while checking what a two-year user costs the Train past-phase strip (batc
 **Not known yet:** how often `_syncWorkoutPlan` runs per user action (bytes a day per user), the restore time of a 2.5 MB value on mobile data, and the write cost of rewriting a multi-MB jsonb on each completed day.
 
 **Done when:** (1) bytes per push and pushes per day are measured for a synthetic two-year account (a test or a scripted run, not an estimate); (2) a decision is recorded with that evidence: keep as is, prune rows older than a stated horizon from the bundle (the per-day `scheduled_workouts` rows already hold status and date, and the exercise logs live in their own tables), or split history out of the bundle; (3) whatever is chosen keeps the restore of past phases working (a restore-completeness test over a two-year fixture). Pre-launch: testers only (CLAUDE.md section 1), so priority follows the measurement.
+
+## OI-531 — Progress-photo free weekly cap (OI-348 Landing 3c) residuals: two parallel free uploads are designed (advisory lock) but only checked by hand, and a device clock hours behind across Monday makes the client pre-check refuse a free photo the server would accept
+
+- **Status**: OPEN
+- **Blocked on**: upstream: no local Supabase image or two-session harness on the founder's machine (MCP execute_sql calls never overlap). reopen_when: a local Supabase container or a two-connection harness exists, or a user reports a refused free photo early on a Monday.
+- **Verified**: 2026-11-26 - by design and text only: the storage trigger in `test/sql/progress_photos_free_weekly_cap_draft.sql` takes `pg_advisory_xact_lock` per owner before its count (a VOLATILE plpgsql function, so the count after the lock takes a fresh READ COMMITTED snapshot); the client pre-check `progressPhotoFreeSlotOpen` uses the device clock (`nowWall()`).
+- **Identified**: 2026-11-26 · filed via mint_oi.sh from branch `oi348-landing3c`
+
+(1) Two uploads by one free user at the same moment (two tabs, two devices) should end with exactly one object: the second waits on the lock and then sees the first. Not measured by a test; the founder's two-tab web check after the apply (plan `docs/plans/oi348-landing3c.md` section 6) is the only check. (2) A device clock several hours behind across Monday 00:00 IST makes `ensureFreeSlotOpen` count last week's photo as this week's and show "This week's free photo is in"; the server would accept. There is no server time on the client to correct it with. Done when (1) is measured by a two-connection test, and (2) is either accepted by the founder or the pre-check asks the server for the week start.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:icanbefitter/core/copy/progress_photo_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -12,26 +13,25 @@ import '../widgets/profile_row.dart';
 
 /// Hub behind the single "Photos" row on the Profile tab.
 ///
-/// Two destinations, deliberately NOT merged: Progress Photos (PRO-gated,
-/// daily-capped, dated body-progress timeline in the `progress-photos` bucket)
+/// Two destinations, deliberately NOT merged: Progress Photos (1 free upload
+/// per IST week, PRO unlimited, dated body-progress timeline in the
+/// `progress-photos` bucket)
 /// and Saved Photos (photos the user consented to keep from AI Coach chat, in
 /// the `coach-media` bucket). The hub only routes; each destination keeps its
 /// own data source and delete behaviour. Both are pushed (not `go`) so back
 /// returns here.
 ///
 /// Progress is NOT gated here. The row pushes `ProgressPhotosScreen` for every
-/// user, and that screen decides what each one sees (OI-314, founder decision 6 of
-/// 2026-10-06): PRO gets the gallery and the Add button; a lapsed user who holds
-/// photos gets the gallery to view and delete (no new uploads: the database
-/// refuses them, migration 154); a user with no photos who is not PRO gets the
-/// locked card with the Upgrade button. Before OI-314 this row ran the PRO gate
-/// itself and showed a free user the paywall without opening the screen, which
-/// also locked a lapsed user out of their own photos. Saved is ungated by design.
+/// user, and that screen decides what each one may upload (OI-348 Landing 3c,
+/// founder calls 2026-11-26): everyone views and deletes; PRO uploads with no
+/// cap; a free or lapsed user uploads one photo per IST week (the database
+/// enforces it). Before OI-314 this row ran the PRO gate itself and showed a
+/// free user the paywall without opening the screen. Saved is ungated by design.
 /// `user_photos_hub_test.dart` fails on a second door from this hub that names
 /// the Progress screen.
 ///
 /// The ONE subscription read in the build is display-only: the Progress subtitle
-/// keeps the "PRO — visual progress timeline" hint for a user who is not PRO.
+/// states the free weekly photo for a user who is not PRO.
 class UserPhotosScreen extends ConsumerWidget {
   const UserPhotosScreen({super.key});
 
@@ -75,7 +75,7 @@ class UserPhotosScreen extends ConsumerWidget {
                   title: 'Progress',
                   subtitle: isPro
                       ? 'Track your transformation visually'
-                      : 'PRO — visual progress timeline',
+                      : ProgressPhotoCopy.hubSubtitleFree,
                   trailing: const ProfileRowChevron(),
                   // No gate here: the screen decides (see the class doc).
                   onTap: () => context.push('/profile/progress-photos'),

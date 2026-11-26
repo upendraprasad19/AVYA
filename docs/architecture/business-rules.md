@@ -37,7 +37,7 @@ status: scaffold
 - Cart Auditor — 10 scans/day (soft cap warning at 7/10)
 - Weekly AI nutrition report (ongoing)
 - Future Prediction card — fresh AI prediction every month
-- Progress photos (full timeline)
+- Unlimited progress photos (free users: 1 per IST week, server-enforced; viewing free for everyone; OI-348 Landing 3c)
 - Dedicated AI coaching with a higher daily limit (Gemini 3.1 Flash Lite — 20 messages/day, no trial window; NOT unlimited)
 - AI coach photo / video analysis — **10 image reads + 5 video reads per IST day** (OI-153, founder decision 2026-09-12; lowered from 50/10 by Part B, founder 2026-10-01; enforced atomically server-side, reset at midnight IST, an in-app coach reply at the ceiling — not the paywall). ⚠ Not "unlimited": every copy string that promised unlimited media reads was reworded the same day, and `test/contracts/coach_replies_test.dart` pins the word absent
 - Morning alert — AI-personalised message with yesterday's data

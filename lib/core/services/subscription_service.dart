@@ -670,9 +670,11 @@ class SubscriptionService {
   /// Prevents Hive-spoofing on rooted devices for premium features.
   ///
   /// Progress photos are included because they involve Supabase Storage
-  /// writes to a user-scoped bucket — granting access via a spoofed
-  /// local flag would let a free user persist private photos onto
-  /// infrastructure we pay for.
+  /// writes to a user-scoped bucket. Since OI-348 Landing 3c the feature means
+  /// "uploads beyond the free photo of the IST week": the screen's verified
+  /// verdict picks the free path (a weekly slot check) or the uncapped one,
+  /// and the database enforces the free cap at both doors whatever a spoofed
+  /// local flag says.
   ///
   /// F34 (2026-06-07) — residual risk note. The AI-cost features
   /// (scan_meal / cart_auditor / ai_text_log) are NOT in this set, so their
