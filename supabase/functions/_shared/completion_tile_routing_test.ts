@@ -138,7 +138,8 @@ Deno.test("ai-proxy: the tile block is pushed only through `if (tileBlock)`", ()
 });
 
 Deno.test("ai-proxy: the addendum is appended AFTER writeClaimSuffix(", () => {
-  const suffixAt = indexSrc.indexOf("writeClaimSuffix(ruleOn)");
+  // OI-348 Landing 3b: the call also passes the meal-items rule.
+  const suffixAt = indexSrc.indexOf("writeClaimSuffix(ruleOn, { mealItems: mealOn })");
   const addendumAt = indexSrc.indexOf("completionTileWriteClaimAddendum(capabilities, ruleOn)");
   assert(suffixAt > 0 && addendumAt > 0);
   assert(addendumAt > suffixAt);

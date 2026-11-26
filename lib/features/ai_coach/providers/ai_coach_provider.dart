@@ -21,6 +21,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/ai_service.dart' show AiChatResponse;
 import 'package:icanbefitter/core/services/service_providers.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/services/nutrition_read_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import '../copy/coach_replies.dart';
@@ -28,6 +29,7 @@ import '../copy/workout_draft_copy.dart';
 import '../repositories/ai_coach_repository.dart';
 import '../repositories/coach_interaction_repository.dart';
 import '../services/coach_meal_log.dart';
+import '../services/conversational_log_handler.dart';
 import 'pending_tool_intents_provider.dart';
 import '../models/tool_intent.dart';
 
@@ -1612,8 +1614,23 @@ class PendingLogAction {
   bool isDismissed;
 
   /// When the card was created (OI-493): a food tag logs on this instant's
-  /// IST day, because its 5 s countdown can cross midnight.
+  /// IST day, because its card can be confirmed after midnight (a 5 s
+  /// countdown before OI-348 Landing 3b; now a tap within the hour).
   final DateTime createdAt;
+
+  /// OI-348 Landing 3b: how long a food card waits for CONFIRM, the coach
+  /// tool's own intent TTL (`pending_tool_intents_provider.dart`).
+  static const Duration foodCardTtl = Duration(hours: 1);
+
+  /// Whether this is a food card past [foodCardTtl] at [now] (pass
+  /// `nowWall()`, the clock [createdAt] is stamped with). DERIVED, never
+  /// stored: a stale card shows `Expired` and its tap writes nothing
+  /// (`LogConfirmCard`), and `addActions` drops it unless its save runs.
+  /// Only with the meal card on: the kill switch keeps the 5 s card.
+  bool isStaleFood(DateTime now) =>
+      type == LogActionType.food &&
+      coachMealItemsCardEnabled() &&
+      now.difference(createdAt) > foodCardTtl;
 
   PendingLogAction({
     required this.id,
@@ -1673,6 +1690,7 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
       // configBox unavailable (e.g. unit tests) — dedup stays ON (fix-active).
     }
     final cov = dedupOff ? TypedLogCoverage.empty : coverage;
+    _dropStaleFood();
     for (final raw in rawActions) {
       if (raw['action'] == 'confirm_workout_log') {
         final data = raw['data'];
@@ -1701,6 +1719,23 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
         state = [...state, action];
       }
     }
+  }
+
+  /// OI-348 Landing 3b: a food card waits for CONFIRM with no timer, so one
+  /// left untapped would sit in the chat for the whole session. Each new
+  /// reply removes the food cards past their hour, never one already logged
+  /// or whose save is still running (`markLogged` must still find it).
+  /// Removed, not dismissed: dismissed fades a mounted card to nothing and
+  /// feeds [removeSettled].
+  void _dropStaleFood() {
+    final now = nowWall();
+    final kept = state
+        .where((a) =>
+            a.isLogged ||
+            !a.isStaleFood(now) ||
+            ConversationalLogHandler.isInFlight(a.id))
+        .toList();
+    if (kept.length != state.length) state = kept;
   }
 
   void markLogged(String id) {
@@ -1748,8 +1783,9 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
         // OI-493: the tag writes the coach's own estimate, so a tag with no
         // usable calories shows no card (it used to save a food-database
         // match or an invented 200 kcal). Counted, never silent.
-        final item = coachItemFromTag(data);
-        if (item == null) {
+        // OI-348 Landing 3b: usable items[] alone are enough (card ON).
+        final items = coachItemsFromTag(data);
+        if (items == null) {
           unawaited(ErrorTelemetry.logEvent(
               'coach_food_tag_dropped_no_calories'));
           return null;
@@ -1757,11 +1793,18 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
         final createdAt = nowWall();
         final meal = resolveCoachMealSlot(data['meal_type'] as String?, createdAt);
         final cap = meal[0].toUpperCase() + meal.substring(1);
+        final flat = coachItemFromTag(data);
+        final name = flat?.name ??
+            NutritionReadService.shortMealDisplayName({
+              'items': [
+                for (final i in items) {'name': i.name},
+              ],
+            });
         return PendingLogAction(
           id: id,
           type: LogActionType.food,
           data: data,
-          displayText: '${item.name} — $cap',
+          displayText: '$name — $cap',
           createdAt: createdAt,
         );
 

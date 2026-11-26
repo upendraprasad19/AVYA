@@ -1815,8 +1815,11 @@ class ToolDispatcher {
       return const ToolExecutionResult.failure(
           'Invalid log_meal_by_text intent payload.');
     }
-    final totalCal = (p['total_calories'] as num?)?.toInt() ?? 0;
-    final protein = (p['total_protein_g'] as num?)?.toInt() ?? 0;
+    // OI-348 Landing 3b: the one override parse, shared with the tool card so
+    // the total it shows is the total stored (never casts).
+    final overrides = coachToolOverrides(p);
+    final totalCal = overrides.cals;
+    final protein = overrides.protein;
 
     try {
       final result = await CoachMealLog.write(

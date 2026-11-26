@@ -72,6 +72,7 @@ import {
 } from "../_shared/completion_tile_routing.ts";
 import {
   icbfLogInstructions,
+  isCoachMealItemsRuleDisabled,
   isWriteClaimRuleDisabled,
   writeClaimSuffix,
 } from "../_shared/write_claim_prompt.ts";
@@ -841,6 +842,10 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     // coach-log-truth: the write-claim rule, read ONCE per request
     // (DISABLE_WRITE_CLAIM_RULE exactly "true" disables; OFF = today's bytes).
     const ruleOn = !isWriteClaimRuleDisabled();
+    // OI-348 Landing 3b: the meal-items rule, read ONCE per request
+    // (DISABLE_COACH_MEAL_ITEMS_RULE exactly "true" disables; OFF = the bytes
+    // before 3b). Food goes to logMealByText; no food tag example.
+    const mealOn = !isCoachMealItemsRuleDisabled();
 
     // ── OI-505 fix 4: a Retry of a finished turn reuses it ──
     // Only with `client_retry === true` and a valid `client_key`: the row of the
@@ -1091,7 +1096,7 @@ Rules: identify every distinct food product, use ACCURATE nutrition values from 
     // Total ceiling ≈ 35 KB, far under Gemini 3.1 Flash Lite's context limit.
     // Unit 2b: captainManual() serves the pre-2b food rules when
     // DISABLE_FOOD_TYPE_MANUAL_RULES is exactly "true".
-    const promptParts: string[] = [captainManual(), icbfLogInstructions(ruleOn)];
+    const promptParts: string[] = [captainManual(), icbfLogInstructions(ruleOn, { mealItems: mealOn })];
     if (isChatChannel) {
       // Unit 3 (day-swapper-sync-load) — deterministic per-request routing
       // block, chosen server-side from isProUser + the parsed client
@@ -1202,14 +1207,14 @@ data, say so honestly: "I don't have enough data on your Monday pattern
 yet" — never make up a number.
 `;
 
-    systemPrompt = dayInjection + systemPrompt + "\n\n" + antiFabricationRule + writeClaimSuffix(ruleOn);
+    systemPrompt = dayInjection + systemPrompt + "\n\n" + antiFabricationRule + writeClaimSuffix(ruleOn, { mealItems: mealOn });
     // Coach workout parity S3: the tile addendum comes AFTER the write-claim
     // rule, so it is the last text the model reads ("" without the
     // capability or with the rule off).
     systemPrompt += completionTileWriteClaimAddendum(capabilities, ruleOn);
 
     // Smoke-test log: confirms CAPTAIN_MANUAL is wired in every chat turn.
-    console.log(`[ai-proxy] system_prompt_size=${systemPrompt.length} captain_manual=${systemPrompt.includes("THE CAPTAIN — STATIC MANUAL")} write_claim_rule=${ruleOn}`);
+    console.log(`[ai-proxy] system_prompt_size=${systemPrompt.length} captain_manual=${systemPrompt.includes("THE CAPTAIN — STATIC MANUAL")} write_claim_rule=${ruleOn} meal_items_rule=${mealOn}`);
 
     // ── Multi-round tool-calling loop (Phase A, 2026-04-19) ────────
     // Replaces the previous single-shot geminiChat() with a 3-round

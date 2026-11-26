@@ -154,6 +154,21 @@ Deno.test("untyped inputs never throw", () => {
   })!;
   assertEquals(d.legacy_auto, 1);
   assertEquals(d.legacy_workout, 0);
+  assertEquals(d.legacy_food, 0);
+});
+
+Deno.test("legacy_food counts log_food tags only; legacy_auto still counts them (Landing 3b)", () => {
+  const d = detectWriteClaim("Queued. Tap CONFIRM to log it.", {
+    ...none,
+    legacyActions: [
+      { action: "log_food", data: {} },
+      { action: "log_water", data: { ml: 250 } },
+      { action: "confirm_workout_log", data: {} },
+    ],
+  })!;
+  assertEquals(d.legacy_food, 1);
+  assertEquals(d.legacy_auto, 2);
+  assertEquals(d.legacy_workout, 1);
 });
 
 Deno.test("replayCtxOf: no typed intents, the stored tags, replay true", () => {

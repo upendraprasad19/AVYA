@@ -60,6 +60,28 @@ class NutritionWriteService {
   ProviderContainer? _container;
   void attachContainer(ProviderContainer c) => _container = c;
 
+  /// The calories and protein [logMeal] stores for [items]: the Atwater
+  /// fallback per item when its calories are 0, each sum rounded once, and an
+  /// override only when > 0 (OI-493 Landing B, B8: an AI total that came back
+  /// 0 must not store a meal whose items carry calories as 0 kcal). Pure; the
+  /// coach meal cards call it so the total they show is the total stored
+  /// (OI-348 Landing 3b, plan R1-2).
+  static ({int kcal, int protein}) mealTotals(
+    List<FoodItem> items, {
+    int? overrideCals,
+    int? overrideProtein,
+  }) {
+    final itemsCals =
+        items.fold<double>(0, (a, i) => a + i.kcalWithFallback).round();
+    final itemsProtein = items.fold<double>(0, (a, i) => a + i.protein).round();
+    return (
+      kcal: (overrideCals != null && overrideCals > 0) ? overrideCals : itemsCals,
+      protein: (overrideProtein != null && overrideProtein > 0)
+          ? overrideProtein
+          : itemsProtein,
+    );
+  }
+
   /// Creates a `nutrition_logs` row + N `nutrition_log_items` rows
   /// atomically. Increments no counter (counters live at the API-call site).
   ///
@@ -93,20 +115,12 @@ class NutritionWriteService {
     final baseKey =
         computeLogKey(istDate: date, mealType: mealType, items: items);
 
-    // 3. Compute totals (Atwater fallback per item if calories=0). An
-    //    override applies only when > 0 (OI-493 Landing B, B8): an AI total
-    //    that came back 0 (the coach tool defaults a missing total to 0)
-    //    must not store a meal whose items carry calories as 0 kcal.
-    final itemsCals =
-        items.fold<double>(0, (a, i) => a + i.kcalWithFallback).round();
-    final itemsProtein = items.fold<double>(0, (a, i) => a + i.protein).round();
-    final totalCals = (overrideTotalCals != null && overrideTotalCals > 0)
-        ? overrideTotalCals
-        : itemsCals;
-    final totalProtein =
-        (overrideTotalProtein != null && overrideTotalProtein > 0)
-            ? overrideTotalProtein
-            : itemsProtein;
+    // 3. Compute totals: the one rule in [mealTotals] (OI-348 Landing 3b: the
+    //    coach meal cards show the same numbers before the write).
+    final totals = mealTotals(items,
+        overrideCals: overrideTotalCals, overrideProtein: overrideTotalProtein);
+    final totalCals = totals.kcal;
+    final totalProtein = totals.protein;
     final totalCarbs = items.fold<double>(0, (a, i) => a + i.carbs).round();
     final totalFat = items.fold<double>(0, (a, i) => a + i.fat).round();
     final totalFiber = items.fold<double>(0, (a, i) => a + i.fiber).round();

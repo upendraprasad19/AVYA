@@ -10,6 +10,15 @@
 // Kill switch DISABLE_WRITE_CLAIM_RULE (exactly "true" disables): every
 // builder then returns today's bytes (golden-pinned against origin/main by
 // write_claim_prompt_test.ts), and writeClaimSuffix returns "".
+//
+// OI-348 Landing 3b (plan docs/plans/oi348-landing3b.md, diagnose b3f7a1):
+// with the meal-items rule ON a food tag no longer auto-saves either: the app
+// shows one row per food and waits for CONFIRM. ai-proxy's block drops the
+// log_food example (the model copied its numbers into a real log) and sends
+// food to the logMealByText tool; ai-media-proxy (no tools) keeps the tag
+// with an items[] example. Kill switch DISABLE_COACH_MEAL_ITEMS_RULE (exactly
+// "true" disables): every builder then returns the bytes it returned before
+// (golden testdata/icbf_blocks_pre_meal_items.json).
 
 import type { ToolDefinition } from "./tools/types.ts";
 
@@ -18,6 +27,57 @@ export function isWriteClaimRuleDisabled(
   get: (name: string) => string | undefined = (n) => Deno.env.get(n),
 ): boolean {
   return get("DISABLE_WRITE_CLAIM_RULE") === "true";
+}
+
+/** True only when DISABLE_COACH_MEAL_ITEMS_RULE is exactly "true". Read once per request. */
+export function isCoachMealItemsRuleDisabled(
+  get: (name: string) => string | undefined = (n) => Deno.env.get(n),
+): boolean {
+  return get("DISABLE_COACH_MEAL_ITEMS_RULE") === "true";
+}
+
+// Exact substrings the meal-items rule rewrites (Landing 3b). The test asserts
+// each still exists in its base text, so a later edit fails loudly instead of
+// silently skipping a replacement.
+const DAL_RICE_TAG =
+  '<ICBF_LOG>{"action":"log_food","data":{"food_name":"Dal Rice","meal_type":"lunch","quantity_g":200,"calories_estimate":280,"protein_estimate":9,"carbs_estimate":55,"fat_estimate":3}}</ICBF_LOG>';
+/** The ai-proxy block's food example line (a template-literal line). */
+export const AI_FOOD_TAG_LINE = DAL_RICE_TAG + "\n";
+/** The media block's food example line (a concatenated string). */
+export const MEDIA_FOOD_TAG_LINE = "\n" + DAL_RICE_TAG;
+export const TAG_RULES_WITH_ATE =
+  "(I drank, I weighed, I ate, I slept, my waist is)";
+export const TAG_RULES_WITHOUT_ATE = "(I drank, I weighed, I slept, my waist is)";
+export const ONE_TAG_LINE = "- One tag per response maximum.";
+export const AI_FOOD_TOOL_RULE =
+  "\n- Food the user ate is never a tag: call logMealByText with the user's own words, every food and amount they named.";
+/** The media block's new food example: every flat key today's app reads, plus items[]. */
+export const MEDIA_FOOD_ITEMS_TAG_LINE =
+  '\n<ICBF_LOG>{"action":"log_food","data":{"food_name":"Idli and Sambar","quantity_g":270,"calories_estimate":270,"protein_estimate":10,"carbs_estimate":50,"fat_estimate":4,"items":[{"name":"Idli","quantity_g":120,"calories":160,"protein_g":5,"carbs_g":34,"fat_g":1},{"name":"Sambar","quantity_g":150,"calories":110,"protein_g":5,"carbs_g":16,"fat_g":3}]}}</ICBF_LOG>';
+export const MEDIA_FOOD_ITEMS_RULES =
+  "\n- A food tag lists every food in items, one entry per food, each with your own estimate for the amount the user ate; the totals are the sums. The example's foods and numbers show the format only: never copy them." +
+  "\n- Omit meal_type unless the user named the meal.";
+export const SUFFIX_FOOD_COUNTDOWN_OLD =
+  "A water, weight, food, sleep or measurement tag saves after a 5-second countdown unless the user taps SKIP.";
+export const SUFFIX_FOOD_COUNTDOWN_NEW =
+  "A water, weight, sleep or measurement tag saves after a 5-second countdown unless the user taps SKIP. A food tag waits for CONFIRM.";
+export const SUFFIX_CONFIRM_KINDS_OLD =
+  '"Queued. Tap CONFIRM to log it." (a workout tag)';
+export const SUFFIX_CONFIRM_KINDS_NEW =
+  '"Queued. Tap CONFIRM to log it." (a workout or food tag)';
+export const SUFFIX_SKIP_KINDS_OLD =
+  "(a water, weight, food, sleep or measurement tag)";
+export const SUFFIX_SKIP_KINDS_NEW = "(a water, weight, sleep or measurement tag)";
+
+/** One literal replacement (a function replacer, so no `$` pattern applies). */
+function swap(text: string, from: string, to: string): string {
+  return text.replace(from, () => to);
+}
+
+function mealItemsSuffix(rule: string): string {
+  let out = swap(rule, SUFFIX_FOOD_COUNTDOWN_OLD, SUFFIX_FOOD_COUNTDOWN_NEW);
+  out = swap(out, SUFFIX_CONFIRM_KINDS_OLD, SUFFIX_CONFIRM_KINDS_NEW);
+  return swap(out, SUFFIX_SKIP_KINDS_OLD, SUFFIX_SKIP_KINDS_NEW);
 }
 
 const OLD_HEADER = "FITNESS DATA LOGGING — INSTANT:";
@@ -30,9 +90,22 @@ function header(enabled: boolean): string {
 
 /**
  * The ai-proxy ICBF_LOG tag protocol, moved here verbatim from
- * ai-proxy/index.ts. Only the header line depends on [enabled].
+ * ai-proxy/index.ts. Only the header line depends on [enabled]. With
+ * [opts.mealItems] (Landing 3b) food leaves the tag protocol: the example
+ * line goes, "I ate" leaves the tag rule, and food goes to logMealByText.
  */
-export function icbfLogInstructions(enabled: boolean): string {
+export function icbfLogInstructions(
+  enabled: boolean,
+  opts: { mealItems?: boolean } = {},
+): string {
+  const base = icbfBlock(enabled);
+  if (opts.mealItems !== true) return base;
+  let out = swap(base, AI_FOOD_TAG_LINE, "");
+  out = swap(out, TAG_RULES_WITH_ATE, TAG_RULES_WITHOUT_ATE);
+  return swap(out, ONE_TAG_LINE, ONE_TAG_LINE + AI_FOOD_TOOL_RULE);
+}
+
+function icbfBlock(enabled: boolean): string {
   return `
 ${header(enabled)}
 When the user explicitly states they ALREADY completed an action, embed ONE tag at the END of your response:
@@ -59,9 +132,22 @@ Parse "5x8 at 80kg" as 5 sets of 8 reps at 80kg. logging_type: weight_reps (weig
 /**
  * The ai-media-proxy ICBF substring (from "\n\nFITNESS DATA LOGGING" to the
  * end of its prompt concatenation), moved here verbatim. Only the header
- * line depends on [enabled].
+ * line depends on [enabled]. With [opts.mealItems] (Landing 3b) the food
+ * example carries items[] and the rules ask for one entry per food; the tag
+ * stays the photo path's only meal door (this proxy offers no tools), so
+ * "I ate" stays in the tag rule.
  */
-export function mediaIcbfLogInstructions(enabled: boolean): string {
+export function mediaIcbfLogInstructions(
+  enabled: boolean,
+  opts: { mealItems?: boolean } = {},
+): string {
+  const base = mediaIcbfBlock(enabled);
+  if (opts.mealItems !== true) return base;
+  const out = swap(base, MEDIA_FOOD_TAG_LINE, MEDIA_FOOD_ITEMS_TAG_LINE);
+  return swap(out, ONE_TAG_LINE, ONE_TAG_LINE + MEDIA_FOOD_ITEMS_RULES);
+}
+
+function mediaIcbfBlock(enabled: boolean): string {
   return "\n\n" + header(enabled) +
     "\nWhen the user explicitly states they ALREADY completed an action, embed ONE tag at the END of your response:" +
     '\n<ICBF_LOG>{"action":"log_water","data":{"ml":500}}</ICBF_LOG>' +
@@ -104,10 +190,11 @@ export const MEDIA_WRITE_CLAIM_RULE = `WRITE CLAIMS — NOTHING IS SAVED WHEN YO
  */
 export function writeClaimSuffix(
   enabled: boolean,
-  opts: { tools?: boolean } = {},
+  opts: { tools?: boolean; mealItems?: boolean } = {},
 ): string {
   if (!enabled) return "";
-  return "\n\n" + (opts.tools === false ? MEDIA_WRITE_CLAIM_RULE : WRITE_CLAIM_RULE);
+  const rule = opts.tools === false ? MEDIA_WRITE_CLAIM_RULE : WRITE_CLAIM_RULE;
+  return "\n\n" + (opts.mealItems === true ? mealItemsSuffix(rule) : rule);
 }
 
 /** The note on a queued tool's functionResponse (L1, plan §2.1). */

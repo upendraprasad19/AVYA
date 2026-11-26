@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/services/badge_service.dart';
 import '../../../core/services/error_telemetry.dart';
+import '../../../core/services/hive_service.dart';
 import '../../../core/services/nutrition_write_service.dart';
 import '../../../core/services/nutrition_write_source.dart';
 import '../../../core/services/write_result.dart';
@@ -123,6 +124,71 @@ List<FoodItem> coachItemsFromParsedMeal(Map<String, dynamic> payload) {
       fiber: 0,
     ),
   ];
+}
+
+/// The tool card's override totals, parsed the way the dispatcher stores them
+/// (`toInt`, truncating). Never casts: it runs in a widget `build`, so a
+/// wrong-typed field gives 0 (then [NutritionWriteService.mealTotals] falls
+/// back to the items' sum) instead of throwing (OI-348 Landing 3b, R2-3).
+({int cals, int protein}) coachToolOverrides(Map<String, dynamic> payload) {
+  int whole(Object? v) => (v is num && v.isFinite) ? v.toInt() : 0;
+  return (
+    cals: whole(payload['total_calories']),
+    protein: whole(payload['total_protein_g']),
+  );
+}
+
+/// OI-348 Landing 3b test seam: overrides the configBox kill switch
+/// (`true` = card OFF, `false` = card ON). Null in production.
+@visibleForTesting
+bool? debugCoachMealItemsCardDisabled;
+
+/// Whether the coach meal cards show one row per food and the food tag waits
+/// for CONFIRM (OI-348 Landing 3b, founder P5). Kill switch
+/// `configBox['disable_coach_meal_items_card'] == true` restores the old
+/// cards (one line, 5 s auto-save for a food tag). A closed box = the fix ON.
+bool coachMealItemsCardEnabled() {
+  final forced = debugCoachMealItemsCardDisabled;
+  if (forced != null) return !forced;
+  try {
+    return HiveService.instance.configBox.get('disable_coach_meal_items_card') !=
+        true;
+  } catch (_) {
+    return true;
+  }
+}
+
+/// The items a `log_food` tag writes (OI-348 Landing 3b). With the card ON,
+/// one [FoodItem] per usable `items[]` entry (a non-blank `name` and finite
+/// `calories` >= 0; grams > 0 else 100); unusable entries are skipped, and no
+/// usable entry falls back to the flat-key item. With it OFF, the flat-key
+/// item only (today). Null when there is nothing to log (no card).
+List<FoodItem>? coachItemsFromTag(Map<String, dynamic> data) {
+  final single = coachItemFromTag(data);
+  if (!coachMealItemsCardEnabled()) return single == null ? null : [single];
+  final out = <FoodItem>[];
+  final raw = data['items'];
+  if (raw is List) {
+    for (final e in raw) {
+      if (e is! Map) continue;
+      final name = e['name'];
+      if (name is! String || name.trim().isEmpty) continue;
+      final cal = e['calories'];
+      if (cal is! num || !cal.isFinite || cal < 0) continue;
+      final q = e['quantity_g'];
+      out.add(FoodItem(
+        name: name.trim(),
+        quantityG: (q is num && q.isFinite && q > 0) ? q.toDouble() : 100.0,
+        calories: cal.toDouble(),
+        protein: _num(e['protein_g']),
+        carbs: _num(e['carbs_g']),
+        fat: _num(e['fat_g']),
+        fiber: 0,
+      ));
+    }
+  }
+  if (out.isNotEmpty) return out;
+  return single == null ? null : [single];
 }
 
 /// The one item a `log_food` tag writes: the coach's own name and estimates

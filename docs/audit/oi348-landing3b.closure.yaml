@@ -1,0 +1,52 @@
+# Closure ledger - oi348-landing3b (OI-348 walk, Landing 3b: B4 + P5, coach meals one row per food, saved only on a tap).
+# Gate 40. One terminal_state per unit; no `deferred:` key.
+# Plan: docs/plans/oi348-landing3b.md (3 review rounds, converged). `oi348-landing3b@branch` is the in-branch commit form.
+
+batch: oi348-landing3b
+plan_review_record: docs/plan-reviews/oi348-landing3b.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-26-coach-meal-tag-example-copied-b3f7a1.md
+total_findings: 7
+closed_count: 7
+
+findings:
+  - id: B4-PROMPT
+    title: "ai-proxy no longer teaches a log_food tag example (the model copied Dal Rice 200 g 280 kcal into a real log); food goes to logMealByText"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3b@branch"
+    verification: "write_claim_prompt_test.ts (7 new, OFF byte-identical to main 238bb44f via the new golden, ON shape under both headers), wiring pins repointed; mutants M6, M7, M15 red (diagnose b3f7a1)"
+
+  - id: B4-MEDIA
+    title: "ai-media-proxy food tag lists items[] (one entry per food, never copy the example), carrying every flat key the +50 client reads"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3b@branch"
+    verification: "write_claim_prompt_test.ts parses the example (sums), coach_meal_items_card_behavioral_test T12 builds a two-food card from the same JSON and a one-item card from its flat keys; mutant M5 red"
+
+  - id: P5-TAG-CARD
+    title: "Food tag card shows one row per food and waits for CONFIRM (no 5 s auto-save), expires after an hour"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3b@branch"
+    verification: "coach_meal_items_card_behavioral_test T1/T2/T8/T11/T11b/T13 green; water mirror T3 keeps its 5 s timer; mutants M1, M2, M10, M12, M13, M14 red"
+
+  - id: P5-TOOL-CARD
+    title: "logMealByText card shows each parsed food and the total the dispatcher stores"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3b@branch"
+    verification: "T5/T10 (three payload shapes: card total == stored nlog_ total), T14; mutants M4, M9, M11 red"
+
+  - id: P5-QUEUED-WORDING
+    title: "Both write-claim suffixes say a food tag waits for CONFIRM; the detector counts legacy_food"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3b@branch"
+    verification: "write_claim_prompt_test.ts suffix test, write_claim_detector_test.ts legacy_food test; mutant M8 red"
+
+  - id: SWITCH-REMOVAL
+    title: "Remove DISABLE_COACH_MEAL_ITEMS_RULE and disable_coach_meal_items_card with their OFF paths (CLAUDE.md 4.6 step 4)"
+    terminal_state: upstream_blocked
+    blocker: "Tracked as OI-529; the switches stay until the per-food card is checked on a phone."
+    reopen_when: "the founder's device check of the per-food coach meal card on the next AAB passes"
+
+  - id: EF-DEPLOY
+    title: "Redeploy ai-proxy and ai-media-proxy from main so the prompt change is live"
+    terminal_state: blocked_on_user
+    reason: "A live Edge Function deploy needs its own founder go (CLAUDE.md 4.3), after the merge."

@@ -27,14 +27,25 @@ void main() {
       expect(proxy.indexOf(read), lessThan(proxy.indexOf('dedupCutoff')));
     });
 
+    // OI-348 Landing 3b: the meal-items rule, read once next to ruleOn.
+    test('mealOn is read once, before the dedup read, and reaches the log line',
+        () {
+      const read = 'const mealOn = !isCoachMealItemsRuleDisabled()';
+      expect(count(proxy, read), 1);
+      expect(proxy.indexOf(read), lessThan(proxy.indexOf('dedupCutoff')));
+      expect(count(proxy, r'meal_items_rule=${mealOn}'), 1);
+    });
+
     test('the prompt pieces come from the builders', () {
       expect(
           count(proxy,
               // Diet plan Unit 2b: the manual comes from captainManual()
               // (DISABLE_FOOD_TYPE_MANUAL_RULES), never the bare constant.
-              'const promptParts: string[] = [captainManual(), icbfLogInstructions(ruleOn)];'),
+              // OI-348 Landing 3b: plus the meal-items rule.
+              'const promptParts: string[] = [captainManual(), icbfLogInstructions(ruleOn, { mealItems: mealOn })];'),
           1);
-      expect(count(proxy, 'writeClaimSuffix(ruleOn)'), 1);
+      expect(count(proxy, 'writeClaimSuffix(ruleOn, { mealItems: mealOn })'), 1);
+      expect(count(proxy, 'writeClaimSuffix('), 1);
       expect(
           count(proxy,
               'daySwapRoutingBlock(isProUser, capabilities, ruleOn)'),
@@ -103,9 +114,10 @@ void main() {
   group('ai-media-proxy', () {
     test('ruleOn is read once and feeds the authored prompt', () {
       expect(count(media, 'const ruleOn = !isWriteClaimRuleDisabled()'), 1);
+      expect(count(media, 'const mealOn = !isCoachMealItemsRuleDisabled()'), 1);
       final authored = media.indexOf('asAuthoredPrompt(');
       final tail = media.indexOf(
-          'mediaIcbfLogInstructions(ruleOn) + writeClaimSuffix(ruleOn, { tools: false })');
+          'mediaIcbfLogInstructions(ruleOn, { mealItems: mealOn }) +\n      writeClaimSuffix(ruleOn, { tools: false, mealItems: mealOn })');
       final fence = media.indexOf('if (snapshot_json)');
       expect(authored, isNot(-1));
       expect(tail, greaterThan(authored));
