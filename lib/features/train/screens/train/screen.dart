@@ -28,6 +28,7 @@ import 'package:icanbefitter/shared/widgets/screen_loading_skeleton.dart';
 import 'package:icanbefitter/shared/widgets/error_state.dart';
 import 'package:icanbefitter/shared/widgets/empty_state.dart';
 import '../../providers/train_provider.dart';
+import '../../services/past_week_days.dart';
 import 'package:icanbefitter/features/home/widgets/weight_log_sheet.dart';
 import '../../widgets/create_custom_exercise_sheet.dart';
 import '../../widgets/edit_workout_log_sheet.dart';
@@ -121,7 +122,14 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
 
   Widget _buildContent(BuildContext context) {
     final plan = ref.watch(currentPlanProvider);
-    final selectedWeek = ref.watch(selectedWeekProvider).week;
+    final pickedWeek = ref.watch(selectedWeekProvider).week;
+    // A past-phase week picked on the strip (docs/plans/train-past-week-in-place.md D4): the list shows
+    // THAT week's rows through the same builder as the current week; everything else on the screen (header,
+    // hero, future-phase cards) behaves as for the current week, so the effective week is the current one.
+    final pastSelection = ref.watch(pastWeekSelectionProvider);
+    final pastDays = ref.watch(pastWeekDaysProvider);
+    final inPastView = pastDays != null && pastSelection != null;
+    final selectedWeek = inPastView ? plan.currentWeek : pickedWeek;
     final weekDays = plan.getWeek(selectedWeek);
     final todayWorkout = plan.todayWorkout;
     // Free-tier hold weeks — HoldStatusData.empty for a user who never held,
@@ -275,7 +283,11 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                     // Week selector tabs
                     WeekSelector(
                       totalWeeks: plan.weeks.length.clamp(1, 12),
-                      selectedWeek: selectedWeek,
+                      // Past view: 0 lights no W chip; only the picked past chip is gold.
+                      selectedWeek: inPastView ? 0 : selectedWeek,
+                      pastSelection: pastSelection,
+                      onSelectPast: (sel) =>
+                          ref.read(pastWeekSelectionProvider.notifier).select(sel),
                       // Real current phase from user_progress (via
                       // CurrentPlanData.phase) — drives dynamic phase labels so
                       // the strip never shows a duplicate "PHASE I". Fix
@@ -313,7 +325,14 @@ class _TrainScreenState extends ConsumerState<TrainScreen>
                     // Compact week rows
                     // A3: never the "Complete Phase … to unlock" copy for a PRO
                     // user whose phase has already expired (`proExpired`).
-                    if (weekDays.isEmpty)
+                    if (inPastView) ...[
+                      _buildPastWeekLabel(pastSelection),
+                      if (pastDays.isEmpty)
+                        _buildPastWeekEmpty()
+                      else
+                        _buildCompactWeekRows(context, pastDays,
+                            showAllowanceFooter: false),
+                    ] else if (weekDays.isEmpty)
                       _buildEmptyWeek(
                         isFutureUngeneratedPhase:
                             isFutureUngeneratedPhase(selectedWeek),

@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:icanbefitter/core/services/hive_service.dart';
-import 'package:icanbefitter/core/utils/cardio_format.dart';
 import 'package:icanbefitter/core/utils/hold_week_labels.dart';
 import 'package:icanbefitter/core/services/service_providers.dart';
-import 'package:icanbefitter/core/services/workout_read_service.dart';
 import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
 import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/features/train/services/past_week_days.dart';
 import 'hold_chip_group.dart';
 
 /// Horizontal scrollable week tab bar — extended to 12 weeks (3 phases).
@@ -56,12 +54,20 @@ class WeekSelector extends ConsumerStatefulWidget {
   final int currentPhase;
   final ValueChanged<int> onSelect;
 
+  /// The past-phase week whose rows the Train list shows now (null: none). Its chip is the lit one.
+  final PastWeekSelection? pastSelection;
+
+  /// A past chip tap: the picked week, or null for a re-tap of the lit chip (clears the view).
+  final ValueChanged<PastWeekSelection?>? onSelectPast;
+
   const WeekSelector({
     super.key,
     required this.totalWeeks,
     required this.selectedWeek,
     required this.currentPhase,
     required this.onSelect,
+    this.pastSelection,
+    this.onSelectPast,
   });
 
   @override
@@ -182,7 +188,10 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
           for (final past in pastPhases) ...[
             _PastPhaseGroup(
               past: past,
-              onTap: (week) => _showPastWeekSheet(context, past, week),
+              selectedWeek: widget.pastSelection?.phaseNumber == past.phaseNumber
+                  ? widget.pastSelection?.weekInPhase
+                  : null,
+              onTap: (week) => _selectPast(past, week),
             ),
             const SizedBox(width: 16),
           ],
@@ -296,17 +305,24 @@ class _WeekSelectorState extends ConsumerState<WeekSelector> {
     );
   }
 
-  void _showPastWeekSheet(
-      BuildContext context, _PastPhase past, int weekInPhase) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.card,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => _PastWeekSheet(past: past, weekInPhase: weekInPhase),
-    );
+  /// A past chip tap (docs/plans/train-past-week-in-place.md D5): the Train list shows that week's rows in
+  /// place. The lit chip again clears the view. The dates are the chip's own rows' stored date strings.
+  void _selectPast(_PastPhase past, int weekInPhase) {
+    final cb = widget.onSelectPast;
+    if (cb == null) return;
+    final cur = widget.pastSelection;
+    if (cur != null &&
+        cur.phaseNumber == past.phaseNumber &&
+        cur.weekInPhase == weekInPhase) {
+      cb(null);
+      return;
+    }
+    cb(PastWeekSelection(
+      phaseNumber: past.phaseNumber,
+      weekInPhase: weekInPhase,
+      dates: [for (final e in past.entriesForWeek(weekInPhase)) e.dateKey],
+      phaseStart: past.startKey,
+    ));
   }
 
   void _showHoldWeekSheet(BuildContext context, HoldWeekInfo hold) {
@@ -446,6 +462,9 @@ class _ScheduleEntry {
   final String workoutName;
   final String status;
   final String? completedAt;
+  /// The stored `yyyy-MM-dd` of this row (the key minus `schedule_`).
+  String get dateKey => key.substring('schedule_'.length);
+
   const _ScheduleEntry({
     required this.key,
     required this.date,
@@ -473,6 +492,9 @@ class _PastPhase {
     this.weekCount = 4,
   });
 
+  /// The raw stored date string of the group's first row (== [startDate], unparsed).
+  String get startKey => entries.first.dateKey;
+
   // A row's chip is its CALENDAR week from [startDate] (pastPhaseWeekOf), the
   // same arithmetic as [weekCount], so the two never disagree across DST.
   bool hasCompletedDayInWeek(int weekInPhase) => entries.any((e) =>
@@ -487,9 +509,13 @@ class _PastPhase {
 // ── Past phase group (label + week chips, visually muted) ─────────────────
 
 class _PastPhaseGroup extends StatelessWidget {
-  const _PastPhaseGroup({required this.past, required this.onTap});
+  const _PastPhaseGroup(
+      {required this.past, required this.onTap, this.selectedWeek});
   final _PastPhase past;
   final ValueChanged<int> onTap;
+
+  /// The week of this group the Train list shows now (null: none of this group).
+  final int? selectedWeek;
 
   @override
   Widget build(BuildContext context) {
@@ -530,7 +556,9 @@ class _PastPhaseGroup extends StatelessWidget {
                   key: ValueKey('past-${past.phaseNumber}-w$w'),
                   weekInPhase: w,
                   hasCompletedDay: past.hasCompletedDayInWeek(w),
-                  startDate: past.startDate,
+                  startKey: past.startKey,
+                  phaseNumber: past.phaseNumber,
+                  selected: selectedWeek == w,
                   onTap: () => onTap(w),
                 ),
               ),
@@ -546,441 +574,87 @@ class _PastWeekChip extends StatelessWidget {
     super.key,
     required this.weekInPhase,
     required this.hasCompletedDay,
-    required this.startDate,
+    required this.startKey,
+    required this.phaseNumber,
+    required this.selected,
     required this.onTap,
   });
 
   final int weekInPhase;
   final bool hasCompletedDay;
-  final DateTime startDate;
+
+  /// The raw stored date of the group's first row; the range text is [pastWeekRangeLabel] of it.
+  final String startKey;
+  final int phaseNumber;
+
+  /// True while the Train list shows this week (gold, like a lit current chip).
+  final bool selected;
   final VoidCallback onTap;
 
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-
-  String _dateRange() {
-    final weekStart =
-        startDate.add(Duration(days: (weekInPhase - 1) * 7));
-    final weekEnd = weekStart.add(const Duration(days: 6));
-    if (weekStart.month == weekEnd.month) {
-      return '${_months[weekStart.month - 1]} ${weekStart.day}–${weekEnd.day}';
-    }
-    return '${_months[weekStart.month - 1]} ${weekStart.day}–'
-        '${_months[weekEnd.month - 1]} ${weekEnd.day}';
-  }
-
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 48,
-        height: 58,
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.sharp),
-          border: Border.all(color: AppColors.textDim.withValues(alpha: 0.4)),
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'W$weekInPhase',
-                  style: AppTypography.monoXs.copyWith(
-                    fontSize: 10,
-                    color: AppColors.textDim,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.5,
-                    height: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _dateRange().toUpperCase(),
-                  style: AppTypography.monoXs.copyWith(
-                    color: AppColors.textDim.withValues(alpha: 0.85),
-                    fontSize: 7,
-                    letterSpacing: 1,
-                    height: 1.1,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-            if (hasCompletedDay)
-              Positioned(
-                top: 4,
-                right: 4,
-                child: Icon(
-                  Icons.check_circle,
-                  size: 10,
-                  color: AppColors.ok,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Theme K — modal bottom sheet rendering the 7-day breakdown of a
-/// past-phase week from `schedule_*` Hive entries. Read-only — tapping
-/// a day does NOT navigate (the historical workout's exercises live in
-/// the exlog_* logs, which would need a separate detail screen; v1
-/// keeps this scope tight).
-class _PastWeekSheet extends StatelessWidget {
-  const _PastWeekSheet({required this.past, required this.weekInPhase});
-
-  final _PastPhase past;
-  final int weekInPhase;
-
-  @override
-  Widget build(BuildContext context) {
-    final entries = past.entriesForWeek(weekInPhase)
-      ..sort((a, b) => a.date.compareTo(b.date));
-    final romanLabel = _phaseRoman(past.phaseNumber);
-    return SafeArea(
-      child: ConstrainedBox(
-        // Cap the sheet so a full 7-row week (with expanded rows) scrolls
-        // instead of overflowing the screen. Header stays pinned.
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final range = pastWeekRangeLabel(startKey, weekInPhase);
+    final fg = selected ? AppColors.bgDeep : AppColors.textDim;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Phase ${_phaseRoman(phaseNumber)} week $weekInPhase, '
+          '${range.replaceAll('\u2013', ' to ')}',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 48,
+          height: 58,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.accent : AppColors.card,
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            border: selected
+                ? Border.all(color: AppColors.accent, width: 1.5)
+                : Border.all(color: AppColors.textDim.withValues(alpha: 0.4)),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.textGhost,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Text(
-                'PHASE $romanLabel · WEEK $weekInPhase',
-                style: AppTypography.monoXs.copyWith(
-                  color: AppColors.accent,
-                  letterSpacing: 1.5,
-                  fontSize: 11,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Completed history',
-                style: AppTypography.h3,
-              ),
-              const SizedBox(height: 14),
-              if (entries.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                    child: Text(
-                      'No workouts logged for this week.',
-                      style: AppTypography.bodySm
-                          .copyWith(color: AppColors.textDim),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'W$weekInPhase',
+                    style: AppTypography.monoXs.copyWith(
+                      fontSize: 10,
+                      color: fg,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
+                      height: 1.1,
                     ),
                   ),
-                )
-              else
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final e in entries) _PastDayRow(entry: e),
-                      ],
+                  const SizedBox(height: 2),
+                  Text(
+                    range.toUpperCase(),
+                    style: AppTypography.monoXs.copyWith(
+                      color: fg.withValues(alpha: 0.85),
+                      fontSize: 7,
+                      letterSpacing: 1,
+                      height: 1.1,
                     ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+              if (hasCompletedDay)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Icon(
+                    Icons.check_circle,
+                    size: 10,
+                    color: selected ? AppColors.bgDeep : AppColors.ok,
                   ),
                 ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Derives a past day's display name + the exercises actually logged that
-/// day from the canonical log rows, rather than the (often name-less)
-/// restored schedule row. Visible for testing.
-///
-/// [scheduleKey] is the `schedule_<dateStr>` Hive key; [fallbackName] is the
-/// schedule row's own `workout_name` (used only when the `wlog_<dateStr>`
-/// session row carries none — e.g. a planned-but-skipped day). The name
-/// precedence is: wlog session name → schedule name → 'Workout'. Exercises
-/// come from the canonical [WorkoutReadService.exerciseLogsForIstDate]
-/// reader. See diagnose f4e1d9.
-({String name, List<Map<String, dynamic>> exercises}) derivePastDayLog(
-  String scheduleKey,
-  String fallbackName,
-) {
-  final dateStr = scheduleKey.startsWith('schedule_')
-      ? scheduleKey.substring('schedule_'.length)
-      : '';
-  if (dateStr.isEmpty) {
-    return (
-      name: fallbackName.isNotEmpty ? fallbackName : 'Workout',
-      exercises: const <Map<String, dynamic>>[],
-    );
-  }
-  final wlog = HiveService.instance.workoutBox.get('wlog_$dateStr');
-  final wlogName = (wlog is Map) ? wlog['workout_name'] as String? : null;
-  final name = (wlogName != null && wlogName.isNotEmpty)
-      ? wlogName
-      : (fallbackName.isNotEmpty ? fallbackName : 'Workout');
-  final exercises =
-      WorkoutReadService.instance.exerciseLogsForIstDate(dateStr);
-  return (name: name, exercises: exercises);
-}
-
-/// Theme K v2 (2026-06-01 / diagnose f4e1d9) — a past-day row that
-/// DERIVES its content from the actual logs, then expands (drop-down) to
-/// show the exercises the user really did.
-///
-/// Why derive: cloud `scheduled_workouts` has no `workout_name`/exercises
-/// column, and the schedule-row restore only hydrates a name when a
-/// `template_id` is set — plan-generator days (`template_id IS NULL`) come
-/// back name-less, so the bare schedule row rendered a generic "Workout".
-/// The restored `wlog_<date>` session row DOES carry the name (Push/Pull/
-/// Legs), and the `exlog_*` rows carry the exercises. We read both via the
-/// canonical [WorkoutReadService.exerciseLogsForIstDate] (same path the
-/// receipt + Train screen use) so there is no parallel reader to drift.
-class _PastDayRow extends StatefulWidget {
-  const _PastDayRow({required this.entry});
-  final _ScheduleEntry entry;
-
-  @override
-  State<_PastDayRow> createState() => _PastDayRowState();
-}
-
-class _PastDayRowState extends State<_PastDayRow> {
-  static const _weekdayLabels = [
-    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
-  ];
-
-  bool _expanded = false;
-  late final String _displayName;
-  late final List<Map<String, dynamic>> _exercises;
-
-  @override
-  void initState() {
-    super.initState();
-    final derived =
-        derivePastDayLog(widget.entry.key, widget.entry.workoutName);
-    _displayName = derived.name;
-    _exercises = derived.exercises;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final entry = widget.entry;
-    final weekday = _weekdayLabels[(entry.date.weekday - 1) % 7];
-    final isCompleted = entry.status == 'completed';
-    final isRest = entry.type == 'rest';
-    final exerciseCount = _exercises.length;
-    final canExpand = !isRest && exerciseCount > 0;
-
-    final subtitle = isCompleted
-        ? '${exerciseCount > 0 ? "$exerciseCount exercise${exerciseCount == 1 ? "" : "s"} · " : ""}'
-            'Completed${entry.completedAt != null ? " · ${_formatTime(entry.completedAt!)}" : ""}'
-        : 'Not completed';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: AppColors.input,
-        borderRadius: BorderRadius.circular(AppRadius.sharp),
-        border: Border.all(color: AppColors.line2),
-      ),
-      child: Column(
-        children: [
-          InkWell(
-            onTap:
-                canExpand ? () => setState(() => _expanded = !_expanded) : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.bgRaise,
-                      borderRadius: BorderRadius.circular(AppRadius.sharp),
-                      border: Border.all(color: AppColors.line2),
-                    ),
-                    child: Text(
-                      weekday.toUpperCase(),
-                      style: AppTypography.monoXs.copyWith(
-                        color: AppColors.textDim,
-                        fontSize: 9,
-                        letterSpacing: 1.2,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isRest ? 'Rest day' : _displayName,
-                          style: AppTypography.h3.copyWith(fontSize: 13),
-                        ),
-                        if (!isRest) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            subtitle,
-                            style: AppTypography.bodySm.copyWith(
-                              color: isCompleted
-                                  ? AppColors.ok
-                                  : AppColors.textMute,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (isCompleted)
-                    const Icon(Icons.check_circle, size: 16, color: AppColors.ok)
-                  else if (!isRest)
-                    const Icon(Icons.remove_circle_outline,
-                        size: 16, color: AppColors.textMute),
-                  if (canExpand) ...[
-                    const SizedBox(width: 4),
-                    AnimatedRotation(
-                      turns: _expanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 150),
-                      child: const Icon(Icons.expand_more,
-                          size: 18, color: AppColors.textDim),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          if (_expanded && canExpand)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final ex in _exercises) _ExerciseLine(log: ex),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(String iso) {
-    final dt = DateTime.tryParse(iso);
-    if (dt == null) return '';
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-}
-
-/// The compact summary of one logged exercise on an expanded past-day row,
-/// extracted pure so it is testable (OI-389 T26): `N sets · W kg · time · km`.
-@visibleForTesting
-String weekExerciseLineDetail(Map<String, dynamic> log) {
-  // Unit 7 / OI-50 — shared aggregate reader. This read only `set_number`,
-  // missing the 4-source MAX the receipt has had since APK Test #12.2, so a
-  // row with set_number == 0 and a populated per-set array rendered "0 sets".
-  final sets = WorkoutReadService.aggregateSetCount(log);
-  final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-  // Unit 7 / OI-50 — was `bestPerSetDuration`, a per-set MAX, for a value
-  // rendered beside a SET COUNT (so it reads as the session total) and
-  // formatted as whole minutes. On a cloud-restored row that MAX returns 0
-  // (its top-level fallback is gated on setCount <= 1), so the duration
-  // disappeared from the line entirely while the receipt showed the real
-  // total. Both surfaces now share one reader.
-  final durationSec = WorkoutReadService.aggregateDurationSeconds(log) ?? 0;
-  // OI-389 U3/U7: km through the reader (per-set first, then top level);
-  // cardio / distance minutes and km through the formatter pair. Timed and
-  // weight rows keep their old minute expression.
-  final distanceKm = WorkoutReadService.aggregateDistanceKm(log);
-  final loggingType = log['logging_type'] as String? ?? 'weight_reps';
-  final isCardioLike = loggingType == 'cardio' || loggingType == 'distance';
-
-  final parts = <String>[];
-  if (sets > 0) parts.add('$sets ${sets == 1 ? "set" : "sets"}');
-  if (weight > 0) {
-    parts.add('${weight % 1 == 0 ? weight.toInt() : weight} kg');
-  }
-  if (durationSec > 0) {
-    parts.add(isCardioLike
-        ? formatSetDuration(durationSec)
-        : '${(durationSec / 60).round()} min');
-  }
-  if (distanceKm > 0) parts.add(formatDistance(distanceKm));
-  return parts.join(' · ');
-}
-
-/// One logged exercise inside an expanded past-day row: name + a compact
-/// "N sets · W kg" summary built from the exlog top-level fields, with a
-/// PR marker. Time/distance exercises show their duration/distance instead.
-class _ExerciseLine extends StatelessWidget {
-  const _ExerciseLine({required this.log});
-  final Map<String, dynamic> log;
-
-  @override
-  Widget build(BuildContext context) {
-    final name = (log['exercise_name'] as String?) ?? 'Exercise';
-    final isPr = log['is_pr'] == true;
-    final detail = weekExerciseLineDetail(log);
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 3,
-            height: 3,
-            decoration: const BoxDecoration(
-              color: AppColors.textGhost,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              name,
-              style: AppTypography.bodySm.copyWith(fontSize: 12),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (isPr) ...[
-            const Icon(Icons.star, size: 12, color: AppColors.accent),
-            const SizedBox(width: 6),
-          ],
-          if (detail.isNotEmpty)
-            Text(
-              detail,
-              style: AppTypography.monoXs.copyWith(
-                color: AppColors.textDim,
-                fontSize: 10,
-              ),
-            ),
-        ],
       ),
     );
   }

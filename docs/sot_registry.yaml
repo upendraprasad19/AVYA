@@ -1251,7 +1251,7 @@ concepts:
           dismiss (per-user IST date key) + configBox kill-switch
           'disable_expiry_banner'. Renders via _buildExpiryBanner in home_screen.
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 124-127
+        line_range: 130-133
         method: WeekSelector build
         semantic: display-only
         fields_read: [isPro]
@@ -4976,7 +4976,7 @@ concepts:
         semantic: flag-check
         fields_read: [status, completed_at, exercises]
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 643-678
+        line_range: 651-686
         method: currentPlanProvider (weekDays status check)
         semantic: flag-check
         fields_read: [status]
@@ -5173,7 +5173,7 @@ concepts:
       so partial-failure recovery is row-level instead of template-level.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2762-2775
+        line_range: 2879-2892
         method: TemplatesNotifier.saveTemplate (single-day; multi-day templates
           land via tool_dispatcher.createCustomTemplate entry below)
       - file: lib/features/train/screens/template_builder_screen.dart
@@ -5222,7 +5222,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2740-2760
+        line_range: 2857-2877
         method: TemplatesNotifier.build
         semantic: pass-through
         fields_read: [type, name, exercises, assigned_days, exercise_count, group_id, group_day_index, group_total_days, last_used_at, created_at, updated_at]
@@ -5980,7 +5980,7 @@ concepts:
       while the clamp reports 4. See a3f8d1.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 543-648
+        line_range: 551-656
         method: resolveStreakWeekState (pure extraction — week identity + row key + day counts, both arms; a3f8d1)
       - file: lib/features/train/services/workout_completion_bookkeeping.dart
         method: WorkoutCompletionBookkeeping.afterCompletion (step 5, the streak row upsert; calls resolveStreakWeekState in step 3. Moved out of Active Workout's completeWorkout by coach workout parity 1a, diagnose 0ebfcb, so every completion door writes it)
@@ -6640,7 +6640,7 @@ concepts:
         method: WorkoutCompletionBookkeeping.afterCompletion
         notes: the ONLY production writer of both keys (coach workout parity 1a, diagnose 0ebfcb; was Active Workout's completeWorkout alone, so a coach completion never counted a week). Every completion door calls it after a successful markCompleted; step 3 calls weeklyStreakAfterCompletion and step 4 writes weekly.weeks / weekly.marker (last_counted_week_key), only once this user's restore has settled.
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 728-735
+        line_range: 736-743
         method: weeklyStreakAfterCompletion
         notes: the pure rule; counts when planned > 0, completedCount >= ceil(0.8 * planned) and the calendar-week key differs from the marker. calendarWeekKey (645) is the key; weekIsCurrent (from resolveStreakWeekState) must be true or nothing counts.
     reader_manifest_complete: false
@@ -10643,7 +10643,7 @@ concepts:
     reader_manifest_complete: false  # progressive caller migration; @Deprecated lint surfaces remaining
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 124-129
+        line_range: 130-135
         method: build → getPlanStartDate
         semantic: latest
         fields_read: [plan_start_date]
@@ -10726,7 +10726,7 @@ concepts:
         method: holdWeek → stamps is_hold + hold_ordinal (unchanged; the identity is derived from these stamps, so a field rename silently empties every surface below)
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1167-1170
+        line_range: 1192-1195
         method: weekIdentityProvider — widget-side seam, watches currentPlanProvider
         semantic: latest
         fields_read: [WeekIdentity.weekInPhase, WeekIdentity.holdOrdinal]
@@ -10790,25 +10790,80 @@ concepts:
       selection (hold_display_read_path).
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1179-1209
+        line_range: 1204-1234
         method: SelectedWeek / SelectedWeekNotifier.build (default, picked false) / select (picked true)
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 1085-1092
+        line_range: 759-766
         method: weekChipLit (pure)
         semantic: latest
         fields_read: [SelectedWeek.week, SelectedWeek.picked, HoldStatusData.todayHoldOrdinal]
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 152-162
+        line_range: 158-168
         method: _WeekSelectorState.build — selected + holdingToday for the current group
         semantic: latest
         fields_read: [selectedWeekProvider.picked, holdStatusProvider.todayHoldOrdinal]
       - file: lib/features/train/screens/train/screen.dart
-        line_range: 124-125
+        line_range: 133-133
         method: _buildContent — the week list reads selectedWeekProvider.week
         semantic: latest
         fields_read: [SelectedWeek.week]
     reader_manifest_complete: true
+
+  - concept: past_week_in_place
+    domain: workout
+    behavioral_test_path: test/contracts/train_past_week_in_place_behavioral_test.dart
+    description: |
+      A past-phase week picked on the Train strip is shown by the Train screen's OWN
+      list (train-history-sheet-style, plan docs/plans/train-past-week-in-place.md),
+      replacing the Completed-history sheet (a second row renderer with a hand-copied
+      formatter). Read path only, no writer: a chip tap calls onSelectPast with a
+      PastWeekSelection whose dates are the chip's own stored schedule_ date strings;
+      pastWeekSelectionProvider resets on any selectedWeekProvider change;
+      pastWeekDaysProvider builds each row through the SAME
+      workoutDayDataFromScheduleRow as currentPlanProvider, reading the row with
+      getScheduleForDate(pastWeekDateTime(ymd)) (UTC noon: the same IST date on any
+      device; the current week's visibility rules). Name precedence is the pure
+      pastDayView: a DONE day takes the wlog_<date> workout_name, a not-done day its
+      own row name first, placeholders skipped (kPlaceholderWorkoutNames, trim +
+      lower-case), generic Workout / Rest Day last; the logged count is read only for
+      a row with no stored exercises whose date holds exlog rows. The list is
+      rendered by _buildCompactWeekRows under a label line, without the allowance
+      footer.
+    writers:
+      - file: lib/features/train/widgets/week_selector.dart
+        line_range: 310-326
+        method: _WeekSelectorState._selectPast (the picked week's dates = the chip's own rows; a re-tap clears)
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1275-1286
+        method: PastWeekSelectionNotifier (build watches selectedWeekProvider; select toggles)
+    readers:
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 1299-1336
+        method: pastWeekDaysProvider
+        semantic: latest
+        fields_read: [PastWeekSelection.dates, PastWeekSelection.weekInPhase, schedule_<date>, wlog_<date>.workout_name]
+      - file: lib/features/train/providers/train_provider.dart
+        line_range: 804-862
+        method: workoutDayDataFromScheduleRow
+        semantic: latest
+        fields_read: [workout_name, status, type, exercises, warmup, cooldown, finisher, week_character]
+      - file: lib/features/train/services/past_week_days.dart
+        line_range: 1-9999
+        method: pastDayView / pastWeekDateTime / pastWeekRangeLabel
+        semantic: latest
+        fields_read: [workout_name, status, type, exercises]
+      - file: lib/core/services/workout_read_service.dart
+        line_range: 299-308
+        method: workoutLogName / workoutLogNameForIstDate
+        semantic: latest
+        fields_read: [wlog_<date>.workout_name]
+      - file: lib/features/train/screens/train/week_rows.dart
+        line_range: 131-162
+        method: _buildPastWeekLabel / _buildPastWeekEmpty
+        semantic: latest
+    reader_manifest_complete: true
+    regression_test: test/contracts/past_week_days_pure_test.dart
 
   - concept: hold_display_read_path
     domain: workout
@@ -10847,7 +10902,7 @@ concepts:
         semantic: latest
         fields_read: [schedule_<date>.is_hold, schedule_<date>.hold_ordinal, schedule_<date>.status, schedule_<date>.type]
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1096-1156
+        line_range: 1121-1181
         method: HoldStatusData / holdStatusProvider — the single flag branch point for every hold UI surface
         semantic: latest
         fields_read: [holdWeeks(), holdOrdinalForDate(), holdWeekSessionProgress()]
@@ -13696,7 +13751,7 @@ concepts:
         method: reads primary_muscles/secondary_muscles/difficulty_level, and (alias stage, OI-507) name_aliases through `.neq("name_aliases", "{}")`: an exact miss resolves a name another ACTIVE row lists as an alias before the partial stage
         semantic: AI-coach form cues; was NULL for the 9 stubs pre-batch; all three reads (exact, alias, partial) filter is_active = true in code and order by name; the model-supplied name is LIKE-escaped by _shared/like_escape.ts (OI-507) (OI-438/OI-469; live after the ai-proxy deploy: a retired row never answers; the seed's cue copy onto retired rows, from migration 162, is now defence in depth)
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 109-117
+        line_range: 110-118
         method: last-weight suggestion reads the LOGGED row's logging_type (weight_reps or weighted_bodyweight) before it suggests a load
         semantic: C2c — an E230 history row logged as weight_reps (cable era) still reads as a loaded row; new logs are bodyweight_reps, so no load is suggested for them
       - file: lib/shared/repositories/plan_engine/progression_resolver.dart
@@ -14658,7 +14713,7 @@ concepts:
           account).
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 145-150
+        line_range: 151-156
         method: past-phase strip
         semantic: render
         notes: The ONLY permitted caller of the display wrapper.
@@ -14719,7 +14774,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 341-439
+        line_range: 357-455
         method: _toPastPhases (weekCount) + pastPhaseWeekCount + pastPhaseWeekOf (the one calendar week rule for count and chip assignment) + pastPhaseGroupsForTest
         semantic: render
         notes: chip loop `for (var w = 1; w <= past.weekCount; w++)`; extendWeeks read once per build.
@@ -15642,19 +15697,19 @@ concepts:
         method: validateSetInputs / cardioMinutesToSeconds / exerciseSetFromInput
         notes: OI-389 / OI-382 — cardio MIN takes decimal minutes (founder D2, 2026-10-22), converted to seconds once at capture (exercise_card._valuesOf); bounds 360 MIN / 21600 SEC / 300 KM block LOG; exerciseSetFromInput applies fieldsClearedFor and is what completeWorkout, liveVolumeKg and the receipt save through. Behavioral test/contracts/cardio_duration_distance_writer_to_reader_test.dart (T18, T29, T32), test/features/train/log_exercise/log_exercise_card_test.dart (T32b), test/contracts/cardio_complete_workout_behavioral_test.dart (T5, T28).
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1748-1759
+        line_range: 1865-1876
         method: toggleSet
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1766-1785
+        line_range: 1883-1902
         method: logSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1796-1818
+        line_range: 1913-1935
         method: unlogSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1884-1889
+        line_range: 2001-2006
         method: recordSetValues
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1896-1901
+        line_range: 2013-2018
         method: recordCardEdit
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 521-615
@@ -15670,13 +15725,13 @@ concepts:
         method: _onLogPressed
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1414-1416
+        line_range: 1531-1533
         method: completedSets
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1499-1507
+        line_range: 1616-1624
         method: isExerciseDone
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1525-1539
+        line_range: 1642-1656
         method: liveVolumeKg
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 521-615
@@ -15694,7 +15749,7 @@ concepts:
         line_range: 741-747
         method: allExercisesLogged
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1427-1458
+        line_range: 1544-1575
         method: wouldSaveSet + saveableSetIndexes + hasSaveableSet
       - file: lib/features/train/services/log_exercise_logic.dart
         line_range: 365-376
@@ -15743,16 +15798,16 @@ concepts:
       on the wrong exercise.
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2179-2193
+        line_range: 2296-2310
         method: applyExerciseMove
       - file: lib/features/train/services/exercise_move_logic.dart
         line_range: 51-98
         method: moveExerciseInSession
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2310-2341
+        line_range: 2427-2458
         method: _persistSupersetGroups
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1956-2059
+        line_range: 2073-2176
         method: swapExercise
     readers:
       - file: lib/features/train/services/exercise_move_logic.dart
@@ -16877,7 +16932,7 @@ concepts:
         fields_read: [type]
         notes: the single wrapper every whitelist-shaped call site below delegates to
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 682-872
+        line_range: 690-946
         method: "workoutDayForDate / week builder"
         semantic: flag-check
         fields_read: [type]
@@ -19594,10 +19649,6 @@ concepts:
         line_range: 1-9999
         method: exerciseLogDetail
         semantic: display-only
-      - file: lib/features/train/widgets/week_selector.dart
-        line_range: 1-9999
-        method: weekExerciseLineDetail
-        semantic: display-only
       - file: lib/shared/widgets/wardroom/ward_set_chips.dart
         line_range: 1-9999
         method: WardSetChips._perSetLabel
@@ -20498,12 +20549,12 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/workout_read_service.dart
-        line_range: 332-345
+        line_range: 348-361
         method: exlogRows
         semantic: per-row
         fields_read: [key prefix exlog_]
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 2393-2431
+        line_range: 2510-2548
         method: ActiveWorkoutNotifier FINISH PR scan
         semantic: max
         fields_read: [exercise_name, sets, weight_kg, reps_completed, date]
@@ -20546,15 +20597,15 @@ concepts:
       docs/plans/coach-workout-parity-1c.md (Part 1c).
     writers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1665-1724
+        line_range: 1782-1841
         method: _chatLoggedSnapshot (startWorkout)
         semantic: per-row
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1832-1887
+        line_range: 1949-2004
         method: reopenChatLogged / keepChatLogged
         semantic: per-row
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1961-2114
+        line_range: 2078-2231
         method: swapExercise / addExercise / _introducedChatEntry
         semantic: per-row
       - file: lib/features/train/services/chat_logged_exercises.dart
@@ -20580,7 +20631,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/providers/train_provider.dart
-        line_range: 1484-1506
+        line_range: 1601-1623
         method: chatEntry / isChatLogged / isChatLoggedDone / isExerciseDone
         semantic: per-row
         fields_read: [loggedInChat, reopenedExercises]
@@ -20849,7 +20900,7 @@ concepts:
         semantic: display-only
         fields_read: [phase]
       - file: lib/features/train/widgets/week_selector.dart
-        line_range: 992-992
+        line_range: 666-666
         method: _phaseRoman (labels current, +1, +2, past phases)
         semantic: display-only
         fields_read: [phase]
