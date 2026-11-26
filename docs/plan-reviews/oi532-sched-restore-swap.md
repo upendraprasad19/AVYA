@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/oi532-sched-restore-swap-bpass.md
 ---
 
@@ -42,3 +42,8 @@ race, R2-1/R2-2 rejected the `arranged_at_ms` guard) split it out as OI-532.
   behaviour is T9 at the restore function; the single-call wiring is a source-order test in the same file
   (precedent `restore_readiness_prefetch_test.dart`).
 - T13 added at build time: the post-rows re-mark has a test of its own (mutation n).
+
+## B-pass
+Two fresh seats on `f72863c4` (`docs/reviews/oi532-sched-restore-swap-bpass.md`): 1 P2 (a never-confirming mark
+was permanent: now expires after 14 days), 1 P2 (14 mutation survivors: all now red), P3s folded (re-check of the
+rows after the pre-row mark, cites, tests). Accepted.

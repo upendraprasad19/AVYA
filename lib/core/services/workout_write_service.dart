@@ -915,6 +915,15 @@ class WorkoutWriteService {
         }
         final hook = debugAfterPreMarkForTests;
         if (hook != null) await hook();
+        // B-pass F2: the mark above awaited, and the restore takes no date
+        // lock, so a row may have changed since [build] read it (a cloud
+        // completion landing). Write nothing built from a stale read.
+        if (!_swapRowsUnchanged(box, keyA, live.rowA) ||
+            !_swapRowsUnchanged(box, keyB, live.rowB)) {
+          unawaited(ErrorTelemetry.logEvent('day_swap_row_changed_mid_swap',
+              message: 'a=$aStr b=$bStr'));
+          return WriteResult.fail(daySwapRefusedMessage);
+        }
         final previous = <String, Object?>{
           for (final k in writes.keys) k: box.get(k),
         };
@@ -979,6 +988,25 @@ class WorkoutWriteService {
       _releaseLock(keys[1], c2);
       _releaseLock(keys[0], c1);
     }
+  }
+
+  /// True when [key] still holds what [read] (a deep copy taken earlier under
+  /// the lock) held. Canonical JSON, so key order does not matter.
+  static bool _swapRowsUnchanged(
+      Box<dynamic> box, String key, Map<String, dynamic>? read) {
+    final raw = box.get(key);
+    final now = raw is Map ? _swapDeepCopyMap(raw) : null;
+    if (now == null || read == null) return now == null && read == null;
+    return jsonEncode(_canonical(now)) == jsonEncode(_canonical(read));
+  }
+
+  static Object? _canonical(Object? v) {
+    if (v is Map) {
+      final keys = v.keys.map((k) => k.toString()).toList()..sort();
+      return {for (final k in keys) k: _canonical(v[k])};
+    }
+    if (v is List) return v.map(_canonical).toList();
+    return v;
   }
 
   static Map<String, dynamic> _swapDeepCopyMap(Map raw) => <String, dynamic>{

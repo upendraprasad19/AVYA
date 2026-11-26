@@ -17,6 +17,8 @@ import 'package:icanbefitter/core/services/day_swap/day_swap_allowance.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
+import 'package:icanbefitter/core/services/singleton_lifecycle_registry.dart';
 import 'package:icanbefitter/core/services/swap_service.dart';
 import 'package:icanbefitter/core/services/sync/sched_unpushed_swaps.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
@@ -24,6 +26,7 @@ import 'package:icanbefitter/core/services/template_identity.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
+import 'package:icanbefitter/features/dev/simulation_service.dart';
 
 import '../helpers/hive_test_setup.dart';
 import 'sync_domain_skip_harness.dart';
@@ -376,6 +379,171 @@ void main() {
         reason: 'Fri (no template ref) was confirmed and cleared');
   });
 
+  test('T10b (B-pass F1): a mark whose push never confirms expires after '
+      'maxMarkAge, and the cloud wins that date again', () async {
+    await seedConfirmed();
+    await swapOffline();
+    await HiveService.instance.workoutBox.delete(tmplKey);
+    h.server.writeFailers['scheduled_workouts'] = (req) =>
+        req.rows.any((r) => r['template_id'] == cloudTmplId)
+            ? {'code': '23503', 'message': 'fk'}
+            : null;
+    await pushSched();
+    expect(marks().keys, contains(sat));
+
+    final later = DateTime.now()
+        .add(SchedUnpushedSwaps.maxMarkAge + const Duration(days: 1))
+        .millisecondsSinceEpoch;
+    SchedUnpushedSwaps.nowMs = () => later;
+    expect(SchedUnpushedSwaps.isPending(HiveService.instance.workoutBox, sat),
+        isFalse, reason: 'an expired mark reads as gone');
+    await pushSched();
+    expect(marks().keys, isNot(contains(sat)),
+        reason: 'the expired mark is pruned; Case 2 confirms again');
+
+    await restore(preSwapCloudRows());
+    expect(row(sat)['type'], 'rest', reason: 'the pre-OI-532 merge');
+  });
+
+  test('T6b kill switch, push side: a marked Case 2 row confirms (and is '
+      'cleared) as before', () async {
+    await seedConfirmed();
+    await swapOffline();
+    await HiveService.instance.configBox
+        .put('disable_sched_unpushed_swap_guard', true);
+    await HiveService.instance.workoutBox.delete(tmplKey);
+    h.server.writeFailers['scheduled_workouts'] = (req) =>
+        req.rows.any((r) => r['template_id'] == cloudTmplId)
+            ? {'code': '23503', 'message': 'fk'}
+            : null;
+
+    await pushSched();
+
+    expect(marks(), isEmpty);
+  });
+
+  test('T14 (B-pass F2): a row that changes while the swap marks its dates '
+      'refuses the swap and writes nothing', () async {
+    await seedConfirmed();
+    final wb = HiveService.instance.workoutBox;
+    final completedSat = {
+      ...satRest(),
+      'status': 'completed',
+      'completed_at': '2026-09-26T05:00:00Z',
+    };
+    WorkoutWriteService.debugAfterPreMarkForTests = () async {
+      await wb.put('schedule_$sat', completedSat); // a restore landed
+    };
+
+    final r = await swap();
+
+    expect(r, isNot(isA<DaySwapDone>()));
+    expect(row(sat), completedSat);
+    expect(row(fri)['workout_name'], 'Push A');
+    expect(row(fri)['type'], 'custom_template');
+  });
+
+  test('T14b MIRROR: the same for the OTHER date of the pair', () async {
+    await seedConfirmed();
+    final wb = HiveService.instance.workoutBox;
+    final completedFri = {
+      ...friTemplateWorkout(),
+      'status': 'completed',
+      'completed_at': '2026-09-25T05:00:00Z',
+    };
+    WorkoutWriteService.debugAfterPreMarkForTests = () async {
+      await wb.put('schedule_$fri', completedFri);
+    };
+
+    final r = await swap();
+
+    expect(r, isNot(isA<DaySwapDone>()));
+    expect(row(fri), completedFri);
+    expect(row(sat)['type'], 'rest');
+  });
+
+  test('T15 (seat B M13): a mark that was pending at the fetch and cleared by '
+      'a confirmed push before the merge still keeps that date', () async {
+    await seedConfirmed();
+    await swapOffline(); // marked BEFORE the fetch below
+    final fetchMark = SchedUnpushedSwaps.fetchMark();
+
+    await pushSched(); // confirms and clears during the "fetch"
+    expect(marks(), isEmpty);
+
+    await restore(preSwapCloudRows(), fetchMark: fetchMark);
+
+    expectSwapSurvived();
+  });
+
+  test('T16 (seat B M26): a normal push pass prunes the mark of a date whose '
+      'row is gone', () async {
+    await seedConfirmed();
+    final wb = HiveService.instance.workoutBox;
+    await SchedUnpushedSwaps.markAll(wb, [nextMon]); // no schedule_ row
+    await pushSched();
+    expect(marks().keys, isNot(contains(nextMon)));
+  });
+
+  test('T17 (seat B M27/M28): a pass that loses its owner mid-way prunes '
+      'nothing', () async {
+    await seedConfirmed();
+    await swapOffline();
+    final wb = HiveService.instance.workoutBox;
+    await SchedUnpushedSwaps.markAll(wb, [nextMon]); // rowless, prunable
+    h.server.beforeWrite['scheduled_workouts'] = (req) async {
+      HiveUserSession.debugCurrentUidResolverForTests = () => 'someone-else';
+    };
+    await pushSched();
+    HiveUserSession.debugCurrentUidResolverForTests = () => kTestUserId;
+    expect(marks().keys, contains(nextMon),
+        reason: 'no prune after the owner changed');
+    expect(marks().keys, containsAll(<String>[fri, sat]),
+        reason: 'no clear after the owner changed');
+  });
+
+  test('T18 (seat B M35): a pending date whose cloud template was deleted '
+      'still cleans the local references to it', () async {
+    await seedConfirmed();
+    await swapOffline(); // Fri (pending) is the cloud row naming the template
+    // The cleanup sweeps from the REAL today (TemplateService uses
+    // DateTime.now()), so the observable is a row on a real future date.
+    final f = DateTime.now().add(const Duration(days: 3));
+    final future = '${f.year.toString().padLeft(4, '0')}-'
+        '${f.month.toString().padLeft(2, '0')}-${f.day.toString().padLeft(2, '0')}';
+    final wb = HiveService.instance.workoutBox;
+    await wb.put('schedule_$future', {
+      ...friTemplateWorkout(),
+      'date': future,
+    });
+
+    final rows = preSwapCloudRows();
+    (rows[0]['template'] as Map)['deleted_at'] = '2026-09-24T00:00:00Z';
+    await restore(rows);
+
+    expect(wb.get('schedule_$future'), isNull,
+        reason: 'the pending date still ran the deleted-template cleanup');
+  });
+
+  test('T19 (seat B M37): an account switch through the lifecycle registry '
+      'forgets the in-flight dates and touched marks', () async {
+    final wb = HiveService.instance.workoutBox;
+    await SchedUnpushedSwaps.beginSwap(wb, {fri});
+    expect(SchedUnpushedSwaps.inFlightForTests, contains(fri));
+    SingletonLifecycleRegistry.notifyUserChanged();
+    expect(SchedUnpushedSwaps.inFlightForTests, isEmpty);
+    expect(SchedUnpushedSwaps.touchedSince(fri, 0), isFalse);
+  });
+
+  test('T20 (seat B M40/M41): the sim journey reset removes the marks',
+      () async {
+    final wb = HiveService.instance.workoutBox;
+    await SchedUnpushedSwaps.beginSwap(wb, {fri});
+    await SimulationService.instance.clearJourneyLocalState();
+    expect(wb.containsKey(kSchedSwapUnpushedKey), isFalse);
+    expect(SchedUnpushedSwaps.inFlightForTests, isEmpty);
+  });
+
   test('T11: a stale mark with no local row lets the cloud row restore',
       () async {
     final wb = HiveService.instance.workoutBox;
@@ -503,6 +671,54 @@ void main() {
       await SchedUnpushedSwaps.markAll(wb, [fri]);
       seen.add(SchedUnpushedSwaps.tokenOf(wb, fri)!);
       expect(seen, hasLength(7));
+    });
+
+    test('U5: an account switch forgets the in-memory dates but never resets '
+        'the counter a restore compares against', () async {
+      final wb = HiveService.instance.workoutBox;
+      await SchedUnpushedSwaps.markAll(wb, [fri]);
+      final mark = SchedUnpushedSwaps.fetchMark();
+      SchedUnpushedSwaps.resetForUser();
+      expect(SchedUnpushedSwaps.touchedSince(fri, 0), isFalse);
+      expect(SchedUnpushedSwaps.fetchMark(), mark);
+      await SchedUnpushedSwaps.markAll(wb, [sat]);
+      expect(SchedUnpushedSwaps.touchedSince(sat, mark), isTrue,
+          reason: 'a restore that took its mark before the switch still sees '
+              'a mark made after it');
+    });
+
+    test('U6 (seat B M7/M15): the sequence survives the last clear and a '
+        'prune, so a stepped-back clock never reissues a token', () async {
+      final wb = HiveService.instance.workoutBox;
+      SchedUnpushedSwaps.nowMs = () => 5000;
+      await SchedUnpushedSwaps.markAll(wb, [fri]);
+      final first = SchedUnpushedSwaps.tokenOf(wb, fri)!;
+      await SchedUnpushedSwaps.clearIfUnchanged(wb, fri, first); // last date
+      SchedUnpushedSwaps.nowMs = () => 10;
+      await SchedUnpushedSwaps.markAll(wb, [fri]);
+      final second = SchedUnpushedSwaps.read(wb)[fri]!;
+      expect(second, greaterThan(first));
+
+      await SchedUnpushedSwaps.prune(wb); // fri has no row: pruned
+      expect(SchedUnpushedSwaps.read(wb), isEmpty);
+      await SchedUnpushedSwaps.markAll(wb, [fri]);
+      expect(SchedUnpushedSwaps.read(wb)[fri]!, greaterThan(second));
+    });
+
+    test('U7 (seat B M14): prune never drops a date whose swap is in flight',
+        () async {
+      final wb = HiveService.instance.workoutBox;
+      await SchedUnpushedSwaps.beginSwap(wb, {nextMon}); // no row yet
+      await SchedUnpushedSwaps.prune(wb);
+      expect(SchedUnpushedSwaps.read(wb).keys, contains(nextMon));
+      SchedUnpushedSwaps.endSwap({nextMon});
+    });
+
+    test('U8: resetForUser clears the in-flight set', () async {
+      final wb = HiveService.instance.workoutBox;
+      await SchedUnpushedSwaps.beginSwap(wb, {fri});
+      SchedUnpushedSwaps.resetForUser();
+      expect(SchedUnpushedSwaps.inFlightForTests, isEmpty);
     });
 
     test('U3: a malformed stored value reads as no marks (fail open)',

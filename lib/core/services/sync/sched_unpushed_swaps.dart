@@ -65,6 +65,16 @@ class SchedUnpushedSwaps {
   @visibleForTesting
   static Set<String> get inFlightForTests => Set.unmodifiable(_inFlight);
 
+  /// B-pass F1: a mark whose push never confirms (an orphan template link, a
+  /// persistent rejection) would keep the restore off its date forever and
+  /// the row re-sent every pass. After this long the mark is treated as gone
+  /// (the pre-OI-532 behaviour for that date) and pruned. Tokens are epoch
+  /// ms (or a hair above, see [markAll]).
+  static const Duration maxMarkAge = Duration(days: 14);
+
+  static bool _live(int token) =>
+      token >= nowMs() - maxMarkAge.inMilliseconds;
+
   // ── persisted ──
 
   /// PURE read (no telemetry outside the catch: `isPending` is a query,
@@ -140,11 +150,15 @@ class SchedUnpushedSwaps {
   /// A swap of [dates] ended (success or not); call from a `finally`.
   static void endSwap(Set<String> dates) => _inFlight.removeAll(dates);
 
-  static int? tokenOf(Box<dynamic> box, String date) => read(box)[date];
+  /// The date's LIVE token (null when unmarked or older than [maxMarkAge]).
+  static int? tokenOf(Box<dynamic> box, String date) {
+    final t = read(box)[date];
+    return (t != null && _live(t)) ? t : null;
+  }
 
-  /// Stored mark OR a swap of [date] still being written.
+  /// A live stored mark OR a swap of [date] still being written.
   static bool isPending(Box<dynamic> box, String date) =>
-      _inFlight.contains(date) || read(box).containsKey(date);
+      _inFlight.contains(date) || tokenOf(box, date) != null;
 
   /// Drops [date] only while it still holds [token] and no swap of it is in
   /// flight. No await between the read and the put.
@@ -159,20 +173,27 @@ class SchedUnpushedSwaps {
   }
 
   /// Drops marks of dates with no `schedule_<date>` row NOW (not a list a
-  /// pass collected earlier: a swap during the pass may have created one).
+  /// pass collected earlier: a swap during the pass may have created one),
+  /// and marks older than [maxMarkAge] (already read as gone, so no touch).
   static Future<void> prune(Box<dynamic> box) async {
     final m = _readRaw(box);
-    final drop = m.keys
-        .where((d) =>
-            d != _kSeqEntry &&
-            !_inFlight.contains(d) &&
-            !box.containsKey('schedule_$d'))
-        .toList();
-    if (drop.isEmpty) return;
-    for (final d in drop) {
+    final rowless = <String>[];
+    final expired = <String>[];
+    for (final e in m.entries) {
+      final d = e.key;
+      if (d == _kSeqEntry || _inFlight.contains(d)) continue;
+      if (!box.containsKey('schedule_$d')) {
+        rowless.add(d);
+      } else if (!_live(e.value)) {
+        expired.add(d);
+      }
+    }
+    if (rowless.isEmpty && expired.isEmpty) return;
+    for (final d in rowless) {
       m.remove(d);
       _touch(d);
     }
+    expired.forEach(m.remove);
     await _write(box, m);
   }
 }
