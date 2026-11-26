@@ -2,18 +2,19 @@
 //
 // Diagnose f4e1d9 (2026-06-01) — completed past-phase weeks rendered a
 // generic "Workout" with no exercises in the Train week-selector's
-// `_PastWeekSheet`. Root cause: cloud `scheduled_workouts` has no
+// past-week list (then the `_PastWeekSheet`, since 2026-11-26 the Train list itself). Root cause: cloud `scheduled_workouts` has no
 // `workout_name`/exercises column, and the schedule-row restore only
 // hydrates a name when `template_id` is set; plan-generator days
 // (`template_id IS NULL`) come back name-less. The actual workout name
 // survives on the restored `wlog_<date>` session row, and the exercises on
 // the `exlog_*` rows.
 //
-// The fix derives the past-day view from those logs via
-// `derivePastDayLog` (week_selector.dart). This test pins that behaviour:
-// given a completed day whose schedule row LOST its workout_name (the
-// post-restore drift state), the derived name comes from `wlog_<date>` and
-// the exercise list from the canonical reader — NOT the generic "Workout".
+// The fix derives the past-day view from those logs. Since the past week renders through the Train
+// list (docs/plans/train-past-week-in-place.md D3) the derivation is `pastDayView` fed by
+// `WorkoutReadService.workoutLogNameForIstDate` + `exerciseLogsForIstDate`. This test pins that
+// behaviour: given a completed day whose schedule row LOST its workout_name (the post-restore drift
+// state), the derived name comes from `wlog_<date>` and the exercise count from the canonical
+// reader — NOT the generic "Workout".
 //
 // Pure Hive — no Supabase — so it runs in the pre-commit gate.
 
@@ -29,7 +30,21 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
-import 'package:icanbefitter/features/train/widgets/week_selector.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
+import 'package:icanbefitter/features/train/services/past_week_days.dart';
+
+/// What `pastWeekDaysProvider` does per date, minus the provider: the row the builder is handed.
+PastDayView _derive(String sKey, DateTime day) {
+  final ymd = istDateStr(day);
+  final row =
+      Map<String, dynamic>.from(HiveService.instance.workoutBox.get(sKey) as Map);
+  final reads = WorkoutReadService.instance;
+  return pastDayView(
+    row,
+    wlogName: pastDayWantsLogName(row) ? reads.workoutLogNameForIstDate(ymd) : null,
+    loggedCount: reads.exerciseLogsForIstDate(ymd).length,
+  );
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -116,13 +131,14 @@ void main() {
       });
 
       // 4. Derive — name must come from wlog_<date>, not the empty schedule.
-      final derived = derivePastDayLog(sKey, '');
-      expect(derived.name, 'Push Day',
+      final derived = _derive(sKey, day);
+      expect(derived.row['workout_name'], 'Push Day',
           reason: 'Name must derive from the wlog_<date> session row, not the '
               'name-less restored schedule row (would have been "Workout").');
-      expect(derived.exercises.length, 2,
-          reason: 'Exercises must come from the canonical exlog reader.');
-      final names = derived.exercises
+      expect(derived.loggedCount, 2,
+          reason: 'The exercise count must come from the canonical exlog reader.');
+      final names = WorkoutReadService.instance
+          .exerciseLogsForIstDate(istDateStr(day))
           .map((e) => e['exercise_name'] as String?)
           .toSet();
       expect(names, containsAll(<String>['Bench Press', 'Overhead Press']));
@@ -139,10 +155,10 @@ void main() {
         'type': 'workout',
       });
 
-      final derived = derivePastDayLog(sKey, '');
-      expect(derived.exercises, isEmpty);
+      final derived = _derive(sKey, day);
+      expect(derived.loggedCount, 0);
       // No wlog, no schedule name, no fallback → generic label.
-      expect(derived.name, 'Workout');
+      expect(derived.row['workout_name'], 'Workout');
     });
 
     test('schedule name is used when no wlog session row exists', () async {
@@ -156,9 +172,8 @@ void main() {
         'workout_name': 'Leg Day A',
       });
 
-      // fallbackName mirrors what the widget passes (entry.workoutName).
-      final derived = derivePastDayLog(sKey, 'Leg Day A');
-      expect(derived.name, 'Leg Day A');
+      final derived = _derive(sKey, day);
+      expect(derived.row['workout_name'], 'Leg Day A');
     });
   });
 }

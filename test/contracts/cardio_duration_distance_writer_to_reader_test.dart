@@ -35,7 +35,6 @@ import 'package:icanbefitter/features/train/utils/exercise_log_detail.dart';
 import 'package:icanbefitter/features/train/utils/set_count_label.dart';
 import 'package:icanbefitter/features/train/widgets/workout_receipt_card.dart';
 import 'package:icanbefitter/features/train/widgets/edit_workout_log_sheet.dart';
-import 'package:icanbefitter/features/train/widgets/week_selector.dart';
 
 import '../workout_write_service/helpers/wws_test_setup.dart';
 
@@ -541,27 +540,28 @@ void main() {
       expect(d('distance'), '1 set');
     });
 
-    test('T26: the week selector line for a cardio row with per-set km only',
+    test('T26: the Train row detail for a cardio row with per-set km only (the past week now renders '
+        'through the same expanded row as the current week; the old Completed-history line is gone)',
         () {
       expect(
-          weekExerciseLineDetail({
+          exerciseLogDetail({
             'logging_type': 'cardio',
             'set_number': 1,
             'sets': [
               {'duration_sec': 1830, 'distance_km': 0.04},
             ],
           }),
-          '1 set · 30.5 min · 40 m');
+          '30.5${_nb}min${_sep}40${_nb}m');
       expect(
-          weekExerciseLineDetail({
+          exerciseLogDetail({
             'logging_type': 'timed',
             'set_number': 1,
             'sets': [
               {'duration_sec': 45},
             ],
           }),
-          '1 set · 1 min',
-          reason: 'timed keeps its old minute expression');
+          '45s',
+          reason: 'timed keeps its own expression');
     });
 
     test('T16a: a 5 km log then a duration-only 1800 s log → PR 5.0 km',

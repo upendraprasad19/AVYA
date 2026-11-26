@@ -6946,3 +6946,22 @@ CLAUDE.md 4.6 step 4 tracks an old path kept behind a kill switch on the board. 
 
 CLAUDE.md 4.6 step 4: OI-348 Landing 3b (plan `docs/plans/oi348-landing3b.md`, diagnose b3f7a1) shipped two kill switches defaulting to the fix ON. Remove, in one batch: the server switch `DISABLE_COACH_MEAL_ITEMS_RULE` (`isCoachMealItemsRuleDisabled`, the `mealItems` option and its OFF branch in `supabase/functions/_shared/write_claim_prompt.ts`, the `mealOn` reads in `ai-proxy/index.ts` and `ai-media-proxy/index.ts`, the golden `_shared/testdata/icbf_blocks_pre_meal_items.json` and the OFF tests in `write_claim_prompt_test.ts`), and the client switch `configBox['disable_coach_meal_items_card']` (`coachMealItemsCardEnabled` / `debugCoachMealItemsCardDisabled` in `lib/features/ai_coach/services/coach_meal_log.dart`, the old one-line branch in `ToolConfirmCard`, the old 5 s food path in `LogConfirmCard`, the switch-OFF arms of `coachItemsFromTag` and `isStaleFood`, tests T4/T6/T9 in `test/contracts/coach_meal_items_card_behavioral_test.dart`). Also the write-claim-OFF copy of `logMealByText.ts` description still says "5-second auto-confirm" (that is OI-368/369's switch, not this one).
 
+
+## OI-530 — user_progress.plan_json carries every schedule_* row of the user's whole history in one jsonb value: 913 KB at 168 rows, no pruning, re-sent whole on any changed row
+
+- **Status**: OPEN
+- **Blocked on**: none
+- **Verified**: never
+- **Identified**: 2026-11-26 · filed via mint_oi.sh from branch `train-history-sheet-style`
+
+Found while checking what a two-year user costs the Train past-phase strip (batch `train-history-sheet-style`); not part of that batch's scope.
+
+**Measured (read-only SQL on project `dedsavbjuwgarrhphgnl`, 2026-11-26, the founder's test account):** `user_progress.plan_json` is 913,240 bytes: `schedules` 775,194 (168 keys, about 4.6 KB a row, because each row embeds that day's exercise list), `plan` 137,891, three small date/stamp keys 25 bytes each. `scheduled_workouts` for the account runs 2026-04-27 to 2026-12-06 (168 rows, 42 completed): the oldest row is still there after seven months, so nothing prunes.
+
+**Writer:** `lib/core/services/sync/sync_workout.dart` `_syncWorkoutPlan` (about :1459-1519) collects EVERY `schedule_*` key of the box into `schedules` (:1470-1478) and upserts the whole bundle into `user_progress.plan_json` (:1506-1511). `SyncSkipIndex.pushIfChanged` (:1495) skips an UNCHANGED bundle only; its fingerprint covers all schedules, so one changed row (a day completed, a swap) re-sends the whole value.
+**Reader:** `_restoreWorkoutPlan` (:1550, `.select('plan_json')`) downloads the whole value on every restore (a new device, a reinstall) and merges it row by row through `PlanIntegrityReconciler.mergeScheduleEntry`. The Train past-phase strip reads the mirrored `schedule_*` Hive rows (`WorkoutScheduleReadService._scheduleRowsBefore`, diagnose `5c8e2a`), so any pruning must keep what that strip needs (date, `phase` stamp, `status`, `type`, `workout_name`).
+
+**Estimate, NOT measured:** about 24 KB of schedule rows a week (775 KB over roughly 32 weeks), so about 2.5 MB at two years in one jsonb value.
+**Not known yet:** how often `_syncWorkoutPlan` runs per user action (bytes a day per user), the restore time of a 2.5 MB value on mobile data, and the write cost of rewriting a multi-MB jsonb on each completed day.
+
+**Done when:** (1) bytes per push and pushes per day are measured for a synthetic two-year account (a test or a scripted run, not an estimate); (2) a decision is recorded with that evidence: keep as is, prune rows older than a stated horizon from the bundle (the per-day `scheduled_workouts` rows already hold status and date, and the exercise logs live in their own tables), or split history out of the bundle; (3) whatever is chosen keeps the restore of past phases working (a restore-completeness test over a two-year fixture). Pre-launch: testers only (CLAUDE.md section 1), so priority follows the measurement.
