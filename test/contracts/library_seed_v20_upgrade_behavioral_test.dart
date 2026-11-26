@@ -97,7 +97,7 @@ void main() {
     expect(hive.configBox.get('exercise_library_version') as int, 29);
   });
 
-  test('MIRROR: a box already at the current version (v28, OI-523) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v29) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     final shipped = _bundled().singleWhere((r) => r['id'] == 'E230');
     final marker = {..._v19E230(shipped), 'name': 'Left alone'};

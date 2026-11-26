@@ -130,7 +130,7 @@ void main() {
     expect(hive.configBox.get('exercise_library_version') as int, 29);
   });
 
-  test('MIRROR: a box already at the current version (v28, OI-523) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v29) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV22Box(hive);
     await _markSeeded(hive, 29);

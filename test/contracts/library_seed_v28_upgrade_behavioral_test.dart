@@ -73,7 +73,7 @@ void main() {
         'ef1cea152b3824cfae6e9508cbf8d214e46a87a1225b0f91676c8fb8d7682f18');
   });
 
-  test('a v27 box ends at v28: G3470 is written as bundled without the alias, every other row is unchanged', () async {
+  test('a v27 box ends at the current version (v29): G3470 is written as bundled without the alias, every other row is unchanged', () async {
     final hive = HiveService.instance;
     await _putV27Box(hive);
     await _markSeeded(hive, 27);
