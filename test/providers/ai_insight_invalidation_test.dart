@@ -17,12 +17,23 @@ void main() {
       final source = File(
         'lib/features/profile/screens/edit_profile_screen.dart',
       ).readAsStringSync();
+      // The save path runs after the screen may already be closed, so it
+      // invalidates through the ProviderContainer captured at Save start
+      // (`container`), never through the widget `ref` (c4b8d2).
       expect(
-        source.contains('ref.invalidate(aiInsightProvider)'),
+        source.contains('container.invalidate(aiInsightProvider)'),
         true,
         reason:
-            'edit_profile_screen must invalidate aiInsightProvider in the '
-            'regen save path so home AI insight refreshes.',
+            'edit_profile_screen must invalidate aiInsightProvider (via the '
+            'container captured at Save start) in the regen save path so '
+            'home AI insight refreshes.',
+      );
+      expect(
+        source.contains('ref.invalidate(aiInsightProvider)'),
+        false,
+        reason:
+            'a widget `ref` is dead once the screen closes mid-save: '
+            'invalidate through the captured container instead (c4b8d2).',
       );
     });
 

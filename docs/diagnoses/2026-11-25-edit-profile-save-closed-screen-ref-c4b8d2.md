@@ -60,3 +60,6 @@ related_bugs: []
 
 ## Fix
 Use the app-wide `ProviderContainer`, captured when the Save starts, for every provider call after the first await. Dialogs, the snackbar and navigation keep their `mounted` guards.
+
+## Follow-up caught by CI (2026-11-26)
+The fix renamed `ref.invalidate(aiInsightProvider)` to `container.invalidate(aiInsightProvider)`. The source-grep contract `test/providers/ai_insight_invalidation_test.dart` (F5) still searched for the old spelling and went red in CI shard 4/4 (the only failure of the whole suite). I repointed it, not loosened it: it now requires `container.invalidate(aiInsightProvider)` AND forbids `ref.invalidate(aiInsightProvider)` in `edit_profile_screen.dart`. Mutation: put `ref.invalidate(...)` back in the screen: the test went red (1 failure); the file was restored (empty diff). I did not grep `test/` for the old literal before the rename (CLAUDE.md section 4.9, source-grep contracts row).
