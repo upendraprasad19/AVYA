@@ -1291,7 +1291,7 @@ concepts:
         semantic: display-only
         fields_read: [isPro]
       - file: lib/features/nutrition/widgets/food_logger_section.dart
-        line_range: 173-268
+        line_range: 174-269
         method: FoodLoggerSection _passesUsageGate + build (gate + reactive watch)
         semantic: display-only
         fields_read: [isPro]
@@ -8105,7 +8105,7 @@ concepts:
         fields_read: [kind, resolved_at, date, planned_count, logged_count, created_at]
         notes: ChatHistoryNotifier.build renders the re-shown tile; its fresh UTC created_at sorts it under the reply that asked for it.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 86-120
+        line_range: 87-121
         method: filterVisibleIntents
         semantic: flag-check
         fields_read: [type]
@@ -16290,7 +16290,7 @@ concepts:
         method: _limit — returns 999999 for PRO, the client constant for free
         semantic: client-read
       - file: lib/features/nutrition/widgets/food_logger_section.dart
-        line_range: 265-269
+        line_range: 266-270
         method: build — meter shown on the Log Food tab
         semantic: client-read
       - file: lib/features/profile/screens/profile/subscription_section.dart
@@ -19189,7 +19189,7 @@ concepts:
         method: body (MeasurementsCardFrame(child: _buildBody()))
         notes: L2b Landing C, E3. One line; the frame owns the flag and the height cap, so a flag-OFF screen returns its own body instance.
       - file: lib/features/ai_coach/screens/ai_coach/screen.dart
-        line_range: 373-379
+        line_range: 374-380
         method: MeasurementChipSlot (the mount line in build)
         notes: L2b Landing C, E4. Between the quick prompts and the input bar, with no condition of its own; the slot owns its flag, prompt, focus and sending checks and is given no send callback; onShown scrolls a chat that was at its bottom back to its bottom (keepBottomAfterChip).
     readers:
@@ -20637,6 +20637,12 @@ concepts:
       plugin's final. SpeechInputLifecycle ends a session when its tab goes out of
       sight or the app is hidden / paused. Nothing is persisted: the words live in
       the host's text field until the host sends them.
+      OI-348 Landing 3e (c7e3a2): both hosts' fields grow to kDictationFieldMaxLines
+      (speech_input_lifecycle.dart, with the forced strut and dictationMaxHeight)
+      and the coach's live words wrap to the same cap; a growing composer reports
+      through CoachComposer.onHeightGrew, which screen.dart wires to the SAME
+      keepBottomAfterChip rule the measurement chip uses (a second call site of
+      that rule, after the chip mount).
     writers:
       - file: lib/core/services/speech_input_service.dart
         line_range: 342-692
@@ -20658,7 +20664,7 @@ concepts:
         semantic: per-session
         fields_read: [transcript, reason, failure, empty]
       - file: lib/features/nutrition/widgets/food_logger_section.dart
-        line_range: 56-162
+        line_range: 57-163
         method: FoodLoggerSection (_speech, _onSpeechEnd, _joinSpeech)
         semantic: per-session
         fields_read: [transcript, reason, failure, empty]

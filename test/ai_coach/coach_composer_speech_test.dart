@@ -52,6 +52,10 @@ class _Rig {
   /// Every `onHeightGrew` call (OI-348 Landing 3e, C4).
   final List<double> grew = <double>[];
 
+  /// When set, a rebuild hands the composer a NEW callback (B-pass 3e seat B
+  /// F4: `updateRenderObject` must replace the reporter's callback).
+  List<double>? altGrew;
+
   Widget app() {
     return ProviderScope(
       overrides: [speechInputServiceProvider.overrideWithValue(service)],
@@ -78,7 +82,7 @@ class _Rig {
                       listening.add(busy);
                       order.add('busy:$busy');
                     },
-                    onHeightGrew: grew.add,
+                    onHeightGrew: (altGrew ?? grew).add,
                   ),
                 ),
               ),
@@ -590,6 +594,65 @@ void main() {
       expect(_bubbleHeight(tester), closeTo(48, 0.01), reason: 'limit hint');
     });
 
+    testWidgets('T4c: the buttons keep the 46 dp tap target (B-pass seat B F7)', (
+      tester,
+    ) async {
+      await _phoneSurface(tester);
+      final rig = _Rig();
+      await rig.pump(tester);
+      final attach = find.ancestor(
+        of: find.byIcon(Icons.attach_file),
+        matching: find.byType(IconButton),
+      );
+      expect(tester.getSize(attach).height, closeTo(46, 0.01));
+    });
+
+    testWidgets('T4d: at the limit the WHOLE 46 dp field box opens the paywall (seat B F5)', (
+      tester,
+    ) async {
+      await _phoneSurface(tester);
+      final rig = _Rig()
+        ..isPro = false
+        ..messageCount = AppConstants.freeAiMessagesPerDay;
+      await rig.pump(tester);
+      final paywallTap = find
+          .ancestor(
+            of: find.byType(TextField),
+            matching: find.byType(GestureDetector),
+          )
+          .first;
+      expect(tester.getSize(paywallTap).height, closeTo(46, 0.01),
+          reason: 'the tap area is the row, not the 20 dp text line');
+    });
+
+    testWidgets('T4e: a tap on the empty right side of the field focuses it (seat B F3)', (
+      tester,
+    ) async {
+      await _phoneSurface(tester);
+      final rig = _Rig();
+      await rig.pump(tester);
+      final attachLeft = tester
+          .getRect(find.ancestor(
+            of: find.byIcon(Icons.attach_file),
+            matching: find.byType(IconButton),
+          ))
+          .left;
+      final y = tester.getCenter(find.byIcon(Icons.explore_outlined)).dy;
+      await tester.tapAt(Offset(attachLeft - 4, y));
+      await tester.pump();
+      expect(rig.focusNode.hasFocus, isTrue);
+    });
+
+    testWidgets('T5b: a pasted line break is stripped, as before (seat A F1)', (
+      tester,
+    ) async {
+      final rig = _Rig();
+      await rig.pump(tester);
+      await tester.enterText(find.byType(TextField), 'two rotis\nand dal');
+      await tester.pump();
+      expect(rig.controller.text, 'two rotisand dal');
+    });
+
     testWidgets('T4b: one line stays centred against the buttons', (
       tester,
     ) async {
@@ -686,6 +749,22 @@ void main() {
         );
       });
     }
+
+    testWidgets('T9b: a rebuilt composer reports to its NEW callback (seat B F4)', (
+      tester,
+    ) async {
+      await _phoneSurface(tester);
+      final rig = _Rig();
+      await rig.pump(tester);
+      final line = _editable(tester).size.height;
+      rig.altGrew = <double>[];
+      await rig.rebuild(tester);
+      rig.grew.clear();
+      await _typeLines(tester, rig, line, 3);
+      await tester.pump();
+      expect(rig.altGrew, isNotEmpty, reason: 'the new callback is called');
+      expect(rig.grew, isEmpty, reason: 'the old closure is not');
+    });
 
     testWidgets('T9c: a composer mounted with text already in it reports nothing', (
       tester,

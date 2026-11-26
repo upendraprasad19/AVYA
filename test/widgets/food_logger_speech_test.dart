@@ -437,6 +437,48 @@ void main() {
           reason: 'the end of the text is in view');
     });
 
+    testWidgets('T6b: a jump scheduled by the last live write does not fight Stop (seat B F1)', (
+      tester,
+    ) async {
+      await _phoneSurface(tester);
+      final rig = _Rig();
+      await rig.pump(tester);
+      final line = _editable(tester).size.height;
+      await _startListening(tester);
+      final words = await _speakLines(tester, rig, line, 10);
+      // The last live write schedules a jump; Stop lands in the SAME frame.
+      rig.engine.emitResult('$words more');
+      await tester.tap(find.byIcon(Icons.stop));
+      _scroll(tester).jumpTo(0); // where the user (or the caret reveal) put it
+      await tester.pump();
+      expect(_scroll(tester).offset, 0,
+          reason: 'a stale jump after the session ended must not move it');
+    });
+
+    testWidgets('T7b: the empty field is one line tall, the long hint does not wrap (seat B F2)', (
+      tester,
+    ) async {
+      await _phoneSurface(tester);
+      final rig = _Rig();
+      await rig.pump(tester);
+      // Against ONE line, not against the field with text: a hidden hint keeps
+      // its layout size, so "empty vs typed" is equal even when the hint wraps.
+      final line = _editable(tester).size.height;
+      final empty = tester.getSize(find.byType(TextField)).height;
+      expect(empty, lessThan(line * 1.5),
+          reason: 'a wrapped hint would make the empty field 3+ lines tall');
+    });
+
+    testWidgets('T8d: a pasted line break is stripped, as before (seat A F1)', (
+      tester,
+    ) async {
+      final rig = _Rig();
+      await rig.pump(tester);
+      await tester.enterText(find.byType(TextField), 'dal\nrice');
+      await tester.pump();
+      expect(_text(tester), 'dalrice');
+    });
+
     testWidgets('T8c: the strut, not the font, sets the field\'s line height', (
       tester,
     ) async {

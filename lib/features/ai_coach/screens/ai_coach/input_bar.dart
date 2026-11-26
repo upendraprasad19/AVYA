@@ -342,6 +342,10 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
       minLines: 1,
       maxLines: kDictationFieldMaxLines,
       keyboardType: TextInputType.text,
+      // With maxLines 1 the SDK stripped every newline (singleLineFormatter);
+      // a multi-line field no longer adds it, so a pasted line break would now
+      // reach the coach. Keep today's one-line text (B-pass 3e, seat A F1).
+      inputFormatters: [FilteringTextInputFormatter.singleLineFormatter],
       strutStyle: kDictationStrut,
       decoration: InputDecoration(
         border: InputBorder.none,
@@ -367,7 +371,7 @@ class _CoachComposerState extends ConsumerState<CoachComposer> {
       constraints: const BoxConstraints(minHeight: _kRowHeight),
       child: Align(
         alignment: AlignmentDirectional.centerStart,
-        child: SizedBox(width: double.infinity, child: composerField),
+        child: composerField, // a TextField fills the width (T4e: off-text tap)
       ),
     );
 

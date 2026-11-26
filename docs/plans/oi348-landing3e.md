@@ -50,8 +50,10 @@ C2. Coach idle field (`composerField`): keep `controller:` and `focusNode:` as t
 the limit hint must not wrap and grow an untouched bubble). `TextInputType.text` keeps the `done` action
 (`EditableText` picks `newline` only for `TextInputType.multiline`), so the keyboard's action key still calls
 `onSubmitted` (send) and never inserts a newline; on the web the engine uses an `<input>` for a text type, so a
-hardware Enter also sends (read from the SDK, checked live on the web after the merge). Pasted newlines are not
-blocked, as today. The idle `Row` uses `CrossAxisAlignment.end`, so compass, attach, mic and send sit on the last
+hardware Enter also sends (read from the SDK, checked live on the web after the merge). CORRECTED by the B-pass
+(seat A F1): "pasted newlines are not blocked, as today" was WRONG. With `maxLines: 1` the SDK adds
+`FilteringTextInputFormatter.singleLineFormatter` (`editable_text.dart:968`), so today a pasted line break is stripped;
+both fields now pass that formatter themselves, keeping today's one-line text (tests T5b, T8d). The idle `Row` uses `CrossAxisAlignment.end`, so compass, attach, mic and send sit on the last
 line as the field grows; the field sits in `ConstrainedBox(minHeight: 36)` + `Align(Alignment.centerLeft)` so ONE
 line stays centred against the 36 dp buttons (R1-2; `AlignmentDirectional.centerStart`, R2-9). At the daily limit the `GestureDetector` wraps that whole 36 dp box (R2-8: the paywall tap area grows from the text line to the 36 dp row, a deliberate small change).
 
@@ -189,6 +191,17 @@ kDictationStrut, textScaler).preferredLineHeight` (the number `RenderEditable` m
 strut is forced, so the late-loading font does not change it (the reason section 3 avoided a TextPainter).
 B3 (T3b/T8b, test only). `getLocalRectForCaret` is in text coordinates; the tests subtract the field's scroll offset,
 and pump the frame that starts the 100 ms caret reveal before advancing the clock.
+
+## B-pass (2 seats on 9b3cd284, review `docs/reviews/oi348-landing3e-bpass.md`)
+Seat A (lenses): F1 P2 pasted newlines (above, fixed); F2 P3 the services CLAUDE.md row and the registry did not name
+the new geometry or the second `keepBottomAfterChip` call site (fixed). Seat B (30 new mutants): 9 survivors; tests
+added for five (T6b stale jump after Stop, T7b long hint (against ONE line: a hidden hint keeps its layout size, so its
+first form, empty vs typed, was itself blind), T9b replaced callback, T4d paywall tap area, T4c 46 dp tap target),
+each re-mutated red; the full-width `SizedBox` around the coach field was redundant (a TextField already fills the
+width) and is removed, T4e (off-text tap focuses) kept; three stated: `AlignmentDirectional` vs `Alignment.centerLeft`
+is an EQUIVALENT mutant (both children are full width, so only the vertical centring matters), the `attached` check
+cannot be reached within one frame (layout and post-frame callbacks run with no rebuild between; kept as defence), and
+the `_fieldScroll.dispose()` leak has no observable test.
 
 ## Round 3 log (fresh seat, narrow check of the round-2 folds, 2026-11-26)
 Every R2 item closed. N1 P3 inner Row min size and spacing -> C3. N2 P2 `_lastHeight` on every layout -> C4, T9

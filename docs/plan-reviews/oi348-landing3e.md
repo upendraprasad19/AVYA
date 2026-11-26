@@ -5,7 +5,7 @@ blast_radius: account
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/oi348-landing3e-bpass.md
 ---
 
@@ -38,4 +38,4 @@ rounds a line's height, so the formula cap was 2.4 dp short of the field (built:
 in two tests. No new mechanism; each is covered by a test and a mutant.
 
 ## B-pass
-Pending: `docs/reviews/oi348-landing3e-bpass.md`.
+`docs/reviews/oi348-landing3e-bpass.md`, 2 Sonnet seats on `9b3cd284`: 11 findings, all resolved in this batch. Fixed: pasted newlines (seat A, a wrong "as today" claim in the plan; both fields now pass `singleLineFormatter`) and the docs drift; six mutation survivors closed by tests re-mutated red (one of them, T7b, rewritten after its first form was itself blind); a redundant `SizedBox` removed; three stated (an equivalent mutant, an unreachable defensive check, an untestable dispose).

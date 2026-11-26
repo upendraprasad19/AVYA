@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/copy/speech_input_copy.dart';
@@ -324,6 +325,11 @@ class _FoodLoggerSectionState extends ConsumerState<FoodLoggerSection> {
                       minLines: 1,
                       maxLines: kDictationFieldMaxLines,
                       keyboardType: TextInputType.text,
+                      // Keeps today's one-line text: a pasted newline is
+                      // stripped, as the SDK did for maxLines 1.
+                      inputFormatters: [
+                        FilteringTextInputFormatter.singleLineFormatter,
+                      ],
                       strutStyle: kDictationStrut,
                       onChanged: (_) => setState(() => _notice = null),
                       onSubmitted: (_) => _analyse(),
