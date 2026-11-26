@@ -230,7 +230,7 @@ void _openCreateAndAutoSwap(
           // OI-358: the custom row stays in the library; only the swap is off,
           // so no UNDO. The create guard already refuses a name the exercise list
           // holds, so this is the rare name that is in the workout but in no list
-          // (a deleted custom, a restored row).
+          // (an old plan or coach-made row whose exercise is not in the list).
           if (change == SessionExerciseChange.nameTaken && context.mounted) {
             _showExerciseNameTaken(ScaffoldMessenger.of(context), newName);
           }

@@ -1,5 +1,6 @@
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
+import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/same_movement.dart';
 
@@ -494,9 +495,29 @@ class ExerciseRepository {
     return results;
   }
 
+  /// Whether the exercise list (a name, or an older name in `name_aliases`) or
+  /// one of the user's own exercises already holds [name]
+  /// ([exerciseDuplicateKey]). The custom-exercise create guard (f2a6c8).
+  bool isNameTaken(String name) {
+    final target = exerciseDuplicateKey(name);
+    if (target.isEmpty) return false;
+    for (final raw in _hive.exerciseBox.values) {
+      if (raw is! Map) continue;
+      final n = raw['name'];
+      if (n is String && exerciseDuplicateKey(n) == target) return true;
+      final aliases = raw['name_aliases'];
+      if (aliases is List &&
+          aliases.any((a) => a is String && exerciseDuplicateKey(a) == target)) {
+        return true;
+      }
+    }
+    return customNamesLower().any((n) => exerciseDuplicateKey(n) == target);
+  }
+
   /// The user's custom exercise names, trimmed and lower-cased. Names only:
   /// the L2 repair (d4b8e1, Batch 0b) uses it to REMOVE customs the generator
-  /// added on its own, never to offer one.
+  /// added on its own, and [isNameTaken] uses it to refuse a taken name. Never
+  /// used to offer an exercise.
   Set<String> customNamesLower() {
     final names = <String>{};
     for (final c in getCustomExercises()) {

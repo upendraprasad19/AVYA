@@ -1781,7 +1781,7 @@ concepts:
           fires syncProfileNow); signed in: pushSnapshot, and the
           coach-extraction lock ONLY when the food type itself changed.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1949-2433
+        line_range: 1964-2462
         method: _save (writes _foodType.storageKey; lock compare on canonical keys)
       - file: lib/features/onboarding/providers/onboarding_provider.dart
         line_range: 1005-1006
@@ -1914,7 +1914,7 @@ concepts:
           itself; invalidating a provider that watches userProfileProvider
           from inside it is a CircularDependencyError in debug builds).
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1949-2433
+        line_range: 1964-2462
         method: _save (adds diet_strategy only with the flag on, for a chip different from the EFFECTIVE strategy, after confirmEditProfileDietStrategy; PRO re-checked at Save)
         notes: |
           PRESENCE ONLY for the screen wiring (B-pass seat C finding 3): the
@@ -5177,7 +5177,7 @@ concepts:
         method: TemplatesNotifier.saveTemplate (single-day; multi-day templates
           land via tool_dispatcher.createCustomTemplate entry below)
       - file: lib/features/train/screens/template_builder_screen.dart
-        line_range: 405-418
+        line_range: 406-419
         method: self-contained
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
         line_range: 1-9999
@@ -6840,7 +6840,7 @@ concepts:
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1949-2433
+        line_range: 1964-2462
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
@@ -9447,14 +9447,16 @@ concepts:
           sheet) else EquipmentVocab.normalize; defaultReps is a String
           ("8-12" ranges). Judges the write by the stored row
           (customExerciseRowLanded), throwing write_failed only when absent.
-          ONE NAME ONCE (f2a6c8, 2026-11-25, founder): a name the exercise
-          list holds (name, then older `name_aliases`: getByExactName), the
-          v5 id of an earlier custom, or the exerciseNameKey of any of the
-          user's exercise rows is refused with duplicate_name and
-          WardroomCopy.customExerciseNameTakenTemplate, for the sheet and the
-          coach alike. Test test/contracts/custom_exercise_name_unique_behavioral_test.dart.
+          ONE NAME ONCE (f2a6c8, 2026-11-25, founder):
+          ExerciseRepository.isNameTaken (a list row's name or older
+          `name_aliases`, or any of the user's exercise rows, compared by
+          exerciseDuplicateKey: case, repeated / non-breaking spaces and curly
+          apostrophes ignored) or the v5 id of an earlier custom refuses with
+          duplicate_name and WardroomCopy.customExerciseNameTakenTemplate; the
+          coach tool passes that message through unchanged. Test
+          test/contracts/custom_exercise_name_unique_behavioral_test.dart.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1629-1671
+        line_range: 1662-1702
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,
@@ -9477,13 +9479,22 @@ concepts:
           id/created_at/equipment_needed/approved_for_library
           (buildEditPayload — round-2 P1-1/P1-2).
       - file: lib/core/services/sync/sync_community.dart
-        line_range: 290-360
+        line_range: 334-396
         method: _restoreCustomExercises
         notes: cloud → Hive restore at sign-in
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 472-495
+        line_range: 498-515
+        method: isNameTaken
+        semantic: filter
+        fields_read: [name, name_aliases, type]
+        notes: |
+          The create guard's one question (f2a6c8): list rows' name and
+          name_aliases, then customNamesLower (the user's exercise rows only,
+          so templates in customBox are never compared).
+      - file: lib/shared/repositories/exercise_repository.dart
+        line_range: 473-496
         method: getCustomExercises
         semantic: filter
         fields_read: [name, category, logging_type, type]
@@ -9518,7 +9529,7 @@ concepts:
         semantic: display
         fields_read: [name, category]
       - file: lib/features/train/screens/template_builder_screen.dart
-        line_range: 561-611
+        line_range: 562-612
         method: _refresh
         semantic: display
         fields_read: [name, category, equipment_needed]
@@ -11485,13 +11496,13 @@ concepts:
         method: attach (_moveInjuries + _moveIsContra)
         notes: U3 (d3f8a1) drop-not-substitute warmup/cooldown injury filter + non-empty floor; main-selectable moves defer to library tags; kill-switch warmupInjuryFilterEnabled. Threaded from plan_generator generateV4 + template_service. Behavioral test warmup_injury_filter_behavioral_test.dart.
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
-        line_range: 705-729
+        line_range: 703-727
         method: _saveCoachInjuryToProfile (via InjuryVocab.coachPartToken + coachInjuryProfilePatch)
         notes: Unit 3C (d77 / d78, diagnose f3c9a6) - a confirmed coach modifyWorkoutForInjury adds its canonical token to profile['injuries'] (quad -> knee, calf -> ankle, chest / upper_back -> shoulder), drops 'none', never twice, under ProfileWriteService.patchProfileWith with an owner re-check; then locks 'injuries'. Behavioral test coach_injury_profile_write_behavioral_test.dart.
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 420-430
+        line_range: 421-431
         method: queryV4 injury match
         semantic: flag-check
         fields_read: [injury_contraindications]
@@ -12183,7 +12194,7 @@ concepts:
           test/contracts/oi166_unit2_regen_content_cycling_behavioral_test.dart.
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
         method: "_executeRegeneratePlanBlock / _executeSwitchGoal — current_plan splice (OI-166 Unit 2, NEW writer)"
-        line: 1043
+        line: 1041
         notes: >
           The AI-coach regen path (RegeneratePlanPlanner.plan()) never wrote
           current_plan before this — the exact gap this concept's own
@@ -13695,7 +13706,7 @@ concepts:
         semantic: a missing injury field = never excluded; muscle_primary was invisible
         notes: the E252 knee safety hole + muscle-invisibility
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 49-122
+        line_range: 50-123
         method: getByExactName / hasExactNameWhere (exact loop, then name_aliases) + search (name or alias substring)
         semantic: a retired name resolves to its kept twin; an exact name always wins over an alias
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts
@@ -18083,13 +18094,13 @@ concepts:
           once, a much smaller harm than blocking the profile save this
           runs alongside.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 2141-2157
+        line_range: 2156-2172
         method: "_save (via the pure computeCoachExtractionFieldsToLock helper)"
         notes: |
           Locks only fields that ACTUALLY changed this save (diet_preference /
           lifestyle_activity / injuries), never a field re-saved unchanged.
       - file: lib/features/ai_coach/services/tool_dispatcher.dart
-        line_range: 705-729
+        line_range: 703-727
         method: _saveCoachInjuryToProfile (ToolDispatcher.lockFields(['injuries']), 4 s timeout)
         notes: |
           Unit 3C (d77, diagnose f3c9a6): after a confirmed coach injury
@@ -20524,7 +20535,7 @@ concepts:
         semantic: count
         fields_read: [via countBeatenPrs]
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 1916-1923
+        line_range: 1908-1915
         method: getAllExerciseLogKeysForLifetimeSum
         semantic: aggregated
         fields_read: [volume_kg]

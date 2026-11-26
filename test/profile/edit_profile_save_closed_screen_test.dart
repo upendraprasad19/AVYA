@@ -25,6 +25,8 @@ import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
+import 'package:icanbefitter/features/ai_coach/providers/ai_coach_provider.dart'
+    show predictionProvider;
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
@@ -205,6 +207,30 @@ void main() {
           e.op == 'profile_edit_save_failed' && (e.message ?? '').contains('unmounted')) ||
       nonFatals.any((s) => s.contains('unmounted'));
 
+  /// EVERY Save failure, not only the unmounted-ref one: a Save that stops half way
+  /// for any reason must show up here.
+  List<String> saveFailures() => [
+        for (final e in events)
+          if (e.op == 'profile_edit_save_failed') e.message ?? ''
+      ];
+
+  bool skippedReschedule() =>
+      events.any((e) => e.op == 'profile_edit_reschedule_skipped_closed');
+
+  /// Closes the screen (the app's ProviderScope stays).
+  Future<void> closeScreen(WidgetTester tester) async {
+    router.go('/profile');
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+  }
+
+  Future<Map<dynamic, dynamic>> storedProfile(WidgetTester tester) async =>
+      Map<dynamic, dynamic>.from((await tester.runAsync(
+          () async => HiveService.instance.userBox.get('profile')))! as Map);
+
+  ProviderContainer appContainer(WidgetTester tester) =>
+      ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+
   testWidgets('the screen closed right after SAVE: the Save still recomputes the targets and reports nothing',
       (tester) async {
     await boot(tester, _profile());
@@ -231,6 +257,9 @@ void main() {
         reason: 'recalculateTargets ran after the screen closed');
     expect(reportedUnmountedRef(), isFalse,
         reason: 'events were $events, non-fatals were $nonFatals');
+    expect(saveFailures(), isEmpty);
+    expect(skippedReschedule(), isFalse,
+        reason: 'mirror: no plan, so no reschedule was owed');
   });
 
   // Everything `_save` does after its first await runs in this test with no screen behind it
@@ -266,5 +295,88 @@ void main() {
     expect(find.text('Reschedule Workouts?'), findsNothing);
     expect(find.text('PROFILE'), findsOneWidget);
     expect(reportedUnmountedRef(), isFalse, reason: 'events were $events');
+    expect(saveFailures(), isEmpty);
+    expect((await storedProfile(tester))['days_per_week'], 5,
+        reason: 'the plan-affecting edit was really saved');
+    expect(skippedReschedule(), isTrue,
+        reason: 'the plan keeps its old days: that must be recorded');
+  });
+
+  testWidgets('a target change closed right after SAVE still refreshes the prediction card',
+      (tester) async {
+    await boot(tester, _profile());
+    final container = appContainer(tester);
+    final sub = container.listen(predictionProvider, (_, __) {});
+    addTearDown(sub.close);
+    expect(container.read(predictionProvider).isStale, isFalse);
+
+    final target = find.widgetWithText(TextField, 'Target Weight (kg)');
+    await tester.ensureVisible(target);
+    await tester.enterText(target, '72.0');
+    await tester.pump();
+    await tester.ensureVisible(find.text('SAVE'));
+    await tester.tap(find.text('SAVE'));
+    await tester.pump();
+    await closeScreen(tester);
+    await settle(tester);
+
+    expect(saveFailures(), isEmpty);
+    expect((await storedProfile(tester))['target_weight_kg'], 72.0);
+    // A free account marks the prediction stale; only invalidating the provider
+    // after that makes the already-open card say so.
+    expect(container.read(predictionProvider).isStale, isTrue);
+  });
+
+  const assessment = <String, dynamic>{
+    'body_fat_percent': 18.0,
+    'body_fat_assessed_at': '2026-11-26T04:00:00.000Z',
+    'body_fat_range': '16-20%',
+  };
+
+  testWidgets('a body-fat result is stored even after the screen has closed',
+      (tester) async {
+    await boot(tester, _profile());
+    final container = appContainer(tester);
+    await closeScreen(tester);
+
+    final saved = await tester.runAsync(() => saveBodyFatAssessment(
+        container: container,
+        ownerAtStart: _user,
+        ownerNow: _user,
+        updates: Map<String, dynamic>.from(assessment)));
+    await settle(tester);
+
+    expect(saved, isTrue);
+    expect((await storedProfile(tester))['body_fat_percent'], 18.0);
+  });
+
+  testWidgets('mirror: a body-fat result is NOT written when the account changed',
+      (tester) async {
+    await boot(tester, _profile());
+    final container = appContainer(tester);
+
+    final saved = await tester.runAsync(() => saveBodyFatAssessment(
+        container: container,
+        ownerAtStart: _user,
+        ownerNow: 'aaaa0000-0000-0000-0000-000000000000',
+        updates: Map<String, dynamic>.from(assessment)));
+    await settle(tester);
+
+    expect(saved, isFalse);
+    expect((await storedProfile(tester))['body_fat_percent'], isNull);
+    expect(events.any((e) => e.op == 'body_fat_assessment_owner_changed'), isTrue);
+  });
+
+  test('wiring (source pin): nothing returns between the AI result and its save', () {
+    final src = File('lib/features/profile/screens/edit_profile_screen.dart')
+        .readAsLinesSync()
+        .where((l) => !l.trimLeft().startsWith('//'))
+        .join('\n');
+    final from = src.indexOf("final assessedAt = data['assessed_at'] as String;");
+    final to = src.indexOf('await saveBodyFatAssessment(');
+    expect(from, greaterThan(0));
+    expect(to, greaterThan(from));
+    expect(src.substring(from, to).contains('return'), isFalse,
+        reason: 'a closed screen must not drop the result before it is stored');
   });
 }

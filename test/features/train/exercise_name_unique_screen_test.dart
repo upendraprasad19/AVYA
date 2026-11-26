@@ -206,6 +206,24 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets(
+        'create-custom named like a session row that is in NO list: the workout refuses the add and says so',
+        (tester) async {
+      // `Zercher Hold` is in the session (an old plan or coach-made row) but in neither
+      // the library nor the customs, so the create is allowed and the workout's own
+      // guard is the one that refuses.
+      final h = await _pump(tester, [_custom, _row]);
+      await _openAddPicker(tester);
+      await tester.tap(_inSheet(find.text('+ CREATE CUSTOM')));
+      await _settle(tester);
+      await _createCustom(tester, _custom);
+
+      expect(_names(h), [_custom, _row]);
+      expect(find.text(_takenMessage(_custom)), findsOneWidget);
+      expect(_customNamed(_custom), isTrue, reason: 'the new exercise itself is kept');
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('create-custom named like a library exercise that is NOT in the session: refused too',
         (tester) async {
       final h = await _pump(tester, [_bench, _row]);
@@ -281,6 +299,19 @@ void main() {
       await _settle(tester);
       expect(_names(h), [_custom, _row]);
       expect(find.byType(BottomSheet), findsOneWidget, reason: 'nothing happened');
+    });
+
+    testWidgets(
+        'auto-swap into a session name that is in NO list: message, slot unchanged, no UNDO',
+        (tester) async {
+      final h = await _pump(tester, [_custom, _row]);
+      await _swapToNewCustom(tester, 1, _custom);
+
+      expect(_names(h), [_custom, _row]);
+      expect(find.text(_takenMessage(_custom)), findsOneWidget);
+      expect(find.text('UNDO'), findsNothing,
+          reason: 'nothing was swapped, so there is nothing to undo');
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('auto-swap into a session name: refused in the create sheet, slot unchanged, no UNDO',

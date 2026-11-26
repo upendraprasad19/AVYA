@@ -202,9 +202,11 @@ class WardroomCopy {
 
   /// A new custom exercise whose name the exercise list already holds (the list's own
   /// name, one of its older names, or one of the user's own exercises): refused where it is
-  /// created, so no second exercise shares the first one's name and history.
+  /// created, so no second exercise shares the first one's name and history. The pickers hide
+  /// list exercises the user's equipment cannot do, so a plain "search for it" was a dead
+  /// end for those; the second sentence is true for them too.
   static const customExerciseNameTakenTemplate =
-      '“{exercise}” is already in the exercise list. Search for it instead.';
+      '“{exercise}” is already in the exercise list. Can’t find it? Check your equipment in Edit Profile.';
 
   /// First-use hint for the two icons (shown once per account).
   static const activeSwapMoveHintTitle = 'On every exercise';

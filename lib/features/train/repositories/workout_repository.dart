@@ -1599,14 +1599,13 @@ class WorkoutRepository {
     // Duplicate-name guard: ONE NAME ONCE (founder 2026-11-25, OI-348 walk A16). Logs are
     // keyed by the exercise name (`exlogKey`), so a second exercise with a taken name would
     // share the first one's history and the pickers would show two rows that look the same.
-    // Taken = the exercise list holds it as a name or as one of its older names
-    // (`getByExactName`: exact, case and spaces ignored, aliases second), OR one of the
-    // user's own exercises carries it (any id scheme: an older row's id is not this v5 id).
+    // Taken = `isNameTaken`: the exercise list holds it as a name or an older name, OR one
+    // of the user's own exercises carries it (any id scheme: an older row's id is not this
+    // v5 id). Case, repeated spaces and curly apostrophes are ignored.
     final customBox = _hive.customBox;
-    var taken = ExerciseRepository.instance.getByExactName(trimmed) != null;
+    var taken = ExerciseRepository.instance.isNameTaken(trimmed);
     if (!taken) {
-      // The raw id scan over every row, as before; the name scan below reads only the
-      // user's exercise rows (customBox also holds templates).
+      // The raw id scan over every row, as before: one id must never name two rows.
       for (final k in customBox.keys) {
         final v = customBox.get(k);
         if (v is Map && v['id'] == id) {
@@ -1614,13 +1613,6 @@ class WorkoutRepository {
           break;
         }
       }
-    }
-    if (!taken) {
-      // Names only (`customNamesLower` reads the exercise rows through the one reader, so a
-      // template sharing the box is never compared and this adds no exercise-emitting seam).
-      taken = ExerciseRepository.instance
-          .customNamesLower()
-          .contains(exerciseNameKey(trimmed));
     }
     if (taken) {
       throw CreateCustomExerciseException(

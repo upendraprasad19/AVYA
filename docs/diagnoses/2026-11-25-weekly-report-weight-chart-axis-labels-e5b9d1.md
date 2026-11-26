@@ -10,9 +10,9 @@ symptom: |
 concept: weekly_report_weight_chart_axis
 sot_registry_entry: not_applicable
 writers:
-  - { file: lib/features/profile/screens/reports_screen.dart, method_or_widget: "weightTrendTitlesData: bottomTitles interval and getTitlesWidget; leftTitles getTitlesWidget", line: 37 }
+  - { file: lib/features/profile/screens/reports_screen.dart, method_or_widget: "weightTrendTitlesData: bottomTitles interval and getTitlesWidget; leftTitles getTitlesWidget (rules: weightTrendKeepsDateLabel / weightTrendKeepsWeightLabel)", line: 40 }
 readers:
-  - { file: lib/features/profile/screens/reports_screen.dart, method_or_widget: "_buildLineChart passes titlesData: weightTrendTitlesData(entries) to the LineChart", line: 853 }
+  - { file: lib/features/profile/screens/reports_screen.dart, method_or_widget: "_buildLineChart passes titlesData: weightTrendTitlesData(entries) to the LineChart", line: 877 }
 hive_key_prefix: none
 hive_key_formula: "not applicable: display only; the weigh-ins are read through NutritionRepository.getWeightEntries and nothing is written"
 sync_methods: []
@@ -29,11 +29,12 @@ cross_account_guard: "not applicable: a pure render of the entries the screen al
 forbidden_patterns_checked:
   - { pattern: "two axis labels of the Weight Trend card drawn over each other, or the same left number printed twice", absent: true }
 proposed_fix: |
-  Extract the card's titles into the top-level weightTrendTitlesData (so a test can render the real function; the rules were first moved verbatim and the new test failed on them). Bottom: the label of a step point is dropped when the last point is less than half a step after it (the newest date wins; a last point that lands on a step is untouched). Left: only ticks that are a multiple of the applied interval are drawn (the library's forced minimum and maximum are not), and a tick step under 1 kg prints one decimal so two ticks cannot read the same whole number.
+  Extract the card's titles into the top-level weightTrendTitlesData (so a test can render the real function; the rules were first moved verbatim and the new test failed on them). Bottom (weightTrendKeepsDateLabel): a step label closer than one FULL step to the last point is dropped (the newest date wins; a last point that lands on a step is untouched). Left (weightTrendKeepsWeightLabel): ticks are always drawn; the forced minimum or maximum is dropped only when a drawn tick is within half a step of it, and a tick step under 1 kg prints one decimal so two ticks cannot read the same whole number. Plan review round 1 changed both rules: a HALF-step date rule still overlapped with 10, 12, 19 and 28 weigh-ins on a 360 dp phone (labels about 34 px: 8 px mono, letter spacing 2), and dropping EVERY forced end left a 72-78 kg range (axis 71-79, step 5) with the single label 75.
 regression_test_planned: |
-  test/profile/weight_trend_axis_labels_test.dart: a real LineChart over Upendra's 27 weigh-ins: no two date labels overlap, 25/11 and 29/8 are drawn, the in-between 18/9, 25/9, 1/10, 22/10 stay; the mirror (26 weigh-ins, the last point on a step) draws all six labels; the left labels are distinct and the real ticks 74/76/78/80 stay; a 0.2 kg range (0.5 kg ticks) prints distinct left labels.
+  test/profile/weight_trend_axis_labels_test.dart: a real LineChart over Upendra's 27 weigh-ins: no two date labels overlap, 25/11 and 29/8 are drawn, the in-between 18/9, 25/9, 1/10, 22/10 stay; the mirror (26 weigh-ins, the last point on a step) draws all six labels; the left labels are distinct and the real ticks 74/76/78/80 stay; a 0.2 kg range (0.5 kg ticks) prints distinct left labels; every count from 2 to 27 rendered has no overlap and labels the newest date; the pure rule from 2 to 90 weigh-ins never draws two labels closer than a full step; a 72-78 kg range keeps 71, 75 and 79; boundary cases of the weight rule, including a neighbour tick outside the axis; a source pin that the screen passes weightTrendTitlesData.
 mutation_proof: |
   Rule 21, backup/mutate/run/restore (files compared by hash after). Fixed code: 5 of 5 pass. Pre-fix rules (moved verbatim): the overlap test and the distinct-left-labels test FAIL (rectangles 532.5-582.5 and 544-594; labels [74, 74, 76, 78, 80]). MD1 close-to-last rule removed: 1 test RED. MD2 forced-minimum rule removed: 1 RED. MD3 decimals under 1 kg removed: 1 RED (after the narrow fixture was tightened from 0.8 kg to 0.2 kg: the first fixture left MD3 green, so it was not proof). MD4 the newest date dropped: 2 RED.
+  Plan review round 1 (2026-11-26), new rules: the half-step date rule put back: 2 RED; every forced weight end dropped: 2 RED; the axis-range check removed from the weight rule: 2 RED; the chart no longer passing weightTrendTitlesData: 1 RED.
 impact_analysis: |
   Display only, one card. The chart's data, ranges and tooltips are untouched. The home WeightTrendChart (shared/widgets) is a different widget with a date-proportional axis and is not changed. A series whose last point sits on a step still shows every label it showed before.
 touched_layers_checked:
@@ -59,4 +60,4 @@ related_bugs: [e1c6a9, b3f7a2]
 The Weight Trend card places an x label every `round(n / 5)` points and the chart library adds a label at the last point. With 27 weigh-ins the step is 5, so the labels at points 25 (13/11) and 26 (25/11) are one slot apart and overlap. The left axis forced a label at the non-integer minimum and printed it rounded beside the real tick (74 twice).
 
 ## Fix
-`weightTrendTitlesData` drops the step label that sits within half a step of the last point, draws only real ticks on the left, and prints one decimal when the tick step is under 1 kg. Tests render the real function in a real `LineChart`.
+`weightTrendTitlesData` drops any step date label closer than a full step to the last point, drops the forced weight minimum or maximum only where a tick is within half a step of it, and prints one decimal when the tick step is under 1 kg. Tests render the real function in a real `LineChart`.

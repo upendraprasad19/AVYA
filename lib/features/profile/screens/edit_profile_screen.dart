@@ -1860,12 +1860,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (file == null || !mounted) return;
 
     setState(() => _isAssessingBf = true);
+    // After the photo is read, every provider call goes through the app-wide
+    // container: the result must be stored even if this screen closes while the
+    // AI call runs.
+    final container = ProviderScope.containerOf(context, listen: false);
+    final ownerAtStart = SupabaseService.instance.currentUser?.id;
 
     try {
       final bytes = await file.readAsBytes();
+      // Left before the photo was sent: nothing has been used yet.
+      if (!mounted) return;
       final base64Image = base64Encode(bytes);
 
-      final profile = ref.read(userProfileProvider);
+      final profile = container.read(userProfileProvider);
       final weightKg =
           (profile['current_weight_kg'] as num?)?.toDouble() ?? 70.0;
       final heightCm = (profile['height_cm'] as num?)?.toDouble() ?? 170.0;
@@ -1900,25 +1907,31 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         return;
       }
 
-      if (!mounted) return;
       final bfLow = (data['bf_low'] as num).toDouble();
       final bfHigh = (data['bf_high'] as num).toDouble();
       final bfMid = ((bfLow + bfHigh) / 2).roundToDouble();
       final assessedAt = data['assessed_at'] as String;
 
-      setState(() {
-        _bodyFatController.text = bfMid.toStringAsFixed(1);
-        _bodyFatAssessedAt = assessedAt;
-      });
-
-      // Immediately persist so it's not lost if user closes without saving
-      await ref.read(userProfileProvider.notifier).updateProfile({
-        'body_fat_percent': bfMid,
-        'body_fat_assessed_at': assessedAt,
-        'body_fat_range': '${bfLow.round()}-${bfHigh.round()}%',
-      });
-
       if (mounted) {
+        setState(() {
+          _bodyFatController.text = bfMid.toStringAsFixed(1);
+          _bodyFatAssessedAt = assessedAt;
+        });
+      }
+
+      // Store it even when the screen has closed (see saveBodyFatAssessment).
+      final saved = await saveBodyFatAssessment(
+        container: container,
+        ownerAtStart: ownerAtStart,
+        ownerNow: SupabaseService.instance.currentUser?.id,
+        updates: {
+          'body_fat_percent': bfMid,
+          'body_fat_assessed_at': assessedAt,
+          'body_fat_range': '${bfLow.round()}-${bfHigh.round()}%',
+        },
+      );
+
+      if (saved && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1929,7 +1942,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'body_fat_assessment'));
       _showError('Assessment failed. Please try again.');
     } finally {
       if (mounted) setState(() => _isAssessingBf = false);
@@ -2217,7 +2232,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         originalEquipmentOwned: _originalEquipmentOwned,
       );
 
-      if (planChanged && WorkoutScheduleService.instance.hasPlan() && mounted) {
+      final rescheduleOwed =
+          planChanged && WorkoutScheduleService.instance.hasPlan();
+      if (rescheduleOwed && !mounted) {
+        // The screen closed before the question could be asked, so the plan keeps
+        // its old days, and the next Save sees no change to ask about. Recorded.
+        unawaited(
+            ErrorTelemetry.logEvent('profile_edit_reschedule_skipped_closed'));
+      }
+      if (rescheduleOwed && mounted) {
         final changes = <String>[];
         if (_daysPerWeek != _originalDaysPerWeek) {
           changes.add('$_originalDaysPerWeek → $_daysPerWeek days/week');
@@ -2386,7 +2409,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             .refreshAfterProfileChange(
                 isPro: SubscriptionService.instance.isPro())
             .whenComplete(() {
-          if (mounted) ref.invalidate(predictionProvider);
+          // Through the container: a closed screen's card must refresh too.
+          try {
+            container.invalidate(predictionProvider);
+          } catch (e, st) {
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'edit_profile_prediction_invalidate'));
+          }
         }));
       }
 
@@ -2431,6 +2460,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+}
+
+/// Stores an AI body-fat assessment, with or without the screen that asked for it.
+/// The server marks the month's one assessment as used and does not keep the
+/// result, so dropping it here (the screen closed while the AI call ran) lost it
+/// for 30 days. Refuses when the signed-in account changed meanwhile.
+@visibleForTesting
+Future<bool> saveBodyFatAssessment({
+  required ProviderContainer container,
+  required String? ownerAtStart,
+  required String? ownerNow,
+  required Map<String, dynamic> updates,
+}) async {
+  if (ownerNow != ownerAtStart) {
+    unawaited(ErrorTelemetry.logEvent('body_fat_assessment_owner_changed'));
+    return false;
+  }
+  await container.read(userProfileProvider.notifier).updateProfile(updates);
+  return true;
 }
 
 /// Pure helper extracted from `_EditProfileScreenState._save` (a2b-2,

@@ -129,6 +129,34 @@ void main() {
           reason: 'refused before it reaches the template');
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+        'a custom named like a template row that is in NO list: the builder refuses it and says so',
+        (tester) async {
+      // An old or coach-made template row whose name is in neither the library nor the
+      // customs: the create is allowed, so the builder's one writer must refuse it.
+      const oldRow = 'Zercher Hold';
+      await _pump(tester, [
+        {'exercise_name': oldRow, 'sets': 3, 'reps': '8'},
+      ]);
+      await _openSearch(tester);
+      await tester.tap(_inSheet(find.textContaining('CUSTOM')).first);
+      await _settle(tester);
+      await tester.enterText(_inSheet(find.byType(TextField)).first, oldRow);
+      await tester.pump();
+      await tester.ensureVisible(_inSheet(find.text('SAVE')));
+      await tester.pump();
+      await tapWithRealIo(tester, _inSheet(find.text('SAVE')));
+      final message = find.text(WardroomCopy.templateAlreadyAddedTemplate
+          .replaceAll('{exercise}', oldRow));
+      await pumpUntilRealIoDone(tester, () => message.evaluate().isNotEmpty,
+          what: 'the builder refusal');
+      await _settle(tester);
+
+      expect(message, findsOneWidget);
+      expect(find.text('1 ADDED'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('a template that already holds a name twice', () {

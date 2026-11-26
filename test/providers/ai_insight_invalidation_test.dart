@@ -14,9 +14,10 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('aiInsightProvider invalidation call sites (F5)', () {
     test('edit_profile_screen invalidates aiInsightProvider after regen', () {
+      // Comment lines are dropped, so a commented-out call cannot satisfy it.
       final source = File(
         'lib/features/profile/screens/edit_profile_screen.dart',
-      ).readAsStringSync();
+      ).readAsLinesSync().where((l) => !l.trimLeft().startsWith('//')).join('\n');
       // The save path runs after the screen may already be closed, so it
       // invalidates through the ProviderContainer captured at Save start
       // (`container`), never through the widget `ref` (c4b8d2).

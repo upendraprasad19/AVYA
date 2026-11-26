@@ -10,9 +10,9 @@ symptom: |
 concept: edit_profile_save_provider_calls
 sot_registry_entry: not_applicable
 writers:
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: updateProfile, recalculateTargets, the impact read, invalidateProfileDerivedSurfaces, the name providers, the plan providers (now through the app-wide ProviderContainer captured when the Save starts)", line: 2045 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: updateProfile, recalculateTargets, the impact read, invalidateProfileDerivedSurfaces, the name providers, the plan providers (now through the app-wide ProviderContainer captured when the Save starts)", line: 1964 }
 readers:
-  - { file: lib/features/profile/providers/profile_provider.dart, method_or_widget: "userProfileProvider notifier (updateProfile, recalculateTargets) and every provider the Save invalidates (macro targets, home greeting, current plan, today workout, calendar week, AI insight)", line: 1 }
+  - { file: lib/features/profile/providers/profile_provider.dart, method_or_widget: "userProfileProvider notifier updateProfile (92) and recalculateTargets (242), and every provider the Save invalidates (macro targets, home greeting, current plan, today workout, calendar week, AI insight, prediction)", line: 92 }
 hive_key_prefix: none
 hive_key_formula: "not applicable: the Save's writes are unchanged; only the handle used for provider calls after an await changed"
 sync_methods: []
@@ -21,21 +21,22 @@ cloud_table: none
 cloud_columns: []
 contract_test_path: test/profile/edit_profile_save_closed_screen_test.dart
 ist_handling: []
-provider_invalidations: "unchanged set; every call after the first await now goes through the container (userProfileProvider notifier calls, invalidateProfileDerivedSurfaces, the three name providers, currentPlan / todayWorkout / calendarWeek / aiInsight)."
+provider_invalidations: "unchanged set; every call after the first await now goes through the container (userProfileProvider notifier calls, invalidateProfileDerivedSurfaces, the three name providers, currentPlan / todayWorkout / calendarWeek / aiInsight, and predictionProvider after its refresh, which a closed screen used to skip)."
 telemetry_op_types:
   success: []
-  failure: [profile_edit_save_failed]
-cross_account_guard: "unchanged: the reschedule block keeps its `mounted` check (a closed screen does not regenerate a plan, so a sign-out between the dialog and the regeneration never writes another account's schedule); the `ref` calls left in the file are each directly behind a `mounted` check."
+  failure: [profile_edit_save_failed, profile_edit_reschedule_skipped_closed, edit_profile_prediction_invalidate]
+cross_account_guard: "unchanged: the reschedule block keeps its `mounted` check (a closed screen does not regenerate a plan, so a sign-out between the dialog and the regeneration never writes another account's schedule). In _save the one `ref` call left (the reschedule block's profile read) sits directly behind a `mounted` check; the body-fat flow no longer uses `ref` after an await (d7a2e4)."
 forbidden_patterns_checked:
   - { pattern: "a WidgetRef call after an await in Edit Profile `_save` with no mounted check", absent: true }
 proposed_fix: |
-  Capture `ProviderScope.containerOf(context, listen: false)` when the Save starts and use it (read / invalidate) for every provider call that follows an await. The two `ref` calls left (the reschedule block's profile read and the prediction refresh) stay behind an immediate `mounted` check with no await between. Context uses (dialogs, snackbar, navigation) were already guarded.
+  Capture `ProviderScope.containerOf(context, listen: false)` when the Save starts and use it (read / invalidate) for every provider call that follows an await. The `ref` call left (the reschedule block's profile read) stays behind an immediate `mounted` check with no await between. Context uses (dialogs, snackbar, navigation) were already guarded. Plan review round 1 added: the prediction card's invalidate also goes through the container (it was behind `mounted`, so a closed screen kept the old card), and a reschedule that could not be asked because the screen had closed is recorded (`profile_edit_reschedule_skipped_closed`). The plan keeps its old days in that case, and a later Save sees no change to ask about: what should happen then is a product call, not made here.
 regression_test_planned: |
   test/profile/edit_profile_save_closed_screen_test.dart: the REAL EditProfileScreen against real Hive, SAVE tapped, the screen replaced through the router before the Save's first real await resumes, the app's ProviderScope kept. A pace edit: the targets are recomputed (daily_calories leaves 2000) and no unmounted-ref failure reaches either telemetry sink (`profile_edit_save_failed` or the per-provider non-fatal of the surface refresh). A 5-days edit with a stored plan: the same, and no dialog opens on a closed screen.
 mutation_proof: |
   Rule 21, backup/mutate/run/restore (files compared by hash after). Fixed code: 3 of 3 pass. Pre-fix shape (every container. back to ref.): 2 RED. One line at a time back to ref: the recompute (MA1) RED, the impact read (MA2) RED, the profile-derived surfaces tear-off (MB1) RED only after the test also read the surface refresh's own non-fatal (the helper catches each failure, so the first version of the test stayed green: not proof), the name providers (MB2) RED, currentPlan (MC1) RED, aiInsight (MC2) RED. Two earlier versions of the test were discarded: one replaced the whole ProviderScope (the container died with it, an unrealistic scenario) and one let the screen finish its exit transition after the Save had resumed (4 of the 6 lines stayed green).
+  Plan review round 1 (2026-11-26), 3 more, each 1 RED: the prediction invalidate put back behind `mounted`; the skipped-reschedule event renamed; the F5 call commented out (the F5 test now ignores comment lines).
 impact_analysis: |
-  Feature blast radius, one screen. No write path or stored value changes. A Save with the screen open behaves as before (the existing edit_profile tests pass). A Save whose screen closed now finishes: the targets are recomputed, the providers refresh, and the plan and snapshot push run.
+  Feature blast radius, one screen. No write path or stored value changes. A Save with the screen open behaves as before (the existing edit_profile tests pass). A Save whose screen closed now finishes the profile write, the target recompute, the provider refreshes (the prediction card included) and the profile and snapshot push. It still does NOT reschedule the plan: the question cannot be shown, and the skip is now recorded.
 touched_layers_checked:
   - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "_save uses the captured container after its first await; new test 3/3 green; the existing edit_profile_* tests (target impact, goal target, plan changed, coach-extraction lock) pass; flutter analyze and the pre-commit gates pass." }
   - { tier: 2, name: "Hive (local state)", status: verified, evidence: "The closed-screen test reads the profile map back from real Hive after the Save: the pace edit and the recomputed daily_calories are there." }

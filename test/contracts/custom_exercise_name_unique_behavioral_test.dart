@@ -9,20 +9,23 @@
 //
 // Writer:  lib/features/train/repositories/workout_repository.dart `createCustomExercise`
 // Readers: the sheet (create_custom_exercise_sheet.dart shows e.message), the coach tool
-//          (tool_dispatcher.dart `_executeCreateCustomExercise` maps `duplicate_name` to a failure).
+//          (tool_dispatcher.dart `_executeCreateCustomExercise` passes e.message through).
 //
-// "The same name" = `exerciseNameKey` (trim + lower case), the identity `exlogKey` hashes, matched
-// against (a) every exercise-list row's `name`, (b) every row's retired `name_aliases` (the same
-// lookup the cues use), (c) every custom row, whatever id scheme it was stored with.
+// "The same name" = `exerciseDuplicateKey`: `exerciseNameKey` (trim + lower case) with runs of
+// spaces read as one and curly apostrophes read as straight ones. Matched against (a) every
+// exercise-list row's `name`, (b) every row's retired `name_aliases`, (c) every custom row,
+// whatever id scheme it was stored with. Plus one row per v5 id.
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 import 'package:icanbefitter/features/ai_coach/services/tool_dispatcher.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart'
     show CreateCustomExerciseException, WorkoutRepository;
+import 'package:uuid/uuid.dart';
 
 import '../helpers/hive_test_setup.dart';
 
@@ -48,6 +51,13 @@ void main() {
       'name_aliases': ['Pike Pushup', ' Elevated Pike '],
       'category': 'Push',
       'logging_type': 'bodyweight_reps',
+    });
+    // A real library name with a straight apostrophe.
+    await lib.put('E3', {
+      'id': 'E3',
+      'name': "Child's Pose",
+      'category': 'Core',
+      'logging_type': 'timed',
     });
     await HiveService.instance.customBox.clear();
   });
@@ -80,11 +90,33 @@ void main() {
     });
 
     test('case and spaces do not get around it', () async {
-      final e = await refused('  barbell BENCH   press'.replaceAll('   ', ' '));
-      expect(e.code, 'duplicate_name');
-      final e2 = await refused('  BARBELL BENCH PRESS  ');
-      expect(e2.code, 'duplicate_name');
+      expect((await refused('  BARBELL BENCH PRESS  ')).code, 'duplicate_name');
+      expect((await refused('barbell  bench   press')).code, 'duplicate_name',
+          reason: 'repeated spaces INSIDE the name');
+      final nbsp = String.fromCharCode(0xA0);
+      expect((await refused('Barbell${nbsp}Bench Press')).code, 'duplicate_name',
+          reason: 'a non-breaking space');
       expect(customNames(), isEmpty);
+    });
+
+    test('a curly apostrophe does not make a new name', () async {
+      expect((await refused('Child’s Pose')).code, 'duplicate_name');
+      expect(customNames(), isEmpty);
+    });
+
+    test('a custom row with the same id blocks the create, whatever its name',
+        () async {
+      // The v5 id a create of "ZZ Id Twin" would get (signed-out namespace).
+      final id = const Uuid().v5('5a1f0b0c-9dad-11d1-80b4-00c04fd430c8',
+          'anon|exercise|zz id twin');
+      await HiveService.instance.customBox.put('custom_exercise_2', {
+        'id': id,
+        'name': 'Renamed Elsewhere',
+        'type': 'exercise',
+        'category': 'Core',
+      });
+      expect((await refused('ZZ Id Twin')).code, 'duplicate_name');
+      expect(customNames(), ['Renamed Elsewhere']);
     });
 
     test('a retired name (alias) of an exercise-list row', () async {
@@ -147,12 +179,29 @@ void main() {
         category: 'Push',
         loggingType: 'weight_reps',
       );
+      // A made-up prefix: "Incline Pike Push Up" is a real list row.
       await WorkoutRepository.instance.createCustomExercise(
-        name: 'Incline $_pike',
+        name: 'Sideways $_pike',
         category: 'Push',
         loggingType: 'bodyweight_reps',
       );
-      expect(customNames(), ['$_bench Wide Grip', 'Incline $_pike']);
+      expect(customNames(), ['$_bench Wide Grip', 'Sideways $_pike']);
+    });
+
+    test('a TEMPLATE in the same box with that name does not block it', () async {
+      await HiveService.instance.customBox.put('tmpl_1', {
+        'id': 'tmpl_1',
+        'type': 'template',
+        'name': 'Zercher Template Day',
+        'exercises': <Map<String, dynamic>>[],
+      });
+      await WorkoutRepository.instance.createCustomExercise(
+        name: 'Zercher Template Day',
+        category: 'Push',
+        loggingType: 'weight_reps',
+      );
+      expect(customNames(), containsAll(['Zercher Template Day']));
+      expect(customNames().length, 2, reason: 'the template and the new exercise');
     });
 
     test('a name that is a PART of a list name creates', () async {
@@ -189,7 +238,11 @@ void main() {
       final result = await ToolDispatcher.instance
           .execute(container.read(refProvider), intent(_bench));
       expect(result.success, isFalse);
-      expect(result.errorMessage, contains(_bench));
+      expect(
+          result.errorMessage,
+          WardroomCopy.customExerciseNameTakenTemplate
+              .replaceAll('{exercise}', _bench),
+          reason: 'the coach says what is true: a list name, not "you already have"');
       expect(customNames(), isEmpty);
     });
   });

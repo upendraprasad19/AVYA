@@ -31,8 +31,35 @@ import 'package:icanbefitter/shared/widgets/empty_state.dart';
 import '../providers/profile_provider.dart';
 import '../services/weekly_report_refresh_policy.dart';
 
-/// The Weight Trend card's axis labels (extracted so a test can render them; the
-/// rules are unchanged by the extraction).
+/// Whether the Weight Trend card draws the date label at position [idx] (the last
+/// position is [last]; [interval] is the label step). The chart library adds a
+/// label at the LAST point on top of the every-step ones, so a step label closer
+/// than one full step to it is skipped: the newest date wins. A half-step rule
+/// still overlapped with 10, 12, 19 or 28 weigh-ins on a 360 dp phone.
+@visibleForTesting
+bool weightTrendKeepsDateLabel(int idx, int last, double interval) =>
+    idx == last || last - idx >= interval;
+
+/// Whether the Weight Trend card draws the weight label at [value]. Ticks
+/// (multiples of [step]) are always drawn. The chart library also labels the
+/// axis [min] and [max]: such an end label is skipped only when a drawn tick is
+/// within half a step of it, where the two crowd or print the same rounded text
+/// ("74" twice). Elsewhere it stays, or the axis can show a single number.
+@visibleForTesting
+bool weightTrendKeepsWeightLabel(
+    double value, double min, double max, double step) {
+  const eps = 1e-6;
+  final rem = value % step;
+  if (rem <= eps || step - rem <= eps) return true;
+  final below = (value / step).floorToDouble() * step;
+  for (final tick in [below, below + step]) {
+    final drawn = tick >= min - eps && tick <= max + eps;
+    if (drawn && (value - tick).abs() <= step / 2 + eps) return false;
+  }
+  return true;
+}
+
+/// The Weight Trend card's axis labels (extracted so a test can render them).
 @visibleForTesting
 FlTitlesData weightTrendTitlesData(List<Map<String, dynamic>> entries) {
   final dates = <int, String>{
@@ -46,12 +73,10 @@ FlTitlesData weightTrendTitlesData(List<Map<String, dynamic>> entries) {
         showTitles: true,
         reservedSize: 40,
         getTitlesWidget: (value, meta) {
-          // The chart library also labels the axis minimum and maximum, which are not whole
-          // numbers here (lowest weigh-in - 1): that label rounded to the same text as the tick
-          // beside it ("74" twice). Only the ticks are drawn.
           final step = meta.appliedInterval;
-          final rem = value % step;
-          if (rem > 1e-6 && step - rem > 1e-6) return const SizedBox();
+          if (!weightTrendKeepsWeightLabel(value, meta.min, meta.max, step)) {
+            return const SizedBox();
+          }
           return Text(
             // A step under 1 kg would print the same whole number on two ticks.
             value.toStringAsFixed(step >= 1 ? 0 : 1),
@@ -68,10 +93,9 @@ FlTitlesData weightTrendTitlesData(List<Map<String, dynamic>> entries) {
         getTitlesWidget: (value, meta) {
           final idx = value.toInt();
           if (idx < 0 || idx >= entries.length) return const SizedBox();
-          // The chart library adds a label at the LAST point on top of the every-step ones. When
-          // the last point is less than half a step after a step label, the two are drawn over
-          // each other (27 points: step 5, labels at 25 and 26). The newest date wins.
-          if (idx != last && (last - idx) * 2 < xInterval) return const SizedBox();
+          if (!weightTrendKeepsDateLabel(idx, last, xInterval)) {
+            return const SizedBox();
+          }
           final d = dates[idx] ?? '';
           // Show abbreviated date: "3/12" or "12 Mar"
           final parts = d.split('-');

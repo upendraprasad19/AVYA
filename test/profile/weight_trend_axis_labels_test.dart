@@ -9,6 +9,8 @@
 //
 // BEHAVIOURAL: the REAL titles function the screen uses is pumped into a real `LineChart` and the
 // rendered label rectangles are read back. No Hive, no provider scope.
+import 'dart:io';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -154,5 +156,79 @@ void main() {
         .toList();
     expect(labels, isNotEmpty);
     expect(labels.toSet().length, labels.length, reason: 'left labels were $labels');
+  });
+
+  testWidgets('every count from 2 to 27 weigh-ins: no two date labels overlap',
+      (tester) async {
+    // The half-step rule left 10, 12 and 19 overlapping.
+    for (var n = 2; n <= _upendra.length; n++) {
+      await _pump(tester, _entries(n));
+      final labels = _xLabels(tester);
+      expect(labels.last, '${int.parse((_upendra[n - 1][0] as String).substring(8))}/'
+          '${int.parse((_upendra[n - 1][0] as String).substring(5, 7))}',
+          reason: 'n=$n: the newest weigh-in is labelled');
+      final rects = [for (final l in labels) tester.getRect(find.text(l))];
+      for (var i = 1; i < rects.length; i++) {
+        expect(rects[i - 1].overlaps(rects[i]), isFalse,
+            reason: 'n=$n: ${labels[i - 1]} and ${labels[i]} overlap '
+                '(${rects[i - 1]} vs ${rects[i]})');
+      }
+    }
+  });
+
+  test('2 to 90 weigh-ins: drawn date labels are never closer than one full step', () {
+    for (var n = 2; n <= 90; n++) {
+      final last = n - 1;
+      final interval = (n / 5).clamp(1, 100).roundToDouble();
+      // The chart library offers every multiple of the step, plus the last point.
+      final offered = <int>{for (var i = 0; i <= last; i += interval.toInt()) i, last}
+          .toList()
+        ..sort();
+      final drawn = [
+        for (final i in offered)
+          if (weightTrendKeepsDateLabel(i, last, interval)) i
+      ];
+      expect(drawn.first, 0, reason: 'n=$n');
+      expect(drawn.last, last, reason: 'n=$n');
+      for (var i = 1; i < drawn.length; i++) {
+        expect(drawn[i] - drawn[i - 1], greaterThanOrEqualTo(interval.toInt()),
+            reason: 'n=$n: labels at ${drawn[i - 1]} and ${drawn[i]}, step $interval');
+      }
+    }
+  });
+
+  testWidgets('a 72 to 78 kg range keeps both ends: the axis is not one number',
+      (tester) async {
+    await _pump(tester, [
+      {'date': '2026-11-01', 'weight_kg': 72.0},
+      {'date': '2026-11-02', 'weight_kg': 75.0},
+      {'date': '2026-11-03', 'weight_kg': 78.0},
+    ]);
+    expect(_yLabels(tester), containsAll(['71', '75', '79']));
+  });
+
+  test('weight label rule: ends are dropped only beside a drawn tick', () {
+    // A tick is always drawn.
+    expect(weightTrendKeepsWeightLabel(74, 74, 76.2, 0.5), isTrue);
+    // The founder's chart: forced minimum 73.5 beside tick 74 ("74" twice).
+    expect(weightTrendKeepsWeightLabel(73.5, 73.5, 80, 2), isFalse);
+    // Exactly half a step away still prints the same rounded text.
+    expect(weightTrendKeepsWeightLabel(73.5, 73.5, 80, 1), isFalse);
+    // Forced ends far from every drawn tick stay.
+    expect(weightTrendKeepsWeightLabel(71, 71, 79, 5), isTrue);
+    expect(weightTrendKeepsWeightLabel(79, 71, 79, 5), isTrue);
+    // A neighbour tick OUTSIDE the axis is not drawn, so it cannot crowd the end:
+    // 70 is 0.9 away from 70.9 but is below the minimum; 72 is 1.1 away.
+    expect(weightTrendKeepsWeightLabel(70.9, 70.9, 79, 2), isTrue);
+    // The forced maximum beside the tick below it.
+    expect(weightTrendKeepsWeightLabel(76.2, 74, 76.2, 0.5), isFalse);
+  });
+
+  test('wiring (source pin): the Weight Trend chart uses these titles', () {
+    final src = File('lib/features/profile/screens/reports_screen.dart')
+        .readAsLinesSync()
+        .where((l) => !l.trimLeft().startsWith('//'))
+        .join('\n');
+    expect(src.contains('titlesData: weightTrendTitlesData(entries),'), isTrue);
   });
 }
