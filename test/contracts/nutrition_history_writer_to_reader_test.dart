@@ -230,11 +230,13 @@ void main() {
       expect(mixed.fatShare, closeTo(450 / 1650, 1e-9));
     });
 
-    test('hit-rate and runs: today never breaks a run, a gap does', () {
+    test('hit-rate and runs: today never breaks a run; for calories and '
+        'protein a day that is not a full day is skipped (60dc46)', () {
       final cal = hitStats(days, HitKind.calories, today);
       expect((cal.counted, cal.hits, cal.bestRun, cal.currentRun), (4, 2, 1, 1));
       final pro = hitStats(days, HitKind.protein, today);
-      expect((pro.counted, pro.hits, pro.bestRun, pro.currentRun), (4, 3, 1, 1));
+      // Nov 2 and Nov 5 hit with the unlogged days between them skipped.
+      expect((pro.counted, pro.hits, pro.bestRun, pro.currentRun), (4, 3, 2, 1));
 
       final streak = _judged('2026-11-02', 6, (i, _) => 2000, today: '2026-11-07');
       final s = hitStats(streak, HitKind.calories, '2026-11-07');
@@ -364,7 +366,7 @@ void main() {
     test('best protein run: 5 days', () {
       List<String> run(int n) => nutritionInsights(
           _judged('2026-11-02', n, (i, _) => 2000), const {}, '2099-01-01');
-      expect(run(5), contains('Your best protein run is 5 days in a row.'));
+      expect(run(5), contains('Your best protein run is 5 full days in a row.'));
       expect(run(4), isNot(contains(startsWith('Your best protein run'))));
     });
 
@@ -462,6 +464,34 @@ void main() {
       expect(data.hasTargets, isFalse);
       expect(data.foods.mostLogged.map((f) => (f.name, f.count)),
           [('Dal', 3), ('Rice', 3)]);
+    });
+
+    test('v2: logged meals reach protein by meal and the whey family '
+        'through the real write service (3cfcc6)', () async {
+      const w1 = FoodItem(name: 'Whey protein powder', quantityG: 30,
+          calories: 120, protein: 24, carbs: 2, fat: 1, fiber: 0);
+      const w2 = FoodItem(name: 'Whey Protein Isolate', quantityG: 30,
+          calories: 110, protein: 27, carbs: 1, fat: 0, fiber: 0);
+      const w3 = FoodItem(name: 'Whey protein (1 scoop)', quantityG: 30,
+          calories: 120, protein: 25, carbs: 2, fat: 1, fiber: 0);
+      final now = DateTime.now();
+      final d1 = now.subtract(const Duration(days: 1));
+      await log(d1, 'breakfast', [w1]);
+      await log(d1, 'lunch', [rice, dal, w2]);
+      await log(d1, 'dinner', [w3]);
+
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final data = c.read(nutritionHistoryProvider);
+      final day = data.days.firstWhere((j) => j.date == istDateStr(d1)).day;
+      expect(day.proteinBySlot['breakfast'], 24);
+      expect(day.proteinBySlot['lunch'], 4 + 14 + 27);
+      expect(day.proteinBySlot['dinner'], 25);
+      expect(day.proteinBySlot.values.fold<double>(0, (a, b) => a + b),
+          day.protein, reason: 'slots sum to the day');
+      final whey = data.foods.topProtein.first;
+      expect((whey.name, whey.count, whey.kinds, whey.protein),
+          ('Whey', 3, 3, 76.0));
     });
 
     test('targets: days before the first entry are assumed; a meal log, a '
