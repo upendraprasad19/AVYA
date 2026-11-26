@@ -274,7 +274,6 @@ class DayRolloverObserver with WidgetsBindingObserver {
     ref.invalidate(currentPlanProvider);
     ref.invalidate(todayWorkoutProvider);
     ref.invalidate(calendarWeekProvider);
-    ref.invalidate(workoutStatsProvider);
     ref.invalidate(streakProvider);
     ref.invalidate(allExercisePRsProvider);
     // Bug 9c8958 — streakFreezeProvider was absent from this list. The

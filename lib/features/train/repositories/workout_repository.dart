@@ -33,7 +33,7 @@ class ExercisePR {
 
   /// OI-389: the unit [bestValue] is in. Stated, never guessed from the
   /// magnitude (the old guess printed an 1800 s cardio PR as "1800 km" on
-  /// StatsGrid). `kg` / `reps` / `sec` / `km`.
+  /// the PR card). `kg` / `reps` / `sec` / `km`.
   final String? _unit;
 
   const ExercisePR({
@@ -1028,51 +1028,6 @@ class WorkoutRepository {
     );
   }
 
-  /// Loads personal records for the key compound lifts from workout logs.
-  ///
-  /// Returns a map with keys: bench, squat, deadlift, ohp.
-  /// Each value is a map with 'current' and 'previous' doubles.
-  Map<String, Map<String, double>> loadKeyLiftPRs() {
-    final prMap = <String, Map<String, double>>{
-      'bench': {'current': 0, 'previous': 0},
-      'squat': {'current': 0, 'previous': 0},
-      'deadlift': {'current': 0, 'previous': 0},
-      'ohp': {'current': 0, 'previous': 0},
-    };
-
-    for (final raw in _hive.workoutBox.values) {
-      if (raw is! Map) continue;
-      final log = Map<String, dynamic>.from(raw);
-      final exerciseName =
-          (log['exercise_name'] as String? ?? '').toLowerCase();
-      final weight = (log['weight_kg'] as num?)?.toDouble() ?? 0;
-      if (weight <= 0) continue;
-
-      String? prKey;
-      if (exerciseName.contains('bench press')) {
-        prKey = 'bench';
-      } else if (exerciseName.contains('squat') &&
-          !exerciseName.contains('split')) {
-        prKey = 'squat';
-      } else if (exerciseName.contains('deadlift') &&
-          !exerciseName.contains('romanian')) {
-        prKey = 'deadlift';
-      } else if (exerciseName.contains('overhead press') ||
-          exerciseName.contains('ohp')) {
-        prKey = 'ohp';
-      }
-
-      if (prKey != null && weight > prMap[prKey]!['current']!) {
-        prMap[prKey] = {
-          'current': weight,
-          'previous': prMap[prKey]!['current']!,
-        };
-      }
-    }
-
-    return prMap;
-  }
-
   /// Returns the number of workouts logged per week for the last 4 weeks.
   ///
   /// Index 0 = this week, 1 = last week, 2 = 2 weeks ago, 3 = 3 weeks ago.
@@ -1305,35 +1260,6 @@ class WorkoutRepository {
       'missed': planned - completed,
       if (planned > 0) 'rate_percent': completed * 100 ~/ planned,
     };
-  }
-
-  // ── Extended Weekly Workout Counts ───────────────────────────────
-
-  /// Returns the number of workouts logged per week for the last [weeks] weeks.
-  ///
-  /// Index 0 = this week, 1 = last week, etc.
-  /// Supports configurable range (default 12, overriding the original 4).
-  List<int> getExtendedWeeklyWorkoutCounts({int weeks = 12}) {
-    final now = DateTime.now();
-    final weekCounts = List<int>.filled(weeks, 0);
-
-    for (final raw in _hive.workoutBox.values) {
-      if (raw is! Map) continue;
-      final log = Map<String, dynamic>.from(raw);
-      if (log['type'] != 'workout_log') continue;
-      final dateStr = log['date'] as String?;
-      if (dateStr == null) continue;
-      final date = DateTime.tryParse(dateStr);
-      if (date == null) continue;
-
-      final daysAgo = now.difference(date).inDays;
-      final weekIndex = daysAgo ~/ 7;
-      if (weekIndex >= 0 && weekIndex < weeks) {
-        weekCounts[weekIndex]++;
-      }
-    }
-
-    return weekCounts;
   }
 
   // ── Day-of-Week Completion Stats ─────────────────────────────────

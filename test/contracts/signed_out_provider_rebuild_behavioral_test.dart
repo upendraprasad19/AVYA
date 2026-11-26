@@ -158,7 +158,7 @@ const _kTokenWatchSites = <String, int>{
   'lib/features/profile/widgets/measurements_card_frame.dart': 1,
   'lib/features/train/providers/day_swap_provider.dart': 2,
   'lib/features/train/providers/preview_plan_provider.dart': 1,
-  'lib/features/train/providers/train_provider.dart': 6,
+  'lib/features/train/providers/train_provider.dart': 5,
   'lib/features/train/providers/video_render_provider.dart': 1,
   'lib/features/train/widgets/swap_confirm_sheet.dart': 1,
   'lib/shared/mixins/hive_tab_scaffold.dart': 1,
@@ -479,16 +479,6 @@ List<_Case> _cases() => <_Case>[
     seed: () => HiveService.instance.userBox
         .put('progress', {'current_phase': 2, 'current_week': 1}),
     isSeeded: (v) => v is CurrentPlanData && v.phase == 2,
-  ),
-  _Case(
-    'workoutStatsProvider',
-    workoutStatsProvider,
-    isEmpty: (v) => v is Map && v.isEmpty,
-    seed: () => HiveService.instance.workoutBox.put('exlog_${_today}_aaaa0002', {
-      'exercise_name': 'Bench Press',
-      'weight_kg': 80.0,
-    }),
-    isSeeded: (v) => v is Map && (v['bench'] as Map?)?['current'] == 80.0,
   ),
   _Case(
     'graduationStatsProvider',

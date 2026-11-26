@@ -3,6 +3,8 @@ import 'package:icanbefitter/features/train/repositories/workout_repository.dart
 import 'package:icanbefitter/features/nutrition/repositories/nutrition_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plan_engine_flags.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/plateau_scan.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
@@ -140,77 +142,52 @@ class PatternDetector {
 
   // ── 2. Plateau Detector ──────────────────────────────────── HIGH
 
-  /// FOR each of top exercises: IF max weight unchanged 6+ weeks.
+  /// How recent a flat lift's last session must be for the insight (D7): a
+  /// lifter who stopped training it is not told to "adjust".
+  static const int plateauRecentDays = 14;
+
+  /// A compound lift whose estimated 1RM has stayed flat (8300e1): the plan
+  /// engine's ONE scan, `PlateauScan.flatCompoundLifts` (best-set Epley e1RM per
+  /// session, >= 3 sessions over >= 28 days in 63, within 5 %, exact library
+  /// names), so reps count and a lift is judged on its own. Readiness fatigue
+  /// means recover, not plateau. The longest flat span wins, ties by name.
   CoachingInsight? _plateauDetector() {
-    final prMap = _workouts.loadKeyLiftPRs();
-    // Check each lift for plateau.
-    final liftNames = {
-      'bench': 'Bench Press',
-      'squat': 'Squat',
-      'deadlift': 'Deadlift',
-      'ohp': 'Overhead Press',
-    };
-
-    for (final entry in liftNames.entries) {
-      final prKey = entry.key;
-      final displayName = entry.value;
-      final current = prMap[prKey]?['current'] ?? 0.0;
-      if (current <= 0) continue;
-
-      // Get PR history over last 90 days for this exercise.
-      final history = _workouts.getExercisePRHistory(
-        displayName,
-        days: 90,
-      );
-      if (history.length < 3) continue;
-
-      // Check if max weight has been the same for 6+ weeks.
-      final sixWeeksAgo =
-          DateTime.now().subtract(const Duration(days: 42));
-      final recentEntries = history.where((h) {
-        final d = DateTime.tryParse(h['date'] as String? ?? '');
-        return d != null && d.isAfter(sixWeeksAgo);
-      }).toList();
-
-      if (recentEntries.isEmpty) continue;
-
-      final maxRecent = recentEntries
-          .map((h) => (h['weight_kg'] as num?)?.toDouble() ?? 0)
-          .reduce((a, b) => a > b ? a : b);
-
-      // Check older entries too.
-      final olderEntries = history.where((h) {
-        final d = DateTime.tryParse(h['date'] as String? ?? '');
-        return d != null && d.isBefore(sixWeeksAgo);
-      }).toList();
-
-      if (olderEntries.isEmpty) continue;
-
-      final maxOlder = olderEntries
-          .map((h) => (h['weight_kg'] as num?)?.toDouble() ?? 0)
-          .reduce((a, b) => a > b ? a : b);
-
-      // Plateau: max hasn't increased in 6+ weeks.
-      if (maxRecent <= maxOlder) {
-        // Estimate weeks stuck.
-        final weeksCounts = _workouts.getExtendedWeeklyWorkoutCounts(
-          weeks: 12,
-        );
-        final weeksStuck = weeksCounts.length.clamp(6, 12);
-
-        return CoachingInsight(
-          patternId: 'plateau_$prKey',
-          severity: InsightSeverity.high,
-          coachNotice: "$displayName PR stuck at ${current}kg "
-              "for $weeksStuck+ weeks.",
-          userMessage: '$displayName plateau detected: ${current}kg '
-              'for $weeksStuck+ weeks. Time to adjust!',
-          pushWorthy: true,
-        );
-      }
+    if (PlanEngineFlags.readinessEnabled && PlateauScan.fatiguePresent()) {
+      return null;
     }
+    final lifts =
+        PlateauScan.flatCompoundLifts(recentWithinDays: plateauRecentDays);
+    if (lifts.isEmpty) return null;
+    final lift = pickPlateauLift(lifts);
+    return plateauInsightFor(lift);
+  }
 
-    return null;
+  /// The lift the insight names: the longest flat span, ties by name.
+  @visibleForTesting
+  static FlatLift pickPlateauLift(List<FlatLift> lifts) {
+    final sorted = [...lifts]..sort((a, b) {
+        final c = b.spanDays.compareTo(a.spanDays);
+        return c != 0 ? c : a.name.compareTo(b.name);
+      });
+    return sorted.first;
+  }
+
+  /// The insight text for [lift] (D7: "over your last N weeks").
+  @visibleForTesting
+  static CoachingInsight plateauInsightFor(FlatLift lift) {
+    final weeks = lift.spanDays ~/ 7;
+    final best = (lift.bestE1rm * 2).round() / 2;
+    final bestText =
+        best == best.roundToDouble() ? best.toStringAsFixed(0) : '$best';
+    return CoachingInsight(
+      patternId: 'plateau_${lift.name.toLowerCase()}',
+      severity: InsightSeverity.high,
+      coachNotice: '${lift.name} est. 1RM flat at ~${bestText}kg across '
+          '${lift.sessions} sessions over the last $weeks weeks.',
+      userMessage: '${lift.name}: no real progress over your last $weeks '
+          'weeks (est. 1RM ~$bestText kg). Time to adjust!',
+      pushWorthy: true,
+    );
   }
 
   // ── 3. Protein Deficit ───────────────────────────────────── HIGH

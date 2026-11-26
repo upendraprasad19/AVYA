@@ -141,7 +141,6 @@ class _EditWorkoutLogSheetState extends ConsumerState<EditWorkoutLogSheet> {
     // syncWorkoutData + pushSnapshot fire-and-forget per row. Runs on a
     // partial failure too, so the rows that did save show at once.
     ref.invalidate(currentPlanProvider);
-    ref.invalidate(workoutStatsProvider);
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(streakProvider);
     ref.invalidate(todayWorkoutProvider);
