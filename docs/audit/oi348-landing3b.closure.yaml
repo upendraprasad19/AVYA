@@ -6,8 +6,8 @@ batch: oi348-landing3b
 plan_review_record: docs/plan-reviews/oi348-landing3b.md
 diagnose_docs:
   - docs/diagnoses/2026-11-26-coach-meal-tag-example-copied-b3f7a1.md
-total_findings: 7
-closed_count: 7
+total_findings: 11
+closed_count: 11
 
 findings:
   - id: B4-PROMPT
@@ -39,6 +39,30 @@ findings:
     terminal_state: closed_in_commit
     commit: "oi348-landing3b@branch"
     verification: "write_claim_prompt_test.ts suffix test, write_claim_detector_test.ts legacy_food test; mutant M8 red"
+
+  - id: BPASS-F1
+    title: "An expired food card keeps SKIP; every reply path sweeps expired food cards, not only a reply with tags"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3b@branch"
+    verification: "coach_meal_items_card_behavioral_test B-pass F1 (SKIP clears an expired card, dropStaleFood with no tags, all three reply sites sweep before their guard); mutants M16, M17 red"
+
+  - id: BPASS-F2
+    title: "meal_type read through coachMealTypeOf (String or null) at every coach site, never cast"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3b@branch"
+    verification: "B-pass F2 pure test (number, list, map, bool, null) and the F2/F3 widget test (meal_type 3: card on the clock slot, no exception); mutant M18 red"
+
+  - id: BPASS-F3
+    title: "A tag's skipped items[] entries are reported (coach_food_tag_items_partial)"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3b@branch"
+    verification: "B-pass F3 pure test and the F2/F3 widget test (event fires); mutant M19 red"
+
+  - id: BPASS-F4
+    title: "With the write-claim rule off and the meal rule on, logMealByText no longer promises a 5-second auto-confirm"
+    terminal_state: closed_in_commit
+    commit: "oi348-landing3b@branch"
+    verification: "write_claim_prompt_test.ts and tool-loop_write_claim_note_test.ts F4 tests (meal rule off = the input array itself), wiring pins mealItemsRule: mealOn; mutants M20, M21 red"
 
   - id: SWITCH-REMOVAL
     title: "Remove DISABLE_COACH_MEAL_ITEMS_RULE and disable_coach_meal_items_card with their OFF paths (CLAUDE.md 4.6 step 4)"

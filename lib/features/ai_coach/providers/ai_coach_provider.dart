@@ -789,6 +789,7 @@ class SendMessageNotifier extends Notifier<bool> {
       // unit (free: the 5-lifetime image meter; PRO: the media caps), so it must
       // not tick the local chat tally either (no message-limit notifier here).
 
+      ref.read(pendingLogActionsProvider.notifier).dropStaleFood();
       if (aiResponse.actions.isNotEmpty) {
         ref.read(pendingLogActionsProvider.notifier).addActions(
               aiResponse.actions,
@@ -1120,6 +1121,8 @@ class SendMessageNotifier extends Notifier<bool> {
       if (!aiResponse.refunded) limitNotifier.increment();
 
       // Dispatch any structured log actions from AI response
+      // OI-348 Landing 3b (B-pass F1): every reply clears expired food cards.
+      ref.read(pendingLogActionsProvider.notifier).dropStaleFood();
       if (aiResponse.actions.isNotEmpty) {
         ref.read(pendingLogActionsProvider.notifier).addActions(
               aiResponse.actions,
@@ -1205,6 +1208,7 @@ class SendMessageNotifier extends Notifier<bool> {
           await repo.extractCoachingNotes();
           ref.invalidate(coachInsightProvider);
           if (!retryResponse.refunded) limitNotifier.increment();
+          ref.read(pendingLogActionsProvider.notifier).dropStaleFood();
           if (retryResponse.actions.isNotEmpty) {
             ref.read(pendingLogActionsProvider.notifier).addActions(
                   retryResponse.actions,
@@ -1690,7 +1694,7 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
       // configBox unavailable (e.g. unit tests) — dedup stays ON (fix-active).
     }
     final cov = dedupOff ? TypedLogCoverage.empty : coverage;
-    _dropStaleFood();
+    dropStaleFood();
     for (final raw in rawActions) {
       if (raw['action'] == 'confirm_workout_log') {
         final data = raw['data'];
@@ -1723,11 +1727,12 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
 
   /// OI-348 Landing 3b: a food card waits for CONFIRM with no timer, so one
   /// left untapped would sit in the chat for the whole session. Each new
-  /// reply removes the food cards past their hour, never one already logged
-  /// or whose save is still running (`markLogged` must still find it).
-  /// Removed, not dismissed: dismissed fades a mounted card to nothing and
-  /// feeds [removeSettled].
-  void _dropStaleFood() {
+  /// reply removes the food cards past their hour (B-pass F1: called on
+  /// EVERY reply by the three reply paths, with or without tags, and again
+  /// by [addActions]), never one already logged or whose save is still
+  /// running (`markLogged` must still find it). Removed, not dismissed:
+  /// dismissed fades a mounted card to nothing and feeds [removeSettled].
+  void dropStaleFood() {
     final now = nowWall();
     final kept = state
         .where((a) =>
@@ -1790,8 +1795,14 @@ class PendingLogActionsNotifier extends Notifier<List<PendingLogAction>> {
               'coach_food_tag_dropped_no_calories'));
           return null;
         }
+        // B-pass F3: a listed food the parse skipped is counted, never silent.
+        final unusable = coachTagUnusableItemCount(data);
+        if (unusable > 0) {
+          unawaited(ErrorTelemetry.logEvent('coach_food_tag_items_partial',
+              message: 'skipped=$unusable'));
+        }
         final createdAt = nowWall();
-        final meal = resolveCoachMealSlot(data['meal_type'] as String?, createdAt);
+        final meal = resolveCoachMealSlot(coachMealTypeOf(data), createdAt);
         final cap = meal[0].toUpperCase() + meal.substring(1);
         final flat = coachItemFromTag(data);
         final name = flat?.name ??

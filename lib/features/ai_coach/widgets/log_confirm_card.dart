@@ -270,8 +270,8 @@ class LogConfirmCardState extends ConsumerState<LogConfirmCard>
     final data = widget.action.data;
     final items = coachItemsFromTag(data) ?? const [];
     final totals = NutritionWriteService.mealTotals(items);
-    final slot = resolveCoachMealSlot(
-        data['meal_type'] as String?, widget.action.createdAt);
+    final slot =
+        resolveCoachMealSlot(coachMealTypeOf(data), widget.action.createdAt);
     final stale = widget.action.isStaleFood(nowWall());
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 300),
@@ -320,10 +320,14 @@ class LogConfirmCardState extends ConsumerState<LogConfirmCard>
                 totalProtein: totals.protein,
                 slot: slot[0].toUpperCase() + slot.substring(1),
               ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
+            ],
+            const SizedBox(height: 10),
+            // B-pass F1: an expired card keeps SKIP, so it can always be
+            // cleared from the chat; only CONFIRM goes.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (!stale) ...[
                   GestureDetector(
                     key: const Key('coach_food_card_confirm'),
                     onTap: _isExecuting ? null : _execute,
@@ -344,19 +348,20 @@ class LogConfirmCardState extends ConsumerState<LogConfirmCard>
                     ),
                   ),
                   const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: _dismiss,
-                    child: Text(
-                      'SKIP',
-                      style: AppTypography.monoXs.copyWith(
-                        color: AppColors.textDim,
-                        letterSpacing: 1.6,
-                      ),
+                ],
+                GestureDetector(
+                  key: const Key('coach_food_card_skip'),
+                  onTap: _dismiss,
+                  child: Text(
+                    'SKIP',
+                    style: AppTypography.monoXs.copyWith(
+                      color: AppColors.textDim,
+                      letterSpacing: 1.6,
                     ),
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ],
         ),
       ),

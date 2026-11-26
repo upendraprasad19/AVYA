@@ -38,7 +38,11 @@ function declaration(body: any, name: string): { description: string } {
   );
 }
 
-async function runLogSet(writeClaimRule: boolean | undefined, isPro = false) {
+async function runLogSet(
+  writeClaimRule: boolean | undefined,
+  isPro = false,
+  mealItemsRule?: boolean,
+) {
   const { calls, restore } = installFakeFetch([
     okToolCall("logSet", { exerciseId: "bench_press", weightKg: 60, reps: 8, sets: 3 }),
     okText("Queued. Tap APPLY to log it."),
@@ -50,6 +54,7 @@ async function runLogSet(writeClaimRule: boolean | undefined, isPro = false) {
       ctx: ctx(isPro),
       model: "gemini-3.1-flash-lite",
       ...(writeClaimRule === undefined ? {} : { writeClaimRule }),
+      ...(mealItemsRule === undefined ? {} : { mealItemsRule }),
     });
     assertEquals(result.intents.length, 1);
     return calls;
@@ -102,4 +107,14 @@ Deno.test("template declaration (PRO): Queued line when on, Saved! when off", as
     declaration(off[0].body, "scheduleTemplate").description,
     "'Saved! Want me to schedule",
   );
+});
+
+Deno.test("OI-348 3b B-pass F4: meal rule reaches the declaration with write-claim off", async () => {
+  const both = await runLogSet(false, false, true);
+  const meal = declaration(both[0].body, "logMealByText");
+  assert(!meal.description.includes("5-second"));
+  assertStringIncludes(meal.description, "must tap APPLY to log it");
+  // Meal rule off: the original bytes.
+  const off = await runLogSet(false, false, false);
+  assertStringIncludes(declaration(off[0].body, "logMealByText").description, "5-second auto-confirm");
 });

@@ -223,8 +223,21 @@ export const TEMPLATE_NEW_EXAMPLE =
 export function applyWriteClaimDescriptions<T extends ToolDefinition<any>>(
   tools: T[],
   enabled: boolean,
+  opts: { mealItems?: boolean } = {},
 ): T[] {
-  if (!enabled) return tools;
+  if (!enabled) {
+    // OI-348 Landing 3b (B-pass F4): with the meal-items rule ON, food goes
+    // only through logMealByText and its card waits for APPLY, so its
+    // "5-second auto-confirm" line is false even with the write-claim rule
+    // off. Only that sentence changes; the meal rule OFF keeps the input
+    // array itself.
+    if (opts.mealItems !== true) return tools;
+    return tools.map((t) =>
+      t.name === "logMealByText"
+        ? { ...t, description: swap(t.description, MEAL_OLD_CARD, MEAL_NEW_CARD) }
+        : t
+    );
+  }
   return tools.map((t) => {
     if (t.name === "logMealByText") {
       return {

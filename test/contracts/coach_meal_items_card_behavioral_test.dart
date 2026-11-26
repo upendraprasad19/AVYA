@@ -17,6 +17,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -218,6 +219,35 @@ void main() {
       expect(water.isStaleFood(_t0.add(const Duration(days: 2))), isFalse);
       debugCoachMealItemsCardDisabled = true;
       expect(f.isStaleFood(_t0.add(const Duration(days: 2))), isFalse);
+    });
+
+    test('B-pass F3 coachTagUnusableItemCount: every skipped entry counts; '
+        '0 with the card off or no list', () {
+      final data = {
+        'food_name': 'x',
+        'calories_estimate': 99,
+        'items': [
+          {'name': 'Good', 'calories': 50},
+          {'name': '  ', 'calories': 50},
+          {'name': 'NoCal'},
+          {'name': 'Str', 'calories': '160'},
+          {'name': 'Neg', 'calories': -5},
+          'junk',
+        ],
+      };
+      expect(coachTagUnusableItemCount(data), 5);
+      expect(coachTagUnusableItemCount(_mediaExample), 0);
+      expect(coachTagUnusableItemCount({'food_name': 'x'}), 0);
+      debugCoachMealItemsCardDisabled = true;
+      expect(coachTagUnusableItemCount(data), 0);
+    });
+
+    test('B-pass F2 coachMealTypeOf: a String or null, never a throw', () {
+      expect(coachMealTypeOf({'meal_type': 'lunch'}), 'lunch');
+      for (final bad in [3, 2.5, <String>['lunch'], {'a': 1}, null, true]) {
+        expect(coachMealTypeOf({'meal_type': bad}), isNull, reason: '$bad');
+      }
+      expect(coachMealTypeOf({}), isNull);
     });
   });
 
@@ -492,6 +522,73 @@ void main() {
         expect(tester.takeException(), isNull, reason: 'overflow at $w dp');
         expect(find.byKey(const Key('coach_meal_item_3')), findsOneWidget);
       }
+    });
+
+    testWidgets('B-pass F1 an expired food card keeps SKIP, and SKIP clears it',
+        (tester) async {
+      final action = _food('f1', _mediaExample);
+      final c = container([action]);
+      setTestClockTo(_t0.add(const Duration(minutes: 61)));
+      await pumpCard(tester, c, action);
+      expect(find.text('EXPIRED: MEAL'), findsOneWidget);
+      expect(find.byKey(const Key('coach_food_card_confirm')), findsNothing);
+      expect(find.byKey(const Key('coach_food_card_skip')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('coach_food_card_skip')));
+      await tester.pump();
+      expect(c.read(pendingLogActionsProvider), isEmpty);
+      expect(_nlogRows(), isEmpty);
+    });
+
+    testWidgets('B-pass F1 a reply with NO tags still clears an expired card '
+        '(dropStaleFood, public)', (tester) async {
+      final stale = _food('s', _mediaExample);
+      final c = container([stale]);
+      setTestClockTo(_t0.add(const Duration(minutes: 61)));
+      c.read(pendingLogActionsProvider.notifier).dropStaleFood();
+      expect(c.read(pendingLogActionsProvider), isEmpty);
+    });
+
+    test('B-pass F1 every reply path sweeps before its tag guard', () {
+      final src = File('lib/features/ai_coach/providers/ai_coach_provider.dart')
+          .readAsStringSync();
+      const sweep = 'ref.read(pendingLogActionsProvider.notifier).dropStaleFood();';
+      expect(sweep.allMatches(src).length, 3,
+          reason: 'media, send and the auth retry');
+      for (final guard in [
+        'if (aiResponse.actions.isNotEmpty) {',
+        'if (retryResponse.actions.isNotEmpty) {',
+      ]) {
+        var at = src.indexOf(guard);
+        expect(at, isNot(-1), reason: guard);
+        while (at != -1) {
+          final before = src.substring(0, at).trimRight();
+          expect(before.endsWith(sweep), isTrue,
+              reason: 'the line before $guard at offset $at sweeps');
+          at = src.indexOf(guard, at + 1);
+        }
+      }
+    });
+
+    testWidgets('B-pass F2/F3 a tag with a non-String meal_type and a partial '
+        'items list: one card on the clock slot, the skip reported',
+        (tester) async {
+      final c = container(const []);
+      final data = <String, dynamic>{
+        'meal_type': 3,
+        'items': [
+          {'name': 'Roti', 'calories': 210},
+          {'name': 'Dal', 'calories': '150'},
+        ],
+      };
+      c.read(pendingLogActionsProvider.notifier).addActions([
+        {'action': 'log_food', 'data': data},
+      ], c.read(_refProvider));
+      final a = c.read(pendingLogActionsProvider).single;
+      expect(a.displayText, 'Roti — Breakfast');
+      expect(events, contains('coach_food_tag_items_partial'));
+      await pumpCard(tester, c, a);
+      expect(find.text('BREAKFAST'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('T12 the media example through addActions: one food card, '

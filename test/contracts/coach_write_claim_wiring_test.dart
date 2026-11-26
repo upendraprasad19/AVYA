@@ -71,6 +71,8 @@ void main() {
       expect(call, isNot(-1));
       final close = proxy.indexOf('});', call);
       expect(proxy.substring(call, close), contains('writeClaimRule: ruleOn'));
+      // OI-348 Landing 3b, B-pass F4: the meal rule reaches the tool list.
+      expect(proxy.substring(call, close), contains('mealItemsRule: mealOn'));
     });
 
     test('two detector calls: after extractLogActions and in the replay branch',
@@ -144,6 +146,7 @@ void main() {
     expect(
         loop,
         matches(RegExp(
-            r'applyWriteClaimDescriptions\(\s*allTools\(opts\.ctx\.isPro, opts\.capabilities\),\s*writeClaimRule,\s*\)\.map\(toolToFunctionDeclaration\)')));
+            // OI-348 Landing 3b, B-pass F4: the meal rule is the third argument.
+            r'applyWriteClaimDescriptions\(\s*allTools\(opts\.ctx\.isPro, opts\.capabilities\),\s*writeClaimRule,\s*\{ mealItems: opts\.mealItemsRule === true \},\s*\)\.map\(toolToFunctionDeclaration\)')));
   });
 }

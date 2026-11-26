@@ -19,6 +19,7 @@ import {
   icbfLogInstructions,
   isCoachMealItemsRuleDisabled,
   isWriteClaimRuleDisabled,
+  MEAL_NEW_CARD,
   MEAL_OLD_CARD,
   MEAL_OLD_LOG,
   MEDIA_FOOD_ITEMS_RULES,
@@ -312,4 +313,29 @@ Deno.test("3b kill-switch reader: only exactly \"true\" disables", () => {
   for (const v of [undefined, "TRUE", "1", "false", " true", "yes"]) {
     assertEquals(isCoachMealItemsRuleDisabled(env(v)), false, `value ${v}`);
   }
+});
+
+Deno.test("3b B-pass F4: write-claim OFF + meal rule ON drops only the 5-second card line", () => {
+  // deno-lint-ignore no-explicit-any
+  const tools: any[] = [logMealByTextTool, scheduleTemplateTool];
+  // Meal rule absent or false: the input array itself (byte-identical).
+  assertStrictEquals(applyWriteClaimDescriptions(tools, false, {}), tools);
+  assertStrictEquals(applyWriteClaimDescriptions(tools, false, { mealItems: false }), tools);
+  const out = applyWriteClaimDescriptions(tools, false, { mealItems: true });
+  const meal = out.find((t) => t.name === "logMealByText");
+  const tmpl = out.find((t) => t.name === "scheduleTemplate");
+  assert(meal !== logMealByTextTool, "a copy, not the registry object");
+  assert(!meal.description.includes("5-second"));
+  assertStringIncludes(meal.description, "must tap APPLY to log it");
+  // Only the card sentence: the write-claim OFF wording stays otherwise.
+  assertStrictEquals(
+    meal.description,
+    logMealByTextTool.description.replace(MEAL_OLD_CARD, () => MEAL_NEW_CARD),
+  );
+  assertStrictEquals(tmpl, scheduleTemplateTool);
+  // Write-claim ON is unchanged by the meal flag.
+  assertEquals(
+    applyWriteClaimDescriptions(tools, true, { mealItems: true }).map((t) => t.description),
+    applyWriteClaimDescriptions(tools, true).map((t) => t.description),
+  );
 });

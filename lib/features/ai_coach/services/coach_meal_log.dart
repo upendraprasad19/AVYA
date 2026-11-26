@@ -170,25 +170,51 @@ List<FoodItem>? coachItemsFromTag(Map<String, dynamic> data) {
   final raw = data['items'];
   if (raw is List) {
     for (final e in raw) {
-      if (e is! Map) continue;
-      final name = e['name'];
-      if (name is! String || name.trim().isEmpty) continue;
-      final cal = e['calories'];
-      if (cal is! num || !cal.isFinite || cal < 0) continue;
-      final q = e['quantity_g'];
-      out.add(FoodItem(
-        name: name.trim(),
-        quantityG: (q is num && q.isFinite && q > 0) ? q.toDouble() : 100.0,
-        calories: cal.toDouble(),
-        protein: _num(e['protein_g']),
-        carbs: _num(e['carbs_g']),
-        fat: _num(e['fat_g']),
-        fiber: 0,
-      ));
+      final item = _tagListItem(e);
+      if (item != null) out.add(item);
     }
   }
   if (out.isNotEmpty) return out;
   return single == null ? null : [single];
+}
+
+/// How many `items[]` entries of a `log_food` tag [coachItemsFromTag] skips
+/// (B-pass F3): 0 with the card off or no list. The caller reports a partial
+/// parse (`coach_food_tag_items_partial`) so a dropped food is never silent.
+int coachTagUnusableItemCount(Map<String, dynamic> data) {
+  if (!coachMealItemsCardEnabled()) return 0;
+  final raw = data['items'];
+  if (raw is! List) return 0;
+  return raw.where((e) => _tagListItem(e) == null).length;
+}
+
+/// One `items[]` entry of a tag: a non-blank `name` and finite `calories`
+/// >= 0, else null. Grams > 0 else 100, the same sentinel as the tool path
+/// ([coachItemsFromParsedMeal]).
+FoodItem? _tagListItem(Object? e) {
+  if (e is! Map) return null;
+  final name = e['name'];
+  if (name is! String || name.trim().isEmpty) return null;
+  final cal = e['calories'];
+  if (cal is! num || !cal.isFinite || cal < 0) return null;
+  final q = e['quantity_g'];
+  return FoodItem(
+    name: name.trim(),
+    quantityG: (q is num && q.isFinite && q > 0) ? q.toDouble() : 100.0,
+    calories: cal.toDouble(),
+    protein: _num(e['protein_g']),
+    carbs: _num(e['carbs_g']),
+    fat: _num(e['fat_g']),
+    fiber: 0,
+  );
+}
+
+/// The coach's named meal slot, or null when the payload's `meal_type` is
+/// absent or not a String (B-pass F2: model JSON can carry a number or a
+/// list; a cast would throw in `build` or lose the reply's other actions).
+String? coachMealTypeOf(Map<String, dynamic> data) {
+  final m = data['meal_type'];
+  return m is String ? m : null;
 }
 
 /// The one item a `log_food` tag writes: the coach's own name and estimates

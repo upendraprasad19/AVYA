@@ -293,9 +293,7 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
     final items = coachItemsFromParsedMeal(p);
     final totals = NutritionWriteService.mealTotals(items,
         overrideCals: overrides.cals, overrideProtein: overrides.protein);
-    final meal = p['meal_type'];
-    final slot =
-        resolveCoachMealSlot(meal is String ? meal : null, intent.createdAt);
+    final slot = resolveCoachMealSlot(coachMealTypeOf(p), intent.createdAt);
     return CoachMealItemsView(
       items: items,
       totalKcal: totals.kcal,

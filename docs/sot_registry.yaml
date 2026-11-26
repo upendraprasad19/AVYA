@@ -699,7 +699,7 @@ concepts:
           > 0) lives in the pure static mealTotals, which the coach meal
           cards call so the total they show is the total stored.
       - file: lib/features/ai_coach/services/coach_meal_log.dart
-        line_range: 34-212
+        line_range: 34-238
         method: CoachMealLog.write + coachItemsFromParsedMeal / coachItemsFromTag / coachItemFromTag / coachToolOverrides
         notes: |
           OI-493 Landing A: the ONE coach meal writer (tool and food tag)
@@ -2762,7 +2762,7 @@ concepts:
         line_range: 85-204
         method: logMeal
       - file: lib/features/ai_coach/services/coach_meal_log.dart
-        line_range: 34-212
+        line_range: 34-238
         method: CoachMealLog.write (OI-493; names in items[], never a top-level food_name)
     # audit-2026-05-16 reader-side — same reader set as
     # nutrition_total_calories plus a few that consume the items[]
@@ -7487,7 +7487,7 @@ concepts:
         line_range: 171-176
         method: recentHistoryExchanges (shim forwarder)
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 902-1289
+        line_range: 903-1293
         method: |
           SendMessageNotifier.send — assembles history ONCE (kill-switched) and
           threads it into BOTH chat() call sites (primary :948 + auth-retry :1028),
@@ -7670,7 +7670,7 @@ concepts:
           Forwarder retained for back-compat with existing callers
           in main.dart / ai_coach_provider.dart / sync_service.dart.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 902-1289
+        line_range: 903-1293
         method: "`send` (SendMessageNotifier)"
         notes: |
           R3 (2026-07-07): was mislabeled `_sendMessage` (476-500, a method
@@ -16722,7 +16722,7 @@ concepts:
       key — NOT reused directly for chat to avoid corrupting that key).
     writers:
       - file: supabase/functions/_shared/tool-loop.ts
-        line_range: 299
+        line_range: 306
         method: runToolLoop
         notes: the raw Gemini text this concept cleans on the client side.
     readers:
@@ -16731,11 +16731,11 @@ concepts:
         method: "SendMessageNotifier.sendWithMedia"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1097
+        line_range: 1098
         method: "SendMessageNotifier.send (primary)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1191
+        line_range: 1194
         method: "SendMessageNotifier.send (auth-retry)"
         semantic: display-only
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
@@ -18524,7 +18524,7 @@ concepts:
         method: logMeasurement + logMeasurements
         notes: Writer tier. Both validate the ROUNDED value and emit tier=writer. logMeasurements (L2b Landing B) is the sheet's batch writer - all-or-nothing, one put, one fan-out, one event per call.
       - file: lib/features/ai_coach/providers/ai_coach_provider.dart
-        line_range: 1821-1853
+        line_range: 1832-1864
         method: PendingLogActionsNotifier._parse (case log_measurement)
         notes: Chat parse tier. Type tests, never casts; checks the RAW value; emits tier=chat (a wrong-typed value of a registered site emits side=wrongtype).
       - file: lib/core/services/sync/sync_health.dart

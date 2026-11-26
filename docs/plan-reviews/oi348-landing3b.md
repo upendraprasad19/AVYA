@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/oi348-landing3b-bpass.md
 ---
 
@@ -43,3 +43,10 @@ from main `238bb44f` before any edit.
 Whole-project `flutter analyze --no-fatal-infos`, the pre-commit gate loop, `deno test` over `supabase/functions`
 (1974 passed), `deno check` of both proxies, the new card suite (20) and 158 related tests, 15 mutants all red.
 CI on the PR is the full suite.
+
+## B-pass
+`docs/reviews/oi348-landing3b-bpass.md`: one fresh Sonnet seat on 92e94286, 0 P0/P1, 1 P2, 3 P3, all fixed in the
+follow-on commit (an expired food card keeps SKIP and every reply sweeps; `coachMealTypeOf`; a partial-items event;
+the meal tool's 5-second line with the write-claim rule off). Each fix has a test and a mutant (M16-M21, all red).
+After the fixes: deno test over `supabase/functions` 1976 passed, 143 related flutter tests and the card suite green,
+whole-project analyze with no warnings.

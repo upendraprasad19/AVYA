@@ -153,7 +153,7 @@ class ConversationalLogHandler {
     if (items == null) return false;
     final r = await CoachMealLog.write(
       at: at,
-      mealType: data['meal_type'] as String?,
+      mealType: coachMealTypeOf(data),
       items: items,
     );
     if (r.success) {

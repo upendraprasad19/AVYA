@@ -1824,7 +1824,7 @@ class ToolDispatcher {
     try {
       final result = await CoachMealLog.write(
         at: intent.createdAt,
-        mealType: p['meal_type'] as String?,
+        mealType: coachMealTypeOf(p),
         items: coachItemsFromParsedMeal(p),
         overrideTotalCals: totalCal,
         overrideTotalProtein: protein,

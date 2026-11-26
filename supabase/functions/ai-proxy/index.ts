@@ -1261,6 +1261,7 @@ yet" — never make up a number.
         capabilities,
         model: MODEL_FLASH,
         writeClaimRule: ruleOn,
+        mealItemsRule: mealOn,
       });
     } catch (loopErr) {
       console.error(

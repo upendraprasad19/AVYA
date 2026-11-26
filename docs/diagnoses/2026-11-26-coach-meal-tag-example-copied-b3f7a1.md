@@ -171,3 +171,29 @@ Each mutant applied once (match count checked), the named test run, the file res
 | M13 | `isStaleFood` true from the first second | 6 |
 | M14 | `_logFood` writes the flat item only | 1 |
 | M15 | server switch reader accepts any value | 1 |
+
+## B-pass fixes (`docs/reviews/oi348-landing3b-bpass.md`)
+A context-blind B-pass on commit 92e94286 found 0 P0/P1, 1 P2, 3 P3. All four were fixed in this batch:
+- **F1 (P2):** an expired food card had no SKIP, and the sweep ran only on a reply that carried a tag. Now the expired
+  card keeps SKIP (`coach_food_card_skip`), and every reply path (media, send, auth retry) calls the public
+  `dropStaleFood()` before its tag guard.
+- **F2 (P3):** `meal_type` was cast at four coach sites. Now they all read it through `coachMealTypeOf`, which returns
+  a String or null.
+- **F3 (P3):** a listed food the parse skipped was silent. Now `coachTagUnusableItemCount` feeds the
+  `coach_food_tag_items_partial` event from `_parse`. The 100 g grams default stays: it is the same sentinel as the
+  tool path.
+- **F4 (P3):** with the write-claim rule off and the meal rule on, the `logMealByText` description still promised a
+  5-second auto-confirm. Now `runToolLoop` takes `mealItemsRule`, and `applyWriteClaimDescriptions(tools, false,
+  {mealItems: true})` rewrites only that sentence. With the meal rule off it returns the input array itself.
+
+Mutants on the fixes ran with the same protocol. App mutants count `[E]` lines, like M1-M15. Server mutants also ran
+`tool-loop_write_claim_note_test.ts`.
+
+| # | Mutant | Red |
+|---|---|---|
+| M16 | expired card hides SKIP | 3 |
+| M17 | the auth-retry path stops sweeping | 3 |
+| M18 | `coachMealTypeOf` casts | 3 |
+| M19 | unusable-item count always 0 | 3 |
+| M20 | write-claim OFF ignores the meal rule | 2 |
+| M21 | `runToolLoop` stops passing the meal rule | 1 |
