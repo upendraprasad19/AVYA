@@ -15,6 +15,7 @@ class WardSpark extends StatelessWidget {
     this.color,
     this.fillAlpha,
     this.strokeWidth = 1.5,
+    this.step = false,
   });
 
   final List<double> data;
@@ -26,6 +27,11 @@ class WardSpark extends StatelessWidget {
   /// alpha (0-1). Used on hero cards where the spark needs more weight.
   final double? fillAlpha;
   final double strokeWidth;
+
+  /// Draw a step (flat, then a vertical rise at the next point) instead of a
+  /// straight segment between points. Off by default: every other caller's
+  /// path is unchanged.
+  final bool step;
 
   @override
   Widget build(BuildContext context) {
@@ -39,9 +45,29 @@ class WardSpark extends StatelessWidget {
         color: color ?? AppColors.accent,
         fillAlpha: fillAlpha,
         strokeWidth: strokeWidth,
+        step: step,
       ),
     );
   }
+}
+
+/// The vertices of the spark path of [data] in [size]: points index-spaced
+/// across the width, auto-scaled to the data range. With [step], each change
+/// gets a corner at the NEXT point's x and the CURRENT value first, so the
+/// line is flat until the next point and rises there. Pure, for tests.
+List<Offset> wardSparkVertices(List<double> data, Size size,
+    {bool step = false}) {
+  final min = data.reduce((a, b) => a < b ? a : b);
+  final max = data.reduce((a, b) => a > b ? a : b);
+  final span = (max - min) == 0 ? 1 : (max - min);
+  final out = <Offset>[];
+  for (var i = 0; i < data.length; i++) {
+    final x = (i / (data.length - 1)) * size.width;
+    final y = size.height - ((data[i] - min) / span) * (size.height - 2) - 1;
+    if (step && i > 0 && out.last.dy != y) out.add(Offset(x, out.last.dy));
+    out.add(Offset(x, y));
+  }
+  return out;
 }
 
 class _SparkPainter extends CustomPainter {
@@ -50,27 +76,24 @@ class _SparkPainter extends CustomPainter {
     required this.color,
     required this.fillAlpha,
     required this.strokeWidth,
+    required this.step,
   });
 
   final List<double> data;
   final Color color;
   final double? fillAlpha;
   final double strokeWidth;
+  final bool step;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final min = data.reduce((a, b) => a < b ? a : b);
-    final max = data.reduce((a, b) => a > b ? a : b);
-    final span = (max - min) == 0 ? 1 : (max - min);
-
     final path = Path();
-    for (var i = 0; i < data.length; i++) {
-      final x = (i / (data.length - 1)) * size.width;
-      final y = size.height - ((data[i] - min) / span) * (size.height - 2) - 1;
+    final pts = wardSparkVertices(data, size, step: step);
+    for (var i = 0; i < pts.length; i++) {
       if (i == 0) {
-        path.moveTo(x, y);
+        path.moveTo(pts[i].dx, pts[i].dy);
       } else {
-        path.lineTo(x, y);
+        path.lineTo(pts[i].dx, pts[i].dy);
       }
     }
 
@@ -99,5 +122,6 @@ class _SparkPainter extends CustomPainter {
       old.data != data ||
       old.color != color ||
       old.fillAlpha != fillAlpha ||
-      old.strokeWidth != strokeWidth;
+      old.strokeWidth != strokeWidth ||
+      old.step != step;
 }
