@@ -478,13 +478,14 @@ void main() {
     test(
         'the sheet and EVERY other statement of the freeze caps agree (a '
         'one-sided change reddens this)', () {
-      // The caps (free 1, PRO 3) are stated in four places outside the sheet.
+      // The caps (free 1, PRO 3) are stated in five places outside the sheet.
       // Presence-only: each file must still say `isPro ? 3 : 1` exactly as
       // many times as it does today, so changing ONE of two copies in a file
       // reddens this too.
       const capSites = <String, (int, String)>{
         'lib/core/services/streak_progress_service.dart':
-            (1, 'the weekly refill (refillIfNewWeek)'),
+            (2, 'the weekly refill (refillIfNewWeek) and the missed-day '
+                'rescue refund cap (settleRescueRefunds, OI-348 P3)'),
         'lib/features/home/providers/home_provider.dart':
             (2, 'the Home badge and the cap provider'),
         'lib/features/profile/widgets/rank_service_record_sheet.dart':

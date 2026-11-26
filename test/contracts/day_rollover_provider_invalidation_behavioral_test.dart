@@ -39,6 +39,8 @@ import 'package:flutter_riverpod/misc.dart' show ProviderBase;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:icanbefitter/core/services/day_rollover_service.dart';
+import 'package:icanbefitter/core/services/day_swap/day_swap_rules.dart';
+import 'package:icanbefitter/core/services/streak_progress_service.dart';
 import 'package:icanbefitter/core/services/guarded_box.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
@@ -141,6 +143,50 @@ void main() {
       });
 
       expect(TargetHistoryService.read().single.calories, 2540);
+    });
+
+    // ── OI-348 P3: the rollover heals a rescue refund a crash dropped ──
+    testWidgets(
+        'runRolloverNow gives back the freeze of a rescued day with no marker',
+        (tester) async {
+      setTestClockTo(DateTime.utc(2026, 9, 25, 4, 30)); // Fri 25, 10:00 IST
+      const wed = '2026-09-23';
+      await tester.runAsync(() async {
+        await HiveUserSession.openForUser(testUser);
+        await HiveService.instance.workoutBox.put('schedule_$wed', {
+          'date': wed,
+          'type': 'rest',
+          'status': 'rest',
+          'workout_name': 'Rest Day',
+          'exercises': <Map<String, dynamic>>[],
+          DaySwapRules.rescuedIntoKey: '2026-09-25',
+        });
+        await HiveService.instance.userBox.put('progress', {
+          'streak_freezes_available': 0,
+          'streak_freeze_used_dates': [wed],
+          'streak_freezes_last_refill': '2026-09-21',
+        });
+      });
+
+      final refCompleter =
+          Completer<({WidgetRef ref, ProviderContainer container})>();
+      await tester.pumpWidget(
+        ProviderScope(
+          child: _RefCaptureWidget(onCapture: refCompleter.complete),
+        ),
+      );
+      await tester.pump();
+      final captured = await tester.runAsync(() => refCompleter.future);
+      await tester.runAsync(() async {
+        await DayRolloverObserver.instance.runRolloverNow(captured!.ref);
+      });
+
+      final progress =
+          UserRepository.instance.getProgress() ?? const <String, dynamic>{};
+      expect(progress['streak_freeze_used_dates'],
+          contains(FreezeLedger.marker(wed)),
+          reason: 'the rollover runs settleRescueRefunds (B-pass seat B M39)');
+      expect(progress['streak_freezes_available'], 1);
     });
 
     // ── Test A: configBox['last_known_date'] updates from yesterday → today ──

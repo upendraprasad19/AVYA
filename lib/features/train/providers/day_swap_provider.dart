@@ -39,12 +39,16 @@ class DaySwapController {
       inProgressDateOf(_ref.read(activeWorkoutProvider));
 
   /// Display only (confirm sheet, coach card): [swap] re-checks everything.
-  DaySwapPreview preview(String dateA, String dateB) =>
+  /// [origin] must be the origin the swap will carry (OI-348 P3: the coach
+  /// gets no missed-day rescue, so its card must preview with `coach`).
+  DaySwapPreview preview(String dateA, String dateB,
+          {required DaySwapOrigin origin}) =>
       _ref.read(swapServiceProvider).preview(
             dateA: dateA,
             dateB: dateB,
             isPro: _isPro,
             inProgressDate: _inProgressDate,
+            origin: origin,
           );
 
   Future<DaySwapResult> swap({
@@ -76,6 +80,8 @@ class DaySwapController {
       ('currentPlanProvider', () => _ref.invalidate(currentPlanProvider)),
       ('calendarWeekProvider', () => _ref.invalidate(calendarWeekProvider)),
       ('streakProvider', () => _ref.invalidate(streakProvider)),
+      // OI-348 P3: a missed-day rescue may give a streak freeze back.
+      ('streakFreezeProvider', () => _ref.invalidate(streakFreezeProvider)),
       ('todayWorkoutProvider', () => _ref.invalidate(todayWorkoutProvider)),
       ('allExercisePRsProvider', () => _ref.invalidate(allExercisePRsProvider)),
     ];

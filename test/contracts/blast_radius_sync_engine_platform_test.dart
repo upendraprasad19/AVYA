@@ -109,6 +109,9 @@ const _engine = <String>[
   '${_services}plan_window_reanchor.dart',
   '${_services}streak_progress_service.dart',
   '${_services}day_swap/day_swap_rules.dart',
+  // OI-348 P3: the rescue kill switch gates the freeze refund in
+  // streak_progress_service.dart (settleRescueRefunds).
+  '${_services}day_swap/missed_day_rescue_flag.dart',
   '${_services}coach_chat_clear.dart',
   '${_services}target_history_service.dart',
   // Unit 3B (diagnose 21da5f): the restore wrapper calls it on every succeeded
