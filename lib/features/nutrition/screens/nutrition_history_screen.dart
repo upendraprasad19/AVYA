@@ -15,6 +15,7 @@ import '../services/nutrition_history.dart';
 import '../widgets/history/history_common.dart';
 import '../widgets/history/history_day_sheet.dart';
 import '../widgets/history/history_heatmap.dart';
+import '../widgets/history/history_more.dart';
 import '../widgets/history/history_sections.dart';
 import '../widgets/history/history_trend_chart.dart';
 
@@ -208,6 +209,9 @@ class _NutritionHistoryScreenState
             todayKey: data.todayKey,
             waterTargetMl: data.waterTargetMl,
           ),
+          HistoryProteinByMeal(days: shown),
+          HistoryWeekdayProtein(days: shown, todayKey: data.todayKey),
+          HistoryOnTargetCompare(days: shown),
           HistoryMacroSplit(days: shown),
           HistoryWeightOverlay(
             days: shown,
@@ -216,6 +220,11 @@ class _NutritionHistoryScreenState
           ),
           HistoryPatterns(days: shown, trainingDays: data.trainingDays),
           HistoryTopFoods(foods: data.foods),
+          HistoryMonthlyReport(
+            days: data.days,
+            weights: data.weights,
+            todayKey: data.todayKey,
+          ),
         ]),
       ],
     );

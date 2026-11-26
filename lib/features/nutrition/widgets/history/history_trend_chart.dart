@@ -110,37 +110,61 @@ class HistoryTrendChart extends StatelessWidget {
     if (maxY <= 0) maxY = 1;
     final color = metricColor(metric);
 
+    final topY = maxY * 1.1;
+    final labels = [
+      groupedInt(topY.round()),
+      groupedInt((topY / 2).round()),
+      '0',
+    ];
+    final axisCol = yAxisWidth(context, labels);
+    final mid = bars[bars.length ~/ 2].key;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        LayoutBuilder(builder: (context, c) {
-          return GestureDetector(
-            key: const Key('history_trend_chart'),
-            behavior: HitTestBehavior.opaque,
-            onTapUp: (onDayTap == null || series.weekly)
-                ? null
-                : (d) {
-                    final i = (d.localPosition.dx / c.maxWidth * bars.length)
-                        .floor()
-                        .clamp(0, bars.length - 1);
-                    onDayTap!(bars[i].key);
-                  },
-            child: CustomPaint(
-              size: Size(c.maxWidth, height),
-              painter: _TrendPainter(bars, maxY * 1.1, color),
-            ),
-          );
-        }),
-        const SizedBox(height: 6),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: _axis(historyDayLabel(bars.first.key), TextAlign.left)),
+            YAxisLabels(labels: labels, height: height, width: axisCol),
             Expanded(
-              flex: 2,
-              child: _axis('max ${metricText(maxY, metric)}', TextAlign.center),
+              child: LayoutBuilder(builder: (context, c) {
+                return GestureDetector(
+                  key: const Key('history_trend_chart'),
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (onDayTap == null || series.weekly)
+                      ? null
+                      : (d) {
+                          final i =
+                              (d.localPosition.dx / c.maxWidth * bars.length)
+                                  .floor()
+                                  .clamp(0, bars.length - 1);
+                          onDayTap!(bars[i].key);
+                        },
+                  child: CustomPaint(
+                    key: const Key('history_trend_plot'),
+                    size: Size(c.maxWidth, height),
+                    painter: _TrendPainter(bars, topY, color),
+                  ),
+                );
+              }),
             ),
-            Expanded(child: _axis(historyDayLabel(bars.last.key), TextAlign.right)),
           ],
+        ),
+        const SizedBox(height: 6),
+        Padding(
+          padding: EdgeInsets.only(left: axisCol),
+          child: Row(
+            children: [
+              Expanded(
+                  child: _axis(historyDayLabel(bars.first.key), TextAlign.left)),
+              if (bars.length > 2)
+                Expanded(child: _axis(historyDayLabel(mid), TextAlign.center)),
+              if (bars.length > 1)
+                Expanded(
+                    child:
+                        _axis(historyDayLabel(bars.last.key), TextAlign.right)),
+            ],
+          ),
         ),
         const SizedBox(height: 10),
         HistoryLegend([
@@ -151,6 +175,64 @@ class HistoryTrendChart extends StatelessWidget {
             (AppColors.textDim, 'Target'),
         ]),
       ],
+    );
+  }
+}
+
+/// Width of a y-axis label column: the widest label under the ambient text
+/// scale, at least 28 dp (plan §11). Shared by every chart on the screen.
+double yAxisWidth(BuildContext context, List<String> labels) {
+  final scaler = MediaQuery.textScalerOf(context);
+  var w = 0.0;
+  for (final l in labels) {
+    final tp = TextPainter(
+      text: TextSpan(
+          text: l,
+          style: AppTypography.monoXs.copyWith(color: AppColors.textMute)),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+    )..layout();
+    if (tp.width > w) w = tp.width;
+  }
+  return math.max(28.0, w + 6);
+}
+
+/// Labels top, middle, bottom along a chart of [height]; numbers only.
+class YAxisLabels extends StatelessWidget {
+  const YAxisLabels(
+      {super.key,
+      required this.labels,
+      required this.height,
+      required this.width});
+  final List<String> labels;
+  final double height, width;
+
+  @override
+  Widget build(BuildContext context) {
+    // Each label is centred on its gridline (top, middle, bottom).
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Positioned(
+              left: 0,
+              top: labels.length == 1
+                  ? 0
+                  : height * i / (labels.length - 1),
+              child: FractionalTranslation(
+                translation: const Offset(0, -0.5),
+                child: Text(labels[i],
+                    maxLines: 1,
+                    softWrap: false,
+                    style: AppTypography.monoXs
+                        .copyWith(color: AppColors.textMute)),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -177,11 +259,10 @@ class _TrendPainter extends CustomPainter {
     final barW = math.max(1.0, slot * 0.7);
     double y(double v) => size.height - (v / maxY) * size.height;
 
-    canvas.drawLine(
-      Offset(0, size.height - 0.5),
-      Offset(size.width, size.height - 0.5),
-      Paint()..color = AppColors.border,
-    );
+    final grid = Paint()..color = AppColors.border;
+    for (final gy in [0.5, size.height / 2, size.height - 0.5]) {
+      canvas.drawLine(Offset(0, gy), Offset(size.width, gy), grid);
+    }
 
     final counted = Paint()..color = color;
     final muted = Paint()..color = AppColors.textGhost;

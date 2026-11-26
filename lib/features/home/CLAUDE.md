@@ -36,7 +36,7 @@ Pieces:
 5. Nutrition snapshot (calories + protein vs target)
 6. AI Coach insight (computed from local schedule data — next workout, consistency tips)
 7. Weight trend chart (`shared/widgets/weight_trend_chart.dart` — range chips All/1Y/6M/3M/1M/1W, dashed goal line, **date-proportional** x-axis + carry-forward anchor so a post-gap weigh-in always draws a connecting line, never a lone dot)
-8. PR snapshot (dynamic — top 4 exercises by volume when key lifts empty; each tile and each see-all row carries a sparkline once the exercise has two logged days, and a tap opens the trend sheet `widgets/pr_trend_sheet.dart`)
+8. PR snapshot (the 4 most recently set PRs, newest first; the SAME `PrSnapshot` card is Train's PERSONAL RECORDS block with a `VIEW ALL EXERCISE PRS` button, 83e031; each tile and each see-all row carries a sparkline once the exercise has two logged days, and a tap opens the trend sheet `widgets/pr_trend_sheet.dart`)
 9. Recent logged foods
 10. Step counter (Health Connect)
 ```
@@ -71,7 +71,7 @@ Pieces:
 | Pitfall | How to avoid | Source |
 |---|---|---|
 | Steps/sleep showing stale data | Filter health data by BOTH date AND type (`step_log`, `sleep_log`). Legacy `steps_today` guarded by `stepsToday == null && steps_date == todayStr`. Chat-logged sleep read from `sleep_logs` list as fallback. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md, a local build: CLAUDE.md §4.1.5) |
-| Stats grid empty | Fall back to top 4 exercises from allExercisePRs when key lifts (bench/squat/deadlift/OHP) have no data. Unit derived from loggingType (kg/reps/s/km). Adaptive layout: 1→full, 2→row, 3→2+1, 4→2+2. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md, a local build: CLAUDE.md §4.1.5) |
+| Home and Train PR cards disagree | There is ONE card, `PrSnapshot`, over ONE reader (`allExercisePRsProvider` -> `loadAllExercisePRs`). Train passes `seeAll: PrSeeAll.button`; never add a second PR reader or a Train copy of the sheet (Train's key-lift grid, `loadKeyLiftPRs`, matched names by substring and printed "First logged!" on every tile; deleted). | `docs/diagnoses/2026-11-26-train-pr-card-second-reader-83e031.md`, `test/contracts/pr_card_unify_behavioral_test.dart` |
 | Prediction card truncated | Home: maxLines 4 + "Read More →" opens full bottom sheet. Shareable: capped at 500 chars. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md, a local build: CLAUDE.md §4.1.5) |
 | A START button that only closes its sheet (the calendar day sheet, 2026-03-24 to 7c3e91) | The day sheet takes `onStart` from the host and its START is disabled without one. Home has ONE start path, `home_screen._startTodayWorkout` (day from `workoutDayForDate`, then `beginWorkoutWithReadiness`), used by the Today card AND the sheet. A new START label goes in `test/contracts/start_button_inventory_test.dart`. | `docs/diagnoses/2026-11-21-day-sheet-start-and-prefill-reps-7c3e91.md` |
 | Free user stuck on day 29 with empty schedule | Check `WorkoutScheduleService.isPhaseExpired()` returns true AND `todayWorkoutProvider` is null → `home_screen._buildTodayRow` must render `PlanExpiredCard` (Upgrade / "Hold the line — another week" = `holdWeek()` / the MY TEMPLATES hint; Unit 3D-b deleted Re-do Week 4). PRO users auto-generate next Phase on splash via `splash_screen._autoGenerateNextPhaseForPro()` so they never land here. Added 2026-04-18 per audit H9. | (relocated 2026-05-18 — see docs/diagnoses/INDEX.md, a local build: CLAUDE.md §4.1.5) |

@@ -366,6 +366,10 @@ class WardroomCopy {
   /// Train: the line under a not-done rest row's logs.
   static const trainRestNotCounted = 'Rest day. Not counted as a workout.';
 
+  /// Train: a past week that was picked on the strip but has no row left to show
+  /// (docs/plans/train-past-week-in-place.md D4).
+  static const trainPastWeekEmpty = 'No workouts recorded for this week.';
+
   /// TalkBack labels for the chat workout card.
   static const coachWorkoutEditSemanticsTemplate = 'Edit {name}';
   static const coachWorkoutConfirmSemantics = 'Confirm and log workout';

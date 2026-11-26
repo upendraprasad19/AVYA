@@ -72,6 +72,9 @@ class NutritionDay {
   /// Calories per slot of [kMealSlots]; sums to [calories].
   final Map<String, double> caloriesBySlot;
 
+  /// Protein per slot of [kMealSlots]; sums to [protein].
+  final Map<String, double> proteinBySlot;
+
   const NutritionDay({
     required this.date,
     this.logged = false,
@@ -82,6 +85,7 @@ class NutritionDay {
     this.fiber = 0,
     this.waterMl = 0,
     this.caloriesBySlot = const {},
+    this.proteinBySlot = const {},
   });
 }
 
@@ -104,6 +108,7 @@ class _Acc {
   double cal = 0, pro = 0, carb = 0, fat = 0, fib = 0;
   bool meal = false;
   final slots = <String, double>{};
+  final pslots = <String, double>{};
 }
 
 /// The first day with a meal row in [nutritionRows], or null.
@@ -140,13 +145,15 @@ List<NutritionDay> buildNutritionDays(
     final a = acc[day] ??= _Acc();
     final kcal = _n(row['total_calories']);
     a.cal += kcal;
-    a.pro += _n(row['total_protein']);
+    final pro = _n(row['total_protein']);
+    a.pro += pro;
     a.carb += _n(row['total_carbs']);
     a.fat += _n(row['total_fat']);
     a.fib += _n(row['total_fiber']);
     if (row['meal_type'] is String) a.meal = true;
     final slot = mealSlotOf(row['meal_type']);
     a.slots[slot] = (a.slots[slot] ?? 0) + kcal;
+    a.pslots[slot] = (a.pslots[slot] ?? 0) + pro;
   }
 
   final out = <NutritionDay>[];
@@ -168,6 +175,7 @@ List<NutritionDay> buildNutritionDays(
       fiber: a.fib,
       waterMl: water,
       caloriesBySlot: Map.unmodifiable(a.slots),
+      proteinBySlot: Map.unmodifiable(a.pslots),
     ));
   }
   return out;
@@ -449,10 +457,14 @@ class HitStats {
   /// Days that counted, and how many of them hit.
   final int counted, hits;
 
-  /// Longest run of consecutive calendar days that hit.
+  /// Longest run of hits in a row. For calories and protein the run counts
+  /// full days only: a day that is not a full day is skipped, never a break
+  /// (diagnose 60dc46). For water a day with no water logged breaks it.
   final int bestRun;
 
-  /// The run ending on the last past day (today never breaks it).
+  /// The run ending on the last counted day; 0 when that day is more than
+  /// [kRunStaleDays] before today (a stale run is not current). Today never
+  /// breaks it.
   final int currentRun;
 
   const HitStats({
@@ -465,22 +477,33 @@ class HitStats {
   double? get rate => counted == 0 ? null : hits / counted;
 }
 
+/// A current run whose last counted day is more than this many days before
+/// today is not current (it shows 0).
+const int kRunStaleDays = 7;
+
 /// [days] must be continuous and oldest first (as [buildNutritionDays]
-/// returns them). A day that does not count breaks a run, except today.
+/// returns them). Today is neither a hit nor a break. [skipUnjudged] (default:
+/// calories and protein yes, water no) skips a day that does not count
+/// instead of breaking the run on it.
 HitStats hitStats(
   List<JudgedDay> days,
   HitKind kind,
   String todayKey, {
   int waterTargetMl = 0,
+  bool? skipUnjudged,
 }) {
+  final skip = skipUnjudged ?? kind != HitKind.water;
   var counted = 0, hits = 0, best = 0, run = 0;
+  String? lastCounted;
   for (final j in days) {
     if (j.date == todayKey) continue; // in progress: neither hit nor break
     final hit = hitOf(j, kind, todayKey, waterTargetMl);
     if (hit != null) {
       counted++;
+      lastCounted = j.date;
       if (hit) hits++;
     }
+    if (hit == null && skip) continue;
     if (hit == true) {
       run++;
       if (run > best) best = run;
@@ -488,7 +511,15 @@ HitStats hitStats(
       run = 0;
     }
   }
-  return HitStats(counted: counted, hits: hits, bestRun: best, currentRun: run);
+  var current = run;
+  final today = parseDayKey(todayKey);
+  final last = lastCounted == null ? null : parseDayKey(lastCounted);
+  if (skip && today != null && last != null &&
+      today.difference(last).inDays > kRunStaleDays) {
+    current = 0;
+  }
+  return HitStats(
+      counted: counted, hits: hits, bestRun: best, currentRun: current);
 }
 
 // ── Patterns ─────────────────────────────────────────────────────
@@ -538,18 +569,30 @@ Map<String, double> slotAverages(List<JudgedDay> days) {
 // ── Top foods ────────────────────────────────────────────────────
 
 class FoodStat {
-  /// The most frequent original spelling.
+  /// The family name ("Whey") for a family row, else the most frequent
+  /// original spelling.
   final String name;
   final int count;
 
   /// Sums of the logged ITEMS (not day totals).
   final double protein, calories;
 
+  /// Distinct names folded into a family row (trailing-s normalised); 1 for
+  /// any other row. Shown as "N kinds" only on a family row with N >= 2.
+  final int kinds;
+  final bool isFamily;
+
+  /// Share of all ITEMISED protein in range (0..1).
+  final double proteinShare;
+
   const FoodStat({
     required this.name,
     required this.count,
     required this.protein,
     required this.calories,
+    this.kinds = 1,
+    this.isFamily = false,
+    this.proteinShare = 0,
   });
 }
 
@@ -560,12 +603,95 @@ class TopFoods {
   /// Meal rows in range that carry no item detail (older logs).
   final int mealsWithoutItems;
 
+  /// "N foods give X% of the protein in your itemised meals", or null when
+  /// the sample is too small or the foods are spread out.
+  final ({int foods, double share})? concentration;
+
   const TopFoods({
     this.mostLogged = const [],
     this.topProtein = const [],
     this.mealsWithoutItems = 0,
+    this.concentration,
   });
 }
+
+// ── Food families (diagnose 3cfcc6) ──────────────────────────────
+
+/// Ordered: the first family whose pattern matches wins. Multi-token patterns
+/// come first ("chana dal" needs none: Dal precedes Chana below); a family of null means "no family" (coconut milk is not milk).
+const List<(String?, List<String>)> kFoodFamilies = [
+  ('Peanut', ['peanut butter']),
+  ('Almond', ['almond milk']),
+  ('Soya', ['soya milk', 'soy milk']),
+  ('Oats', ['oat milk']),
+  (null, ['coconut milk']),
+  ('Egg', ['egg white', 'egg whites']),
+  ('Whey', ['whey']),
+  ('Casein', ['casein']),
+  ('Chicken', ['chicken']),
+  ('Fish', ['fish']),
+  ('Mutton', ['mutton']),
+  ('Prawn', ['prawn', 'prawns']),
+  ('Paneer', ['paneer']),
+  ('Egg', ['egg', 'eggs', 'anda']),
+  ('Tofu', ['tofu']),
+  ('Soya', ['soya', 'soy']),
+  ('Dal', ['dal', 'daal', 'dhal']),
+  ('Rajma', ['rajma']),
+  ('Chana', ['chana', 'chole']),
+  ('Curd', ['curd', 'dahi', 'yogurt', 'yoghurt']),
+  ('Oats', ['oats']),
+  ('Milk', ['milk']),
+  ('Cheese', ['cheese']),
+  ('Peanut', ['peanut', 'peanuts']),
+  ('Almond', ['almond', 'almonds']),
+];
+
+final _nonLetters = RegExp(r'[^a-z]+');
+
+/// Lower-case letter tokens of [name].
+List<String> foodTokens(String name) => [
+      for (final t in name.toLowerCase().split(_nonLetters))
+        if (t.isNotEmpty) t,
+    ];
+
+/// The family of [name]: the first entry of [kFoodFamilies] with a pattern
+/// whose tokens appear consecutively in the name, not followed by "free" or
+/// "less" (a rejected match moves on to the next entry). Returns
+/// `(matched, family)`; `matched == false` means no family applies.
+(bool, String?) foodFamilyOf(String name) {
+  final tokens = foodTokens(name);
+  for (final (family, patterns) in kFoodFamilies) {
+    for (final pattern in patterns) {
+      final pt = pattern.split(' ');
+      for (var i = 0; i + pt.length <= tokens.length; i++) {
+        var ok = true;
+        for (var k = 0; k < pt.length; k++) {
+          if (tokens[i + k] != pt[k]) {
+            ok = false;
+            break;
+          }
+        }
+        if (!ok) continue;
+        final next = i + pt.length;
+        if (next < tokens.length &&
+            (tokens[next] == 'free' || tokens[next] == 'less')) {
+          continue;
+        }
+        return (true, family);
+      }
+    }
+  }
+  return (false, null);
+}
+
+String _kindKey(String key) =>
+    key.length >= 3 && key.endsWith('s') ? key.substring(0, key.length - 1) : key;
+
+/// Smallest number of top protein rows reaching 60 % of itemised protein.
+const double kConcentrationShare = 0.60;
+const int kConcentrationMaxFoods = 5;
+const int kConcentrationMinItems = 10;
 
 final _trailingParen = RegExp(r'\s*\([^)]*\)\s*$');
 final _trailingTimes = RegExp(r'\s+x\s*\d+\s*$');
@@ -585,6 +711,8 @@ class _FoodAcc {
   int count = 0;
   double protein = 0, calories = 0;
   final spellings = <String, int>{};
+  final kinds = <String>{};
+  String? family;
 }
 
 TopFoods topFoods(
@@ -595,34 +723,44 @@ TopFoods topFoods(
 }) {
   final acc = <String, _FoodAcc>{};
   var withoutItems = 0;
+  var items = 0;
+  var dayProtein = 0.0;
   for (final raw in nutritionRows) {
     final row = countedRow(raw);
     if (row == null) continue;
     final day = rowDay(row);
     if (day.compareTo(fromDay) < 0 || day.compareTo(toDay) > 0) continue;
     if (row['meal_type'] is! String) continue;
-    final items = row['items'];
-    if (items is! List || items.isEmpty) {
+    dayProtein += _n(row['total_protein']);
+    final rowItems = row['items'];
+    if (rowItems is! List || rowItems.isEmpty) {
       withoutItems++;
       continue;
     }
-    for (final it in items) {
+    for (final it in rowItems) {
       if (it is! Map) continue;
       final name = it['name'];
       if (name is! String) continue;
       final key = foodNameKey(name);
       if (key.isEmpty) continue;
-      final a = acc[key] ??= _FoodAcc();
+      final (matched, family) = foodFamilyOf(name);
+      final accKey = matched && family != null ? 'family:$family' : key;
+      final a = acc[accKey] ??= _FoodAcc();
+      if (matched && family != null) a.family = family;
       a.count++;
+      items++;
       a.protein += _n(it['protein']);
       a.calories += _n(it['calories']);
+      a.kinds.add(_kindKey(key));
       final shown = name.trim();
       a.spellings[shown] = (a.spellings[shown] ?? 0) + 1;
     }
   }
 
-  // Fold a plural into its singular when both occur ("eggs" -> "egg").
+  // Fold a plural into its singular when both occur ("eggs" -> "egg");
+  // family rows are already folded.
   for (final key in acc.keys.toList()) {
+    if (key.startsWith('family:')) continue;
     if (!key.endsWith('s') || key.length < 3) continue;
     final singular = acc[key.substring(0, key.length - 1)];
     if (singular == null) continue;
@@ -630,11 +768,13 @@ TopFoods topFoods(
     singular.count += plural.count;
     singular.protein += plural.protein;
     singular.calories += plural.calories;
+    singular.kinds.addAll(plural.kinds);
     plural.spellings.forEach(
         (s, n) => singular.spellings[s] = (singular.spellings[s] ?? 0) + n);
   }
 
   String display(_FoodAcc a) {
+    if (a.family != null) return a.family!;
     final entries = a.spellings.entries.toList()
       ..sort((x, y) {
         final byCount = y.value.compareTo(x.value);
@@ -643,6 +783,7 @@ TopFoods topFoods(
     return entries.first.key;
   }
 
+  final itemProtein = acc.values.fold(0.0, (s, a) => s + a.protein);
   final stats = [
     for (final a in acc.values)
       FoodStat(
@@ -650,6 +791,9 @@ TopFoods topFoods(
         count: a.count,
         protein: a.protein,
         calories: a.calories,
+        kinds: a.family != null ? a.kinds.length : 1,
+        isFamily: a.family != null,
+        proteinShare: itemProtein > 0 ? a.protein / itemProtein : 0,
       ),
   ];
   int byName(FoodStat x, FoodStat y) => x.name.compareTo(y.name);
@@ -664,10 +808,29 @@ TopFoods topFoods(
       final c = y.protein.compareTo(x.protein);
       return c != 0 ? c : byName(x, y);
     });
+
+  // Concentration over the FULL sorted list (not the shown rows).
+  ({int foods, double share})? concentration;
+  if (items >= kConcentrationMinItems &&
+      itemProtein > 0 &&
+      dayProtein > 0 &&
+      itemProtein >= dayProtein * 0.5) {
+    var sum = 0.0;
+    for (var i = 0; i < protein.length; i++) {
+      sum += protein[i].proteinShare;
+      if (sum >= kConcentrationShare) {
+        if (i + 1 <= kConcentrationMaxFoods) {
+          concentration = (foods: i + 1, share: sum);
+        }
+        break;
+      }
+    }
+  }
   return TopFoods(
     mostLogged: most.take(limit).toList(),
     topProtein: protein.take(limit).toList(),
     mealsWithoutItems: withoutItems,
+    concentration: concentration,
   );
 }
 
@@ -761,7 +924,7 @@ List<String> nutritionInsights(
   // 5. Best protein run.
   final run = hitStats(days, HitKind.protein, todayKey).bestRun;
   if (run >= kInsightMinProteinRun) {
-    out.add('Your best protein run is $run days in a row.');
+    out.add('Your best protein run is $run full days in a row.');
   }
 
   return out.take(kMaxInsights).toList();

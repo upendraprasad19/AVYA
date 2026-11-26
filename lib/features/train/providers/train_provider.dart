@@ -40,6 +40,7 @@ import '../services/log_exercise_logic.dart';
 import '../services/chat_logged_exercises.dart';
 import '../services/coach_day_completion.dart';
 import '../services/log_exercise_flags.dart';
+import '../services/past_week_days.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/core/constants/equipment_defaults.dart';
@@ -277,6 +278,11 @@ class WorkoutDayData {
   /// (`WorkoutScheduleService.weekModeForRow`), or null (the label is omitted).
   final String? weekMode;
 
+  /// Past-week list only (docs/plans/train-past-week-in-place.md D1/D3): the number of LOGGED
+  /// exercises, used for `N EX` when the stored row carries no `exercises` (a restored
+  /// plan-generator row). null everywhere else, so every current reader is unchanged.
+  final int? exerciseCountFallback;
+
   const WorkoutDayData({
     required this.dayNumber,
     required this.name,
@@ -292,9 +298,11 @@ class WorkoutDayData {
     this.finisherSeconds = 0,
     this.budgetMinutes,
     this.weekMode,
+    this.exerciseCountFallback,
   });
 
-  int get exerciseCount => exercises.length;
+  int get exerciseCount =>
+      exercises.isNotEmpty ? exercises.length : (exerciseCountFallback ?? 0);
   String get estimatedDuration {
     if (isRest) return '';
     if (budgetMinutes != null) return '$budgetMinutes min';
@@ -787,6 +795,72 @@ WorkoutDayData? workoutDayForDate(DateTime date) {
   );
 }
 
+/// ONE schedule row -> one Train day object (docs/plans/train-past-week-in-place.md D1).
+/// Extracted verbatim from `currentPlanProvider`'s day loop so the current-phase list and the PAST-week
+/// list (`pastWeekDaysProvider`) build their rows through the SAME code; the literal goldens in
+/// `test/contracts/workout_day_data_from_row_test.dart` were captured before the extraction.
+/// [w] only feeds the `dayNumber` label of a row without a date. [exerciseCountFallback] is the logged
+/// count the past list passes for a row that stores no exercises; null for the current phase.
+WorkoutDayData workoutDayDataFromScheduleRow(
+  Map<String, dynamic> dayMap, {
+  required int w,
+  required FinisherShowContext finisherContext,
+  int? exerciseCountFallback,
+}) {
+  final type = dayMap['type'] as String? ?? 'rest';
+  final isRest = PlanEngineFlags.isRestDayConsideringLogged(type);
+  final status = dayMap['status'] as String? ?? 'planned';
+  final exercises = _parseExerciseMaps(dayMap['exercises'] as List?);
+  final warmup = _parseExerciseMaps(dayMap['warmup'] as List?);
+  final cooldown = _parseExerciseMaps(dayMap['cooldown'] as List?);
+  final shownFinisher =
+      isRest ? const <Map<String, dynamic>>[] : FinisherSafety.shownOfRow(dayMap, finisherContext);
+
+  // Parse date for label and actual DateTime.
+  final dateStr = dayMap['date'] as String?;
+  String? dateLabel;
+  DateTime? parsedDate;
+  if (dateStr != null) {
+    parsedDate = DateTime.tryParse(dateStr);
+    if (parsedDate != null) {
+      const dayNames = [
+        'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
+      ];
+      const monthNames = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      dateLabel =
+          '${dayNames[parsedDate.weekday - 1]}, ${monthNames[parsedDate.month - 1]} ${parsedDate.day}';
+    }
+  }
+
+  return WorkoutDayData(
+    dayNumber:
+        (w - 1) * 7 + (dayMap['day_of_week'] as int? ?? 0) + 1,
+    name: (dayMap['workout_name'] as String? ?? 'Rest Day')
+        .toUpperCase(),
+    subtitle: isRest
+        ? 'Recovery & mobility'
+        : '${dayMap['workout_focus'] ?? ''} \u00b7 ${exercises.length} exercises',
+    dateLabel: dateLabel,
+    date: parsedDate,
+    isRest: isRest,
+    isDone: status == 'completed',
+    exercises: exercises,
+    warmup: warmup,
+    cooldown: cooldown,
+    finisher: _parseFinisherMaps(shownFinisher),
+    finisherSeconds: SessionBudget.finisherSecondsOfPlanDay(shownFinisher),
+    budgetMinutes: isRest ? null : budgetedDayMinutes(dayMap, finisher: shownFinisher),
+    weekMode: isRest
+        ? null
+        : WorkoutScheduleService.instance
+            .weekModeForRow(dayMap, parsedDate),
+    exerciseCountFallback: exerciseCountFallback,
+  );
+}
+
 class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
   /// Auto-generates a workout plan from local Hive profile data.
   ///
@@ -964,57 +1038,8 @@ class CurrentPlanNotifier extends Notifier<CurrentPlanData> {
       final dayDataList = <WorkoutDayData>[];
 
       for (final dayMap in weekDays) {
-        final type = dayMap['type'] as String? ?? 'rest';
-        final isRest = PlanEngineFlags.isRestDayConsideringLogged(type);
-        final status = dayMap['status'] as String? ?? 'planned';
-        final exercises = _parseExerciseMaps(dayMap['exercises'] as List?);
-        final warmup = _parseExerciseMaps(dayMap['warmup'] as List?);
-        final cooldown = _parseExerciseMaps(dayMap['cooldown'] as List?);
-        final shownFinisher =
-            isRest ? const <Map<String, dynamic>>[] : FinisherSafety.shownOfRow(dayMap, finisherContext);
-
-        // Parse date for label and actual DateTime.
-        final dateStr = dayMap['date'] as String?;
-        String? dateLabel;
-        DateTime? parsedDate;
-        if (dateStr != null) {
-          parsedDate = DateTime.tryParse(dateStr);
-          if (parsedDate != null) {
-            const dayNames = [
-              'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
-            ];
-            const monthNames = [
-              'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-            ];
-            dateLabel =
-                '${dayNames[parsedDate.weekday - 1]}, ${monthNames[parsedDate.month - 1]} ${parsedDate.day}';
-          }
-        }
-
-        dayDataList.add(WorkoutDayData(
-          dayNumber:
-              (w - 1) * 7 + (dayMap['day_of_week'] as int? ?? 0) + 1,
-          name: (dayMap['workout_name'] as String? ?? 'Rest Day')
-              .toUpperCase(),
-          subtitle: isRest
-              ? 'Recovery & mobility'
-              : '${dayMap['workout_focus'] ?? ''} \u00b7 ${exercises.length} exercises',
-          dateLabel: dateLabel,
-          date: parsedDate,
-          isRest: isRest,
-          isDone: status == 'completed',
-          exercises: exercises,
-          warmup: warmup,
-          cooldown: cooldown,
-          finisher: _parseFinisherMaps(shownFinisher),
-          finisherSeconds: SessionBudget.finisherSecondsOfPlanDay(shownFinisher),
-          budgetMinutes: isRest ? null : budgetedDayMinutes(dayMap, finisher: shownFinisher),
-          weekMode: isRest
-              ? null
-              : WorkoutScheduleService.instance
-                  .weekModeForRow(dayMap, parsedDate),
-        ));
+        dayDataList.add(workoutDayDataFromScheduleRow(dayMap,
+            w: w, finisherContext: finisherContext));
       }
 
       // If no schedule data for this week, add placeholder days.
@@ -1208,25 +1233,108 @@ class SelectedWeekNotifier extends Notifier<SelectedWeek> {
 final selectedWeekProvider = NotifierProvider<SelectedWeekNotifier, SelectedWeek>(
     SelectedWeekNotifier.new);
 
-// ── Workout Stats (PRs) ────────────────────────────────────────
+// ── Past week in the Train list (docs/plans/train-past-week-in-place.md D2/D3) ──
 
-/// Provider for key lift PRs — watched by StatsGrid so it refreshes
-/// automatically after workout completion via ref.invalidate().
-final workoutStatsProvider =
-    Provider<Map<String, Map<String, double>>>((ref) {
-  final token = ref.watch(authUserIdTokenProvider); // c4055a — rebuild on auth change
-  // a2d9f4: '<anon>' = no session to read (sign-out / account-swap window).
-  // A raw box read throws there; serve the empty value, and the token
-  // flipping back re-runs this with the real data.
-  if (token == '<anon>') return const <String, Map<String, double>>{};
-  return WorkoutRepository.instance.loadKeyLiftPRs();
+/// A past-phase week picked on the strip. [dates] are the stored `yyyy-MM-dd` strings of the chip's
+/// rows (frozen at tap time), [phaseStart] the raw date of the group's first row (not always a Monday):
+/// the chip's range text is [pastWeekRangeLabel] of `(phaseStart, weekInPhase)`.
+class PastWeekSelection {
+  const PastWeekSelection({
+    required this.phaseNumber,
+    required this.weekInPhase,
+    required this.dates,
+    required this.phaseStart,
+  });
+
+  final int phaseNumber;
+  final int weekInPhase;
+  final List<String> dates;
+  final String phaseStart;
+}
+
+/// The picked past week, or null. Watches [selectedWeekProvider] (which watches the auth token), so a
+/// current/future chip tap, every `ref.invalidate(selectedWeekProvider)` and an account switch reset it.
+class PastWeekSelectionNotifier extends Notifier<PastWeekSelection?> {
+  @override
+  PastWeekSelection? build() {
+    ref.watch(selectedWeekProvider);
+    return null;
+  }
+
+  /// Sets the view (null clears it). A plain assignment: the strip owns the toggle (a re-tap of the lit
+  /// chip sends null), so two taps in one frame cannot close the view by double-toggling here.
+  void select(PastWeekSelection? selection) {
+    state = selection;
+  }
+}
+
+final pastWeekSelectionProvider =
+    NotifierProvider<PastWeekSelectionNotifier, PastWeekSelection?>(
+        PastWeekSelectionNotifier.new);
+
+/// Seam: how many exercise logs a past date holds. Read only for a day that stores no exercises and
+/// whose date is known to hold logs (never a scan for a date without), overridable by a counting fake.
+final pastDayLoggedCountReaderProvider = Provider<int Function(String ymd)>(
+    (ref) => (d) => WorkoutReadService.instance.exerciseLogsForIstDate(d).length);
+
+/// The picked past week as the SAME [WorkoutDayData] objects the current week's list renders, or null
+/// (no selection, or a signed-out window). A malformed row is skipped and reported, never thrown.
+final pastWeekDaysProvider = Provider<List<WorkoutDayData>?>((ref) {
+  final token = ref.watch(authUserIdTokenProvider);
+  if (token == '<anon>') return null;
+  final selection = ref.watch(pastWeekSelectionProvider);
+  if (selection == null) return null;
+  ref.watch(currentPlanProvider); // completion, edit-log, coach log, swap and regen all invalidate it
+  final schedule = ref.read(workoutScheduleReadServiceProvider);
+  final reads = WorkoutReadService.instance;
+  final countReader = ref.read(pastDayLoggedCountReaderProvider);
+  // A throw in these two reads must not reach `_buildContent` (the whole tab would show "Failed to
+  // load"): no log dates just means no logged-count fallback, as for a date without logs.
+  var logDates = const <String>{};
+  try {
+    logDates = reads.datesWithExerciseLogs();
+  } catch (e) {
+    unawaited(ErrorTelemetry.logEvent('past_week_row_skipped',
+        message: 'logdates error=${e.runtimeType}'));
+  }
+  final finisherContext = FinisherShowContextReader.read();
+  final out = <WorkoutDayData>[];
+  for (final ymd in selection.dates) {
+    try {
+      final row = schedule.getScheduleForDate(pastWeekDateTime(ymd));
+      if (row == null) continue;
+      final view = pastDayView(
+        row,
+        wlogName: pastDayWantsLogName(row) ? reads.workoutLogNameForIstDate(ymd) : null,
+        loggedCount: (row['exercises'] is List && (row['exercises'] as List).isNotEmpty) ||
+                !logDates.contains(ymd)
+            ? null
+            : countReader(ymd),
+      );
+      out.add(workoutDayDataFromScheduleRow(
+        view.row,
+        w: selection.weekInPhase,
+        finisherContext: finisherContext,
+        exerciseCountFallback: view.loggedCount,
+      ));
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.logEvent('past_week_row_skipped',
+          message: 'date=$ymd error=${e.runtimeType}'));
+      if (kDebugMode) debugPrint('[pastWeekDays] skipped $ymd: $e\n$st');
+    }
+  }
+  return out;
 });
 
 // ── Expanded Day ────────────────────────────────────────────────
 
 class ExpandedDayNotifier extends Notifier<int?> {
   @override
-  int? build() => null;
+  int? build() {
+    // A past-week pick (or clearing it) collapses the expanded row: the index means another day now.
+    ref.watch(pastWeekSelectionProvider);
+    return null;
+  }
 
   void toggle(int dayIndex) {
     state = state == dayIndex ? null : dayIndex;
@@ -2627,7 +2735,6 @@ class ActiveWorkoutNotifier extends Notifier<ActiveWorkoutData> {
     // the same synchronous frame — these won't cause separate rebuilds.
     // Each is independent (no transitive dependencies between them).
     ref.invalidate(currentPlanProvider);
-    ref.invalidate(workoutStatsProvider);
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(streakProvider);
     ref.invalidate(todayWorkoutProvider);
@@ -2828,7 +2935,6 @@ class TemplatesNotifier extends Notifier<List<Map<String, dynamic>>> {
     ref.invalidate(currentPlanProvider);
     ref.invalidate(calendarWeekProvider);
     ref.invalidate(todayWorkoutProvider);
-    ref.invalidate(workoutStatsProvider);
     ref.invalidate(streakProvider);
   }
 }

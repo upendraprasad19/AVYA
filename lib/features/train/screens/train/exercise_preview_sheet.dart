@@ -31,6 +31,10 @@ extension _ExercisePreviewSheet on _TrainScreenState {
         ? WorkoutReadService.instance
             .exerciseLogsForIstDate(istDateStr(day.date!))
         : const <Map<String, dynamic>>[];
+    // A restored, never-completed day stores no exercises: its logs ARE the content, so the empty
+    // `PLANNED EXERCISES` label and the "No exercises scheduled" line under them are left out
+    // (docs/plans/train-past-week-in-place.md D7).
+    final logsOnly = notDoneLogs.isNotEmpty && day.exercises.isEmpty;
     final notDoneLogRows = <Widget>[
       if (notDoneLogs.isNotEmpty) ...[
         for (final log in notDoneLogs)
@@ -39,8 +43,10 @@ extension _ExercisePreviewSheet on _TrainScreenState {
             detail: exerciseLogDetail(log),
             isPr: log['is_pr'] == true,
           ),
-        const SizedBox(height: 10),
-        _buildPreviewSectionLabel('PLANNED EXERCISES', AppColors.accent),
+        if (!logsOnly) ...[
+          const SizedBox(height: 10),
+          _buildPreviewSectionLabel('PLANNED EXERCISES', AppColors.accent),
+        ],
       ],
     ];
 
@@ -275,6 +281,7 @@ extension _ExercisePreviewSheet on _TrainScreenState {
                           ...notDoneLogRows,
                           ...(day.exercises.isEmpty
                           ? [
+                              if (!logsOnly)
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 12),

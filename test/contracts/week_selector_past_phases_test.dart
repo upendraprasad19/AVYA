@@ -131,21 +131,17 @@ void main() {
     expect(src.contains('Icons.check_circle'), isTrue);
   });
 
-  test('tapping a past chip opens _PastWeekSheet (modal bottom sheet)', () {
-    expect(src.contains('showModalBottomSheet'), isTrue);
-    expect(src.contains('_PastWeekSheet'), isTrue);
-  });
-
-  test('_PastWeekSheet reads entriesForWeek + renders completed status', () {
-    final idx = src.indexOf('class _PastWeekSheet');
+  test('tapping a past chip picks that week for the Train list (no modal sheet)', () {
+    // docs/plans/train-past-week-in-place.md D5: the Completed-history sheet is gone.
+    expect(src.contains('_PastWeekSheet'), isFalse);
+    expect(src.contains('showModalBottomSheet'), isTrue,
+        reason: 'the hold-week sheet still uses one');
+    final idx = src.indexOf('void _selectPast(');
     expect(idx, greaterThan(-1));
-    final body = src.substring(idx, idx + 3000);
-    expect(body.contains('entriesForWeek'), isTrue);
-    expect(
-      body.contains("status == 'completed'") ||
-          src.contains("e.status == 'completed'"),
-      isTrue,
-    );
+    final body = src.substring(idx, idx + 900);
+    expect(body.contains('entriesForWeek(weekInPhase)'), isTrue,
+        reason: 'the picked dates are the chip\'s own rows');
+    expect(body.contains('onSelectPast') || body.contains('widget.onSelectPast'), isTrue);
   });
 
   test('public widget signature (totalWeeks, selectedWeek, onSelect, currentPhase)',

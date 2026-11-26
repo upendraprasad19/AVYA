@@ -480,7 +480,6 @@ class _TemplateBuilderScreenState
       ref.invalidate(currentPlanProvider);
       ref.invalidate(calendarWeekProvider);
       ref.invalidate(todayWorkoutProvider);
-      ref.invalidate(workoutStatsProvider);
       ref.invalidate(streakProvider);
 
       // Fire-and-forget snapshot push so the AI coach sees the new

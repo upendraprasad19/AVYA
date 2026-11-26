@@ -481,16 +481,6 @@ List<_Case> _cases() => <_Case>[
     isSeeded: (v) => v is CurrentPlanData && v.phase == 2,
   ),
   _Case(
-    'workoutStatsProvider',
-    workoutStatsProvider,
-    isEmpty: (v) => v is Map && v.isEmpty,
-    seed: () => HiveService.instance.workoutBox.put('exlog_${_today}_aaaa0002', {
-      'exercise_name': 'Bench Press',
-      'weight_kg': 80.0,
-    }),
-    isSeeded: (v) => v is Map && (v['bench'] as Map?)?['current'] == 80.0,
-  ),
-  _Case(
     'graduationStatsProvider',
     graduationStatsProvider,
     isEmpty: (v) =>
@@ -588,6 +578,30 @@ List<_Case> _cases() => <_Case>[
   _Case('pendingLogActionsProvider', pendingLogActionsProvider),
   _Case('pendingToolIntentsProvider', pendingToolIntentsProvider),
   _Case('selectedWeekProvider', selectedWeekProvider),
+  // train-history-sheet-style: the picked past week's rows. Its build reads schedule_<date> rows through
+  // the schedule read service; the '<anon>' guard comes BEFORE any read. The selection itself resets when
+  // the token flips (it watches selectedWeekProvider), so only the signed-out value is pinned, not a
+  // re-seeded value after the flip back.
+  _Case(
+    'pastWeekDaysProvider',
+    pastWeekDaysProvider,
+    isEmpty: (v) => v == null,
+    seed: () => HiveService.instance.workoutBox.put('schedule_2026-10-12', {
+      'date': '2026-10-12',
+      'type': 'workout',
+      'status': 'planned',
+      'workout_name': 'Push',
+      'exercises': <Map<String, dynamic>>[],
+    }),
+    listen: (c, onError) {
+      c.read(pastWeekSelectionProvider.notifier).select(const PastWeekSelection(
+          phaseNumber: 1,
+          weekInPhase: 1,
+          dates: ['2026-10-12'],
+          phaseStart: '2026-10-12'));
+      c.listen(pastWeekDaysProvider, (_, _) {}, onError: (e, _) => onError(e));
+    },
+  ),
   _Case('activeWorkoutProvider', activeWorkoutProvider),
   // Providers that do NOT watch the token themselves (they watch a guarded
   // provider, or read a box straight): the token-site count cannot see them.

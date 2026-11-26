@@ -33,19 +33,18 @@ String bodyOf(String src, String signature) {
 void main() {
   tearDown(() => ErrorTelemetry.debugOnRecordNonFatalForTests = null);
 
-  test('invalidates exactly the seven workout surfaces, in order', () {
+  test('invalidates exactly the six workout surfaces, in order', () {
     final seen = <ProviderOrFamily>[];
     invalidateWorkoutSurfaces(seen.add, source: 'unit');
     expect(seen, <ProviderOrFamily>[
       currentPlanProvider,
-      workoutStatsProvider,
       calendarWeekProvider,
       streakProvider,
       todayWorkoutProvider,
       allExercisePRsProvider,
       lastPerformanceProvider,
     ]);
-    expect(seen.toSet(), hasLength(7));
+    expect(seen.toSet(), hasLength(6));
   });
 
   test('aiInsightProvider is left out because it follows todayWorkoutProvider',
@@ -73,7 +72,7 @@ void main() {
       if (identical(p, streakProvider)) throw StateError('boom');
       seen.add(p);
     }, source: 'unit');
-    expect(seen, hasLength(6));
+    expect(seen, hasLength(5));
     expect(seen, isNot(contains(streakProvider)));
     expect(seen.last, lastPerformanceProvider,
         reason: 'entries after the failing one still run');
@@ -85,7 +84,7 @@ void main() {
     ErrorTelemetry.debugOnRecordNonFatalForTests =
         (e, st, {required reason, extra}) => reasons.add(reason);
     invalidateWorkoutSurfaces((_) => throw StateError('boom'), source: 'x');
-    expect(reasons, List.filled(7, 'workout_surface_invalidate_x'));
+    expect(reasons, List.filled(6, 'workout_surface_invalidate_x'));
   });
 
   group('the three coach write paths call the helper', () {
@@ -120,7 +119,6 @@ void main() {
               "invalidateWorkoutSurfaces(ref.invalidate, source: 'tool_dispatcher');"));
       for (final p in [
         'currentPlanProvider',
-        'workoutStatsProvider',
         'calendarWeekProvider',
         'streakProvider',
         'todayWorkoutProvider',
