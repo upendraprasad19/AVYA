@@ -556,6 +556,9 @@ void main() {
         // OI-479: the "Clear conversation" marker push. A swept push: the
         // sweep re-sends it through _syncUserPreferences.
         'upsert_coach_chat_cleared_at',
+        // Target history push (docs/plans/target-history-cloud.md): swept, the
+        // sweep re-sends it through _syncUserProfile.
+        'upsert_target_history',
       };
       const notArmed = <String>{
         'backfill_custom_entity_ids', 'check_and_sync', 'check_and_sync_snapshot',

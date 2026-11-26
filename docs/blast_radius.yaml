@@ -667,6 +667,7 @@ paths:
   - { glob: "lib/core/services/streak_progress_service.dart", tier: platform }   # restore freeze merge (mergeFreezeProgress); also the streak-freeze writer
   - { glob: "lib/core/services/day_swap/day_swap_rules.dart", tier: platform }   # rules the schedule merge delegates to; writes the arranged_at_ms stamp it compares
   - { glob: "lib/core/services/coach_chat_clear.dart", tier: platform }   # restore merge of the coach clear marker (raiseTo, max-wins; OI-479, diagnose 5970aa)
+  - { glob: "lib/core/services/target_history_service.dart", tier: platform }   # restore merge of the nutrition target history (adoptFromCloud / mergedHistories) and the list the profile sync pushes (docs/plans/target-history-cloud.md)
   - { glob: "lib/core/constants/fitness_goals.dart", tier: platform }   # FitnessGoals.legacyTargets decides the goal the legacy heal writes and the profile push sends (Unit 3B); also the goal SoT every calculator reads
   - { glob: "lib/core/services/legacy_goal_healer.dart", tier: platform }   # runs inside restoreFromCloudForUser on every succeeded restore and rewrites what the profile push sends (strength / recompose -> Build / Cut + targets; Unit 3B, diagnose 21da5f)
   # The identity a template push keys on: restore rebuilds Hive keys from the cloud id, and the migrator rewrites

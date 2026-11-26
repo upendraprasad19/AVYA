@@ -338,6 +338,8 @@ consumers of the same cloud snapshot can never disagree:
   `DaySwapAllowance`) and the stale `plan_json` copy already sitting in
   `userBox['progress']` for pre-existing installs.
 
+- **Target history (2026-11-25, `docs/plans/target-history-cloud.md`).** `user_profile.target_history` is NOT part of the profile map. `_restoreUserProfile` removes it from the cloud row always and merges it into `userBox['target_history']` through `TargetHistoryService.adoptFromCloud` before the profile write (also on the write-if-changed early return); the push is `pushTargetHistory`, the last step of `_syncUserProfile` after a successful upsert, through the `merge_target_history` function (a merge by day; a column upsert would let a short list delete a longer one). Kill switch `disable_target_history_cloud`.
+
 **7. The past-timestamp rule (never "now") and Gate G2.** A sync payload never sends `DateTime.now()`
 as a fallback for a timestamp describing the past. Resolution order: (1) the recorded value; (2)
 derived from a `*_ms` sibling or a timestamp embedded in the Hive key (`coach_<ms>`,
