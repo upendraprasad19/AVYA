@@ -34,6 +34,7 @@ import 'package:icanbefitter/core/services/sync_domains/streaks_sync_domain.dart
 import 'package:icanbefitter/core/services/sync_domains/workouts_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync/schedule_completion_time.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
+import 'package:icanbefitter/core/services/target_history_service.dart';
 import 'package:icanbefitter/core/services/sync/nutrition_slot_engine.dart';
 import 'package:icanbefitter/core/services/sync/nutrition_slot_remote.dart';
 import 'package:icanbefitter/core/services/sync/nutrition_slot_section.dart';

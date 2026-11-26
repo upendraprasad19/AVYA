@@ -1352,7 +1352,9 @@ class UserRepository {
     // (confirmed by reading it), so this line is currently a no-op guard,
     // not a live fix.
     final sanitizedProfileData = _sanitize(profileData)
-      ..remove('coach_extraction_locked_fields');
+      ..remove('coach_extraction_locked_fields')
+      // Written only by merge_target_history (never assigned wholesale).
+      ..remove('target_history');
     await supabase.from('user_profile').upsert({
       'user_id': userId,
       ...sanitizedProfileData,

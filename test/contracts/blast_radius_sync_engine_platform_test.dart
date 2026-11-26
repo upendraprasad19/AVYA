@@ -110,6 +110,7 @@ const _engine = <String>[
   '${_services}streak_progress_service.dart',
   '${_services}day_swap/day_swap_rules.dart',
   '${_services}coach_chat_clear.dart',
+  '${_services}target_history_service.dart',
   // Unit 3B (diagnose 21da5f): the restore wrapper calls it on every succeeded
   // restore and it rewrites what the profile push sends (unlike the title
   // healer, which is declined: it touches local Hive only and pushes nothing).
@@ -162,6 +163,17 @@ const _declined = <String, String>{
       'tags, the five keys) would become a full pipeline run. If the engine '
       'ever normalises or rewrites diet_preference through this file, it '
       'stops being declined-eligible',
+  // --- lib/core/utils/ ---
+  'lib/core/utils/nutrition_targets_resolver.dart':
+      'computes the shown nutrition targets. target_history_service.dart '
+      '(engine file, for the restore merge of the target history) imports it '
+      'only for reconcile, the LOCAL recording of today\'s targets. The two '
+      'things the engine does with the history never call it: pushTargetHistory '
+      'sends the stored list verbatim and adoptFromCloud merges stored entries '
+      'by day and at_ms (mergedHistories). Declined on cost: every change to '
+      'how a target is shown (fallbacks, the diet strategy split) would become '
+      'a full pipeline run. If the push or the merge ever recomputes an entry '
+      'through this file, it stops being declined-eligible',
   // --- lib/core/services/ ---
   '${_services}completed_title_healer.dart':
       'a computation applied to the winners AFTER the restore merge (OI-284): '

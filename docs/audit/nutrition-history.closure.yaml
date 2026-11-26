@@ -126,12 +126,11 @@ findings:
 
   - id: B
     title: "Landing B: cloud backup of the target history (user_profile.target_history + merge RPC + push + restore)"
-    terminal_state: blocked_on_user
-    reason: >
-      Needs a migration on the production project, which takes the founder's explicit
-      per-action go (CLAUDE.md 4.3), and a PR whose client needs an additive migration cannot
-      go green before it is applied. Until then the target history survives normal use but not
-      a reinstall or a second device; the screen then judges earlier days against the earliest
-      target it has and says so.
+    terminal_state: closed_in_commit
+    commit: target-history-cloud@branch
+    verification: >
+      Built on branch target-history-cloud (PR #350, plan docs/plans/target-history-cloud.md,
+      closure docs/audit/target-history-cloud.closure.yaml). Migration 190 applied on
+      2026-11-26 after the founder's go and verified live.
 
 closed_count: 12

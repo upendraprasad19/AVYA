@@ -64,6 +64,9 @@ void main() {
         // OI-479 (diagnose 5970aa): pushes the coach clear marker through the
         // monotonic RPC; called by CoachChatClear.clear and the sign-out teardown.
         'pushCoachChatClearedAt',
+        // Target history cloud backup (docs/plans/target-history-cloud.md):
+        // called by _syncUserProfile and the sign-out teardown.
+        'pushTargetHistory',
         'syncWorkoutData',
         // H1a (Unit H) — non-coalesced variant for awaited callers.
         'syncWorkoutDataNow',

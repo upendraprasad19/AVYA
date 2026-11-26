@@ -7,12 +7,22 @@
 // holding the EFFECTIVE numbers (the diet strategy already applied). Water
 // is not recorded (its target follows body weight and would churn the list).
 //
-// ONE writer: [TargetHistoryService.reconcile]. It reads the profile from and
-// writes the list to the SAME per-owner userBox, so an entry can only ever
-// describe the profile sitting beside it. Callers: ProfileWriteService (after
-// each profile put), the day rollover, the post-restore heal, and the History
-// screen on open. Every call is idempotent; a missed one is healed by the
-// next. Local only until Landing B adds the cloud column.
+// TWO writers, both in this file: [TargetHistoryService.reconcile] records
+// today's targets; [TargetHistoryService.adoptFromCloud] merges the cloud
+// backup in on restore. `reconcile` reads the profile from and writes the
+// list to the SAME per-owner userBox, so an entry can only ever describe the
+// profile sitting beside it. Callers of `reconcile`: ProfileWriteService
+// (after each profile put), the day rollover, the post-restore heal, and the
+// History screen on open. Every call is idempotent; a missed one is healed by
+// the next.
+//
+// Cloud backup (docs/plans/target-history-cloud.md): the list is pushed
+// through the `merge_target_history` function (SyncService.pushTargetHistory)
+// and merged back by [mergedHistories], the SAME rule the function applies:
+// union by `from`, the greatest (at_ms, calories, protein, carbs, fat,
+// strategy) wins, newest [maxEntries] kept. The rule has no delete, which is
+// why a same-day change back to the earlier targets REPLACES the day's entry
+// here and never removes it (a removal could not reach the cloud).
 //
 // Stated limit: PRO state is read at call time (`proStateSnapshot`). A profile
 // write that lands before PRO is known (the restore on a fresh install)
@@ -51,6 +61,24 @@ class TargetEntry {
     required this.strategy,
     required this.atMs,
   });
+
+  /// Order of two entries for the SAME `from`: positive when this one wins.
+  /// The greatest (at_ms, calories, protein, carbs, fat, strategy) wins, so
+  /// the result never depends on which side an entry came from (the SQL
+  /// function orders the same way; `strategy` by code unit, `COLLATE "C"`).
+  int compareRank(TargetEntry o) {
+    var c = atMs.compareTo(o.atMs);
+    if (c != 0) return c;
+    c = calories.compareTo(o.calories);
+    if (c != 0) return c;
+    c = protein.compareTo(o.protein);
+    if (c != 0) return c;
+    c = carbs.compareTo(o.carbs);
+    if (c != 0) return c;
+    c = fat.compareTo(o.fat);
+    if (c != 0) return c;
+    return strategy.compareTo(o.strategy);
+  }
 
   /// The five compared value fields are equal.
   bool sameTargets(TargetEntry o) =>
@@ -101,9 +129,40 @@ class TargetHistoryService {
   /// see whatever is stored (an empty history on a fresh install).
   static const String killSwitch = 'disable_target_history';
 
+  /// `configBox` kill switch for the cloud backup only: true = no push and no
+  /// [adoptFromCloud]; the local list keeps working.
+  static const String cloudKillSwitch = 'disable_target_history_cloud';
+
+  /// `userBox` memory of the last list the cloud confirmed:
+  /// `'<SyncFingerprint of the list>|<IST day>'`.
+  static const String pushedKey = 'target_history_pushed';
+
+  /// Bound on the push's one request (`SyncService.pushTargetHistory`).
+  /// A variable only so a test can shorten it.
+  static Duration pushTimeout = const Duration(seconds: 15);
+
+  /// The cloud column, and the key a cloud row carries it under.
+  static const String cloudColumn = 'target_history';
+
   /// Oldest entries are dropped past this; the new first entry then stands in
   /// for every earlier day.
   static const int maxEntries = 400;
+
+  static bool get cloudEnabled {
+    try {
+      return HiveService.instance.configBox.get(cloudKillSwitch) != true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Removes the cloud column from a profile map. `user_profile` is read with
+  /// no column list, so every cloud-to-profile merge would otherwise copy the
+  /// list into `userBox['profile']`. Returns [profile] for chaining.
+  static Map<String, dynamic> stripFromProfile(Map<String, dynamic> profile) {
+    profile.remove(cloudColumn);
+    return profile;
+  }
 
   /// Test seam: thrown inside the next [reconcile] (proves it never rethrows).
   @visibleForTesting
@@ -153,8 +212,9 @@ class TargetHistoryService {
   /// The pure step: [entries] after recording [today]'s targets. Returns the
   /// SAME list instance when nothing changes.
   ///
-  /// A same-day entry is replaced (the last change of a day wins); when the
-  /// replacement equals the entry before it, the same-day entry is removed.
+  /// A same-day entry is replaced (the last change of a day wins), also when
+  /// the replacement equals the entry before it: the day keeps an entry with
+  /// the newer `at_ms`, because the cloud merge can only add or replace.
   static List<TargetEntry> reconciled(
     List<TargetEntry> entries,
     TargetEntry today,
@@ -174,17 +234,73 @@ class TargetHistoryService {
       return next;
     }
     final hasSameDay = entries.isNotEmpty && entries.last.from == today.from;
-    final before = hasSameDay
-        ? (entries.length >= 2 ? entries[entries.length - 2] : null)
-        : (entries.isEmpty ? null : entries.last);
-    if (!hasSameDay) {
-      if (before != null && before.sameTargets(today)) return entries;
-      return _capped([...entries, today]);
+    if (entries.isNotEmpty && entries.last.sameTargets(today)) return entries;
+    if (!hasSameDay) return _capped([...entries, today]);
+    return _capped([...entries.sublist(0, entries.length - 1), today]);
+  }
+
+  /// The cloud merge rule, pure: the union of [local] and [cloud] keyed by
+  /// `from`; for one `from` the entry that wins [TargetEntry.compareRank];
+  /// entries dated after [todayKey] dropped; sorted; newest [maxEntries]
+  /// kept. Returns the SAME [local] instance when the result equals it.
+  static List<TargetEntry> mergedHistories(
+    List<TargetEntry> local,
+    List<TargetEntry> cloud,
+    String todayKey,
+  ) {
+    final byDay = <String, TargetEntry>{};
+    for (final e in [...local, ...cloud]) {
+      if (e.from.compareTo(todayKey) > 0) continue;
+      final held = byDay[e.from];
+      if (held == null || e.compareRank(held) > 0) byDay[e.from] = e;
     }
-    if (entries.last.sameTargets(today)) return entries;
-    final head = entries.sublist(0, entries.length - 1);
-    if (before != null && before.sameTargets(today)) return head;
-    return _capped([...head, today]);
+    final out = byDay.values.toList()
+      ..sort((a, b) => a.from.compareTo(b.from));
+    final next = _capped(out);
+    if (next.length != local.length) return next;
+    for (var i = 0; i < next.length; i++) {
+      final a = next[i], b = local[i];
+      if (a.from != b.from || a.compareRank(b) != 0) return next;
+    }
+    return local;
+  }
+
+  /// Merges the cloud backup ([cloudRaw] = the `target_history` value of the
+  /// restored `user_profile` row) into the local list. Returns whether it
+  /// wrote. Synchronous and never throws, like [reconcile]. Writes nothing
+  /// unless the open Hive session belongs to [ownerId], or under either kill
+  /// switch. It does not touch [pushedKey]: a merged list that differs from
+  /// what was last sent is pushed by the next profile sync.
+  static bool adoptFromCloud(
+    Object? cloudRaw, {
+    required String ownerId,
+    DateTime? now,
+  }) {
+    try {
+      if (HiveUserSession.currentOwnerFullId != ownerId) return false;
+      final hive = HiveService.instance;
+      if (hive.configBox.get(killSwitch) == true) return false;
+      if (hive.configBox.get(cloudKillSwitch) == true) return false;
+      final cloud = parse(cloudRaw);
+      if (cloud.isEmpty) return false;
+      final box = hive.userBox;
+      final local = parse(box.get(boxKey));
+      final next = mergedHistories(local, cloud, istDateStr(now ?? nowWall()));
+      if (identical(next, local)) return false;
+      unawaited(box
+          .put(boxKey, [for (final e in next) e.toMap()])
+          .catchError((Object e, StackTrace st) {
+        debugPrint('[TargetHistoryService.adoptFromCloud] put failed: $e');
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'target_history_put'));
+      }));
+      return true;
+    } catch (e, st) {
+      debugPrint('[TargetHistoryService.adoptFromCloud] $e');
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'target_history_adopt'));
+      return false;
+    }
   }
 
   static List<TargetEntry> _capped(List<TargetEntry> entries) =>
