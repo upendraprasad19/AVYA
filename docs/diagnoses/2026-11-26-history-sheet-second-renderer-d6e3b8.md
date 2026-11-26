@@ -24,11 +24,11 @@ writers:
     line: 310
   - file: lib/features/train/providers/train_provider.dart
     method_or_widget: PastWeekSelectionNotifier (build watches selectedWeekProvider; select toggles)
-    line: 1275
+    line: 1271
 readers:
   - file: lib/features/train/providers/train_provider.dart
     method_or_widget: pastWeekDaysProvider (getScheduleForDate(pastWeekDateTime(ymd)), pastDayView, per-row try/catch)
-    line: 1299
+    line: 1296
   - file: lib/features/train/providers/train_provider.dart
     method_or_widget: workoutDayDataFromScheduleRow (extracted VERBATIM from currentPlanProvider; shared by both lists)
     line: 804
@@ -85,15 +85,16 @@ proposed_fix: >-
   code; the sheet and its helpers are deleted; D6 no production change, a budgeted scale guard; D7 the preview sheet
   omits the empty PLANNED EXERCISES block and "No exercises scheduled" for a day whose logs are its content.
 regression_test_planned:
-  - test/contracts/train_past_week_in_place_behavioral_test.dart (15 tests: rows, names, counts, footer, label, Wednesday-start W2, dropped/malformed/empty, completion refresh, stale picked week, holding user, semantics, D7 sheet, selection lifecycle)
+  - test/contracts/train_past_week_in_place_behavioral_test.dart (17 tests plus the font warm-up: rows, names, counts, real count reader, no cap with 12 logs and a timed set, footer, label, Wednesday-start W2, dropped/malformed/empty, completion refresh, stale picked week, holding user, semantics incl. the tap action, D7 sheet, selection lifecycle)
   - test/contracts/past_week_days_pure_test.dart (pastWeekDateTime, pastWeekRangeLabel, pastDayView precedence/count, workoutLogName)
   - test/contracts/workout_day_data_from_row_test.dart (GOLDEN, captured from the unmodified provider)
   - test/contracts/past_week_scale_guard_test.dart (two-year box, absolute budget)
   - repointed, not loosened: week_selector_past_phases_test.dart, past_week_history_derives_from_logs_test.dart, cardio_duration_distance_writer_to_reader_test.dart (T26 now pins exerciseLogDetail)
 mutation_proof: >-
-  20 mutants (plan M1-M20), each applied by an exact-match replace (refused on 0 or 2+ anchor matches, confirmed by a
-  changed file), run against the four new/related test files, restored by cp and byte-compared. 20 of 20 red. Reddened
-  tests per mutant: M1 1, M2 2, M3 2, M4 2, M5 1, M6 1, M7 1, M8 1, M9 3, M10 1, M11 3, M12 1, M13 1, M14 2, M15 2, M16 1,
+  24 mutants (plan M1-M20, plus M21-M24 for the B-pass fixes: the chip Semantics tap action, the notifier toggle, the
+  stored-title fallback, the real count reader), each applied by an exact-match replace (refused on 0 or 2+ anchor matches, confirmed by a
+  changed file), run against the four new/related test files, restored by cp and byte-compared. 24 of 24 red. Reddened
+  tests per mutant: M21 1, M22 1, M23 1, M24 2, M1 1, M2 2, M3 2, M4 2, M5 1, M6 1, M7 1, M8 1, M9 3, M10 1, M11 3, M12 1, M13 1, M14 2, M15 2, M16 1,
   M17 1, M18 1, M19 1, M20 1. One survivor on the first run: M4 (isDone: false) was anchored on workoutDayForDate
   (line 787), not on the extracted builder (line 849 then); re-anchored on the builder it reddens the golden and one
   behavioral test. Runner: session scratchpad mutants.py / run_mutants.sh. Self-attested.
@@ -105,11 +106,13 @@ impact_analysis: >-
   is Edit Log); (5) the HoldChipGroup H chip stays lit during a past view (it means "you are here"); (6) a past hold
   week (an extended chip group) renders ordinary rows with no H label; (7) any background restore, day rollover, PRO
   phase advance, hero action or selectedWeekProvider invalidation closes an open past view (a transient view, the label
-  line always says where the user is). Scale (founder question, a two-year user, all Hive, no Postgres call): 730
-  schedule rows over 26 phases, ~4,000 exlog and 500 wlog rows: pastPhaseBlocksForDisplay 76 ms, a full past-week build
-  40 ms on the 4-core VPS (budget max(1000 ms, 10x measured) = 1000 ms); the app renders one week at a time, so there is
-  no growing list to hang. The exlog fallback scan (a date with no index entry) is unchanged and is reached only for the
-  one or two nameless no-stored-exercise days of the picked week.
+  line always says where the user is). Scale (founder question, a two-year user, all Hive, no Postgres call): 728
+  schedule rows over 26 phases, ~3,700 exlog and 14 wlog rows, the picked week including a nameless day whose logs have
+  no index entry (the whole-box fallback) and a nameless day with no logs: pastPhaseBlocksForDisplay 120 ms, a full
+  past-week build 57 ms on the 4-core VPS (budget max(1000 ms, 10x measured) = 1000 ms); the app renders one week at a time, so there is
+  no growing list to hang. The exlog fallback scan (a date with exlog_ keys but no index entry) is unchanged and is reached only for the
+  nameless no-stored-exercise days of the picked week that hold logs; a restored key with no date inside it is not
+  counted (the same key-only limit as the current list's hasLogs; ExlogKeyMigrator rewrites those keys).
 touched_layers_checked:
   - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "D1-D7 as listed in writers/readers; flutter analyze --no-fatal-infos clean on the project" }
   - { tier: 2, name: "Hive (local state)", status: verified, evidence: "read-only path over schedule_/wlog_/exlog_; real-Hive behavioral tests; the goldens pin the builder output" }
@@ -145,7 +148,7 @@ See `symptom`. Plan: `docs/plans/train-past-week-in-place.md` (v3 + round-4 patc
 
 Rows are written by the existing schedule writers and `markCompleted` (unchanged). Past rows had TWO readers (the strip
 chips and the sheet); they are now one list renderer fed by the strip's own chip dates: `_selectPast`
-(`week_selector.dart:310`) writes the selection, `pastWeekDaysProvider` (`train_provider.dart:1299`) reads the rows
+(`week_selector.dart:310`) writes the selection, `pastWeekDaysProvider` (`train_provider.dart:1296`) reads the rows
 through `getScheduleForDate`, and `_buildCompactWeekRows` renders them.
 
 ## The fix
@@ -178,8 +181,9 @@ an IST-zone (CI zone) contract. The pure helpers (`past_week_days_pure_test.dart
 ## Verification
 
 - `TZ=Asia/Kolkata flutter test` on the four new files plus the repointed and neighbouring Train tests: green
-  (123 tests across the related Train files; the four new files: 15 behavioral, 12 pure, 1 golden, 1 scale guard).
-- Mutation proof above (20 of 20 red).
+  (123 tests across the related Train files; the four new files: 17 behavioral, 14 pure, 1 golden, 1 scale guard).
+- Mutation proof above (24 of 24 red).
+- B-pass (two fresh Sonnet seats on 655c89b8, CI green): `docs/reviews/655c89b846c9-review.md`, every finding fixed or dispositioned there. The pure test also runs green under `TZ=America/New_York` and `TZ=Etc/GMT-8`.
 - `flutter analyze --no-fatal-infos` on the whole project and the pre-commit gate loop: see the commit.
 - Founder device check after the build: tap a past chip on the phone; the list matches the current week's look under
   the label line; Fri 16 Oct opens its preview with its logs; a holding user keeps the H chip lit.

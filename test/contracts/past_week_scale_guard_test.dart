@@ -1,6 +1,8 @@
 // Scale guard for the Train past-week view (docs/plans/train-past-week-in-place.md D6, founder question:
-// "a two-year user, will it hang?"). A synthetic two-year box: 730 schedule rows over 26 phases, ~4,000
-// exlog_ rows (indexed like the writer does), 500 wlog_ rows. Absolute budget only (never a ratio: CI
+// "a two-year user, will it hang?"). A synthetic two-year box: 728 schedule rows over 26 phases, ~3,700
+// exlog_ rows (indexed like the writer does), 14 wlog_ rows; in the picked week one nameless day has its
+// logs but NO index entry (a restore without the index: the whole-box fallback path) and one nameless day
+// has no logs at all. Absolute budget only (never a ratio: CI
 // runners vary 2x): max(1000 ms, 10x the time measured on the 4-core VPS when this was written).
 // The STRUCTURAL rule (no per-row whole-box read) is killed by the counting seam in
 // train_past_week_in_place_behavioral_test.dart; this guards gross regressions of the two scans.
@@ -112,6 +114,23 @@ void main() {
         w['schedule_${r['date']}'] = r;
       }
       await wb.putAll(w);
+      // Offset 3: logs exist but the index entry is gone (the whole-box fallback of exerciseLogsForIstDate).
+      final d3 = _d(s.add(const Duration(days: 3)));
+      await wb.delete('exercise_log_index_$d3');
+      // Offset 5: a nameless workout day with NO logs at all (no key, no index).
+      final d5 = _d(s.add(const Duration(days: 5)));
+      for (final k in wb.keys.where((k) => k.toString().startsWith('exlog_${d5}_')).toList()) {
+        await wb.delete(k);
+      }
+      await wb.delete('exercise_log_index_$d5');
+      await wb.put('schedule_$d5', {
+        'date': d5,
+        'phase': 20,
+        'week': 1,
+        'type': 'workout',
+        'status': 'planned',
+        'exercises': <Map<String, dynamic>>[],
+      });
     });
 
     final svc = WorkoutScheduleReadService.instance;

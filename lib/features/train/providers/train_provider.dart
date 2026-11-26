@@ -1264,10 +1264,6 @@ class PastWeekSelection {
   final int weekInPhase;
   final List<String> dates;
   final String phaseStart;
-
-  /// Same group + same week (what "tap the lit chip again" compares).
-  bool isSameWeekAs(PastWeekSelection? o) =>
-      o != null && o.phaseNumber == phaseNumber && o.weekInPhase == weekInPhase;
 }
 
 /// The picked past week, or null. Watches [selectedWeekProvider] (which watches the auth token), so a
@@ -1279,9 +1275,10 @@ class PastWeekSelectionNotifier extends Notifier<PastWeekSelection?> {
     return null;
   }
 
-  /// Picks [selection]; the same week again, or null, clears the view.
+  /// Sets the view (null clears it). A plain assignment: the strip owns the toggle (a re-tap of the lit
+  /// chip sends null), so two taps in one frame cannot close the view by double-toggling here.
   void select(PastWeekSelection? selection) {
-    state = (selection != null && selection.isSameWeekAs(state)) ? null : selection;
+    state = selection;
   }
 }
 
@@ -1305,7 +1302,15 @@ final pastWeekDaysProvider = Provider<List<WorkoutDayData>?>((ref) {
   final schedule = ref.read(workoutScheduleReadServiceProvider);
   final reads = WorkoutReadService.instance;
   final countReader = ref.read(pastDayLoggedCountReaderProvider);
-  final logDates = reads.datesWithExerciseLogs();
+  // A throw in these two reads must not reach `_buildContent` (the whole tab would show "Failed to
+  // load"): no log dates just means no logged-count fallback, as for a date without logs.
+  var logDates = const <String>{};
+  try {
+    logDates = reads.datesWithExerciseLogs();
+  } catch (e) {
+    unawaited(ErrorTelemetry.logEvent('past_week_row_skipped',
+        message: 'logdates error=${e.runtimeType}'));
+  }
   final finisherContext = FinisherShowContextReader.read();
   final out = <WorkoutDayData>[];
   for (final ymd in selection.dates) {

@@ -30,7 +30,9 @@ const List<String> _months = [
 /// label line above the list and the chip's Semantics label (three readers, no drift).
 String pastWeekRangeLabel(String phaseStart, int weekInPhase) {
   final m = _ymd.firstMatch(phaseStart);
-  if (m == null) throw FormatException('not a yyyy-MM-dd date', phaseStart);
+  // Called from widget builds (every chip, the label line): a malformed stored date must not break the
+  // strip, so it shows the raw text (the schedule keys are always yyyy-MM-dd; this is hardening).
+  if (m == null) return phaseStart;
   final start = DateTime.utc(int.parse(m.group(1)!), int.parse(m.group(2)!),
           int.parse(m.group(3)!))
       .add(Duration(days: (weekInPhase - 1) * 7));
@@ -49,6 +51,15 @@ String? usableWorkoutName(Object? name) {
   final t = name.trim();
   if (t.isEmpty || kPlaceholderWorkoutNames.contains(t.toLowerCase())) return null;
   return t;
+}
+
+/// A non-blank name that is NOT the generic `workout` word: what the current week's list would show for
+/// a row whose only name is a placeholder such as `Chat Workout` (a coach-logged day). Last resort before
+/// the generic, so the past list never hides a stored title the current list shows (B-pass 2026-11-26).
+String? _storedTitle(Object? name) {
+  if (name is! String) return null;
+  final t = name.trim();
+  return (t.isEmpty || t.toLowerCase() == 'workout') ? null : t;
 }
 
 /// Whether [row] needs its `wlog_<date>` name looked up: a COMPLETED row always (its title follows the
@@ -71,6 +82,8 @@ class PastDayView {
 /// name-less and exercise-less):
 /// - name of a COMPLETED row: the `wlog_<date>` name, else the row's own, else the generic;
 /// - name of a NOT-done row: the row's own, else the wlog name, else the generic;
+/// - then a stored placeholder title other than the bare word `Workout` (e.g. `Chat Workout`), as the
+///   current list shows it;
 /// - generic: `Rest Day` for a rest-type row, `Workout` otherwise (the Train builder upper-cases it);
 /// - count: [loggedCount] only when the row stores no `exercises` (null otherwise, the builder counts them).
 /// [wlogName] and [loggedCount] are read by the caller ONLY when needed ([pastDayWantsLogName], the date
@@ -86,7 +99,11 @@ PastDayView pastDayView(
       PlanEngineFlags.isRestDayConsideringLogged(row['type'] as String? ?? 'rest');
   final generic = isRest ? 'Rest Day' : 'Workout';
   final completed = row['status'] == 'completed';
-  final name = completed ? (log ?? own ?? generic) : (own ?? log ?? generic);
+  final preferred = completed ? (log ?? own) : (own ?? log);
+  final stored = completed
+      ? (_storedTitle(wlogName) ?? _storedTitle(row['workout_name']))
+      : (_storedTitle(row['workout_name']) ?? _storedTitle(wlogName));
+  final name = preferred ?? stored ?? generic;
   final copy = Map<String, dynamic>.from(row)..['workout_name'] = name;
   final ex = row['exercises'];
   final hasExercises = ex is List && ex.isNotEmpty;

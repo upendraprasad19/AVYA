@@ -3,7 +3,7 @@
 // (no "Completed history" sheet), missed days are the muted rows, a completed day expands inline, a missed
 // day with logs opens the preview sheet, and the selection resets the way the plan says.
 //
-// Fixture: current phase 2 (rows from last Monday), ONE past group of 26 days that starts on a WEDNESDAY
+// Fixture: current phase 2 (rows from last Monday), ONE past group of 40 days that starts on a WEDNESDAY
 // (so the chip's range must come from the group's first row, not from a Monday).
 //
 // Run: TZ=Asia/Kolkata flutter test test/contracts/train_past_week_in_place_behavioral_test.dart
@@ -12,13 +12,15 @@
 library;
 
 import 'dart:io';
-import 'dart:ui' show Tristate;
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
+import 'package:icanbefitter/core/services/workout_read_service.dart';
+import 'package:icanbefitter/features/train/utils/exercise_log_detail.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -53,6 +55,19 @@ String _ymd(int i) => istDateStr(_pastDay(i));
 const _months = [
   'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
 ];
+const _monthsMixed = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// The chip's Semantics range text ("Oct 28 to Nov 3"), built from a mixed-case month table so a range
+/// that crosses a month end matches too (B-pass 2026-11-26: a lower-casing helper went red on ~20% of days).
+String _expectedSemanticsRange([int week = 1]) {
+  final a = _pastDay((week - 1) * 7);
+  final b = _pastDay((week - 1) * 7 + 6);
+  return a.month == b.month
+      ? '${_monthsMixed[a.month - 1]} ${a.day} to ${b.day}'
+      : '${_monthsMixed[a.month - 1]} ${a.day} to ${_monthsMixed[b.month - 1]} ${b.day}';
+}
 
 /// The chip's own range text, computed here independently of `pastWeekRangeLabel`.
 String _expectedRange([int week = 1]) {
@@ -173,6 +188,26 @@ Future<void> _seed() async {
   for (final n in ['Bench Press', 'Barbell Row', 'Curl']) {
     await _log(_pastDay(3), n);
   }
+  // i8 (week 2): a nameless day with MANY logs, one of them timed: the "no cap" decision (the batch started
+  // from a day with 40 logs). 12 rows, the timed one prints its seconds.
+  await wb.put('schedule_${_ymd(8)}',
+      _row(_pastDay(8), 2, phase: 1, type: 'workout', status: 'planned'));
+  for (var k = 0; k < 11; k++) {
+    await _log(_pastDay(8), 'Cap Test $k');
+  }
+  final plank = await WorkoutWriteService.instance.logExercise(
+    date: _pastDay(8),
+    exerciseName: 'Plank',
+    sets: [
+      ExerciseSet(
+          weightKg: 0,
+          reps: 0,
+          durationSec: 20,
+          loggedAtMs: DateTime.now().millisecondsSinceEpoch),
+    ],
+    source: WriteSource.aiCoach,
+  );
+  expect(plank.success, isTrue, reason: plank.errorMessage);
   // i4: a completed day whose schedule row lost its name; the wlog row has it; two logs.
   await _log(_pastDay(4), 'Overhead Press');
   await _log(_pastDay(4), 'Dip');
@@ -299,6 +334,12 @@ void main() {
     await tester.tap(find.text('PULL DAY'));
     await tester.pump();
     expect(find.text('Pull Up'), findsWidgets, reason: 'the logged exercise, inline');
+    final pulled = WorkoutReadService.instance.exerciseLogsForIstDate(_ymd(0));
+    expect(pulled.length, 1);
+    expect(find.byType(ExpandedExerciseLogRow), findsOneWidget,
+        reason: 'the inline list is the logged exercises, one row each');
+    expect(find.text(exerciseLogDetail(pulled.single)), findsOneWidget,
+        reason: 'the detail line is the Train row formatter, not a copy');
 
     await tester.tap(find.text('PULL DAY')); // collapse
     await tester.pump();
@@ -308,6 +349,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Bench Press'), findsWidgets);
     expect(find.text('Barbell Row'), findsWidgets);
+    expect(find.byType(ExpandedExerciseLogRow), findsNWidgets(3),
+        reason: 'the sheet lists exactly the 3 logged exercises of that day');
     expect(find.text(WardroomCopy.trainLoggedChip), findsWidgets);
     expect(find.text('PLANNED EXERCISES'), findsNothing);
     expect(find.text('No exercises scheduled'), findsNothing);
@@ -364,6 +407,19 @@ void main() {
       await _done(tester);
     });
 
+    testWidgets('select is a plain assignment: the same week twice in a frame stays open',
+        (tester) async {
+      await open(tester);
+      final c = await _pump(tester);
+      final sel = PastWeekSelection(
+          phaseNumber: 1, weekInPhase: 1, dates: [_ymd(0)], phaseStart: _ymd(0));
+      c.read(pastWeekSelectionProvider.notifier).select(sel);
+      c.read(pastWeekSelectionProvider.notifier).select(sel);
+      expect(c.read(pastWeekSelectionProvider), isNotNull,
+          reason: 'only the strip toggles (a re-tap sends null)');
+      await _done(tester);
+    });
+
     testWidgets('a selection with no rows shows the empty line', (tester) async {
       await open(tester);
       final c = await _pump(tester);
@@ -392,6 +448,34 @@ void main() {
     });
   });
 
+  testWidgets('no cap: a day with 12 logs lists all 12, the timed one prints its seconds',
+      (tester) async {
+    await open(tester);
+    await _pump(tester);
+    final w2 = find.byKey(const ValueKey('past-1-w2'));
+    await tester.ensureVisible(w2);
+    await tester.pump();
+    await tester.tap(w2);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('12 EX'), findsOneWidget, reason: 'the row count is the logged count, uncapped');
+    await tester.ensureVisible(find.text('WORKOUT'));
+    await tester.tap(find.text('WORKOUT'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ExpandedExerciseLogRow), findsNWidgets(12));
+    expect(find.text('20s'), findsOneWidget, reason: 'a timed log prints through exerciseLogDetail');
+    await _done(tester);
+  });
+
+  testWidgets('the REAL count reader (no override): the same N EX the fake gave', (tester) async {
+    await open(tester);
+    await _pump(tester); // no countCalls => pastDayLoggedCountReaderProvider keeps its default
+    await _pickPast(tester);
+    expect(find.text('3 EX'), findsNWidgets(2)); // Leg Day: 3 stored; WORKOUT: 3 logged
+    expect(find.text('2 EX'), findsNWidgets(2)); // Pull + Core: 2 stored; Push Day: 2 logged
+    await _done(tester);
+  });
+
   testWidgets('W2 of a group that starts on a Wednesday: label and chip range come from the FIRST row',
       (tester) async {
     await open(tester);
@@ -408,8 +492,7 @@ void main() {
     expect(find.descendant(of: w2, matching: find.text(_expectedRange(2))), findsOneWidget,
         reason: "the chip's own range text is the same one");
     final sem = tester.getSemantics(w2);
-    expect(sem.label, contains(_expectedRange(2).replaceAll('\u2013', ' to ').toLowerCase()
-        .replaceFirstMapped(RegExp(r'^\w'), (m) => m[0]!.toUpperCase())));
+    expect(sem.label, contains(_expectedSemanticsRange(2)));
     await _done(tester);
   });
 
@@ -474,8 +557,9 @@ void main() {
     await _pickPast(tester);
     expect(find.textContaining('Viewing Week'), findsNothing);
     expect(find.byType(DaySwapAllowanceLine), findsNothing);
-    expect(find.text('PUSH DAY'), findsWidgets,
-        reason: "today's hero (Push Day) is back, plus the past list's own PUSH DAY row");
+    expect(find.textContaining('WK 2 OF'), findsOneWidget,
+        reason: 'the header reads as the current week (this week is week 2 of the phase)');
+    expect(find.text('START'), findsOneWidget, reason: "today's hero offers its workout again");
     await _done(tester);
   });
 
@@ -512,6 +596,9 @@ void main() {
     expect(tester.widget<HoldChipGroup>(find.byType(HoldChipGroup)).todayHoldOrdinal, isNotNull,
         reason: 'the H chip means "you are here" and stays lit');
     expect(find.textContaining('HOLDING'), findsWidgets, reason: 'the hero row still reads as the hold week');
+    expect(find.descendant(of: find.byType(HoldChipGroup), matching: find.textContaining('\u2013')),
+        findsWidgets,
+        reason: 'the lit H chip prints its date range (shown only for the current hold)');
     expect(find.text('START'), findsOneWidget, reason: "the hero still offers today's workout");
     expect(find.text('PULL DAY'), findsOneWidget);
     await _done(tester);
@@ -526,8 +613,15 @@ void main() {
     expect(sem.label, startsWith('Phase I week 1, '));
     expect(tester.widget<WeekSelector>(find.byType(WeekSelector)).selectedWeek, 0,
         reason: 'no W chip in any phase group is lit while a past week is shown');
-    expect(find.byWidgetPredicate((w) => w is Semantics && w.properties.liveRegion == true),
-        findsWidgets, reason: 'the label line is a live region');
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('past-week-label')),
+            matching: find.byWidgetPredicate(
+                (w) => w is Semantics && w.properties.liveRegion == true)),
+        findsOneWidget,
+        reason: 'the label line is a live region');
+    expect(sem.getSemanticsData().hasAction(SemanticsAction.tap), isTrue,
+        reason: 'a screen-reader user can press the chip (excludeSemantics drops the child tap)');
     await _done(tester);
   });
 }

@@ -36,6 +36,9 @@ void main() {
     test('a malformed string throws (the provider skips and reports the row)', () {
       expect(() => pastWeekDateTime('nope'), throwsFormatException);
     });
+    test('the range label never throws in a widget build: a malformed start shows its raw text', () {
+      expect(pastWeekRangeLabel('20261012', 1), '20261012');
+    });
   });
 
   group('pastWeekRangeLabel', () {
@@ -49,9 +52,9 @@ void main() {
     });
     test('crosses a year and a leap day', () {
       expect(pastWeekRangeLabel('2026-12-28', 1), 'Dec 28–Jan 3');
-      expect(pastWeekRangeLabel('2028-02-24', 1), 'Feb 24–30'.replaceAll('30', 'Mar 1'));
+      expect(pastWeekRangeLabel('2028-02-24', 1), 'Feb 24\u2013Mar 1');
     });
-    test('a week past the group start still counts 7-day steps (DST-proof UTC math)', () {
+    test('a week past the group start still counts 7-day steps', () {
       expect(pastWeekRangeLabel('2026-03-23', 2), 'Mar 30–Apr 5');
       expect(pastWeekRangeLabel('2026-10-26', 2), 'Nov 2–8');
     });
@@ -71,6 +74,16 @@ void main() {
       expect(pastDayView(_row(), wlogName: 'Log Name').row['workout_name'], 'Log Name');
       expect(pastDayView(_row()).row['workout_name'], 'Workout');
       expect(pastDayView(_row(type: 'rest', status: 'rest')).row['workout_name'], 'Rest Day');
+    });
+    test('a stored "Chat Workout" title is still shown (as the current list shows it), never hidden', () {
+      expect(pastDayView(_row(status: 'completed', name: 'Chat Workout'), wlogName: 'Chat Workout')
+          .row['workout_name'], 'Chat Workout');
+      expect(pastDayView(_row(name: 'Chat Workout')).row['workout_name'], 'Chat Workout');
+      // The bare word stays the generic (the same text either way), and a real name still beats a placeholder.
+      expect(pastDayView(_row(type: 'rest', status: 'rest', name: 'Workout')).row['workout_name'],
+          'Rest Day');
+      expect(pastDayView(_row(status: 'completed', name: 'Chat Workout'), wlogName: 'Leg Day')
+          .row['workout_name'], 'Leg Day');
     });
     test('a placeholder, blank or non-string name counts as none (trim + lower-case)', () {
       for (final n in ['Workout', ' workout ', 'Chat Workout', 'CHAT WORKOUT', '  ', '']) {

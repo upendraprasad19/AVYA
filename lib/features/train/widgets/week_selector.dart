@@ -21,8 +21,8 @@ import 'hold_chip_group.dart';
 ///   - visually distinct (textDim border vs accent),
 ///   - carry a `✓` glyph on the chip top-right when ≥1 day in that
 ///     week has status='completed',
-///   - tappable → opens [_PastWeekSheet] showing the 7-day breakdown
-///     from `schedule_*` Hive entries for that historical week.
+///   - tappable → shows that historical week in the Train list itself
+///     (`onSelectPast`, rows from `schedule_*` Hive entries; no sheet).
 ///
 /// Past-phase detection: DELEGATED, not done here. This widget calls
 /// `WorkoutScheduleReadService.pastPhaseBlocksForDisplay(currentPhase)`; the
@@ -600,6 +600,10 @@ class _PastWeekChip extends StatelessWidget {
       selected: selected,
       label: 'Phase ${_phaseRoman(phaseNumber)} week $weekInPhase, '
           '${range.replaceAll('\u2013', ' to ')}',
+      // excludeSemantics drops the GestureDetector's own tap action, so the node
+      // carries it itself (a button a screen reader cannot press; same as
+      // food_type_chips.dart; the chip test pins the tap action).
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,
