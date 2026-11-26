@@ -23,6 +23,7 @@ import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
+import 'package:icanbefitter/features/train/widgets/day_swap_drag_wrapper.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 
 import '../../helpers/hive_test_setup.dart';
@@ -480,6 +481,115 @@ void main() {
       expect((r as DaySwapDone).freezeRefunded, isTrue);
       expect(prog()['streak_freezes_available'], 1);
       expect(ledger(), contains(FreezeLedger.marker(wed)));
+    });
+  });
+
+  // B-pass seat B (mutation lens): one test per surviving mutant.
+  group('B-pass seat B survivors', () {
+    Future<void> rescued(String d, {String into = fri, String type = 'rest'}) =>
+        put(d, {
+          ...(type == 'rest' ? rest(d) : workout(d, 'X')),
+          DaySwapRules.rescuedIntoKey: into,
+        });
+
+    test('M03/M31 drag target: a missed day pairs only with today', () async {
+      bool ok(String lifted, String date) => DaySwapDragWrapper.dropTargetValid(
+          movable: true, lifted: lifted, date: date, today: fri);
+      expect(ok(wed, fri), isTrue);
+      expect(ok(fri, wed), isTrue);
+      expect(ok(sat, wed), isFalse);
+      expect(ok(wed, sat), isFalse);
+      expect(ok(sat, sun), isTrue);
+      expect(DaySwapDragWrapper.dropTargetValid(
+              movable: false, lifted: wed, date: fri, today: fri),
+          isFalse);
+      // Kill switch: no pair rule (the old drag: any movable day).
+      await HiveService.instance.configBox
+          .put(kDisableMissedDayRescueKey, true);
+      expect(ok(sat, wed), isTrue);
+      expect(ok(wed, sat), isTrue);
+    });
+
+    test('M30 kill switch: a rescued row earns nothing, ledger untouched',
+        () async {
+      await rescued(wed);
+      await progress(available: 0, used: [wed]);
+      await HiveService.instance.configBox
+          .put(kDisableMissedDayRescueKey, true);
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: false),
+          0);
+      expect(ledger(), [wed]);
+      expect(prog()['streak_freezes_available'], 0);
+      // Mirror: the same state with the switch off pays.
+      await HiveService.instance.configBox.delete(kDisableMissedDayRescueKey);
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: false),
+          1);
+    });
+
+    test('M14 a count above the cap (tier misread) is never lowered', () async {
+      await rescued(wed);
+      await progress(available: 3, used: [wed]);
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: false),
+          0);
+      expect(prog()['streak_freezes_available'], 3);
+    });
+
+    test('M07 a freeze spent on MONDAY and rescued is refunded', () async {
+      await rescued(mon, into: wed);
+      await progress(available: 0, used: [mon]);
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: false),
+          1);
+      expect(ledger(), contains(FreezeLedger.marker(mon)));
+    });
+
+    test('M11 a row carrying rescued_into that is not rest earns nothing',
+        () async {
+      await rescued(wed, type: 'workout');
+      await progress(available: 0, used: [wed]);
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: false),
+          0);
+    });
+
+    test('M13 rescued_into in another week earns nothing', () async {
+      await rescued(wed, into: nextMon);
+      await progress(available: 0, used: [wed]);
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: false),
+          0);
+    });
+
+    test('M46 the unshown freeze notice drops by the freezes given back',
+        () async {
+      await rescued(wed);
+      await HiveService.instance.userBox.put('progress', {
+        'streak_freezes_available': 0,
+        'streak_freeze_used_dates': [tue, wed],
+        'streak_freezes_last_refill': mon,
+        'streak_freeze_just_used': true,
+        'streak_freeze_just_used_count': 2,
+      });
+      expect(StreakProgressService.instance.settleRescueRefunds(isPro: false),
+          1);
+      expect(prog()['streak_freeze_just_used_count'], 1);
+      expect(prog()['streak_freeze_just_used'], isTrue);
+    });
+
+    // M42 (drop the same-week test in _weekHostsRescue) is equivalent: weekStates
+    // reads today's row from that week's own map (null outside it) and an engine
+    // pair is same-week; this pins the behaviour anyway.
+    test('M42 last week keeps the old past lock while today hosts', () async {
+      const lastWed = '2026-09-16';
+      await put(lastWed, workout(lastWed, 'Legs'));
+      final last = {
+        for (final st in engine.weekStates(lastWed)) st.date: st.lock,
+      };
+      expect(last[lastWed], DaySwapRefusal.past);
+      expect(locks()[wed], isNull); // this week's missed day is movable
+    });
+
+    test('M44 today type rest but status planned is not a host', () async {
+      await put(fri, {...rest(fri), 'status': 'planned'});
+      expect(locks()[wed], DaySwapRefusal.past);
+      expectRefused(await swap(wed, fri), DaySwapRefusal.past, wed);
     });
   });
 

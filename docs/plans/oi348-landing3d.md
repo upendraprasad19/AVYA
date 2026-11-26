@@ -273,3 +273,4 @@ coach card drops `origin: coach` (coach card test).
 | B-F6a capped refund marked and lost | P3 | marker only for dates paid; T7e2/T7e3/T7e4 |
 | B-F6b a settle past Sunday midnight skips last week | P3 | verified clean: Monday's refill restores the stock anyway |
 | B-F7 manifest missing readers | P3 | `sync_restore_completeness.dart` and `commitConsume` added |
+| B-seatB mutation survivors (M03/M31 drag, M30 settle switch, M39 rollover call, M07 Monday, M11/M13/M46 settle, M44 host) | P2 | `DaySwapDragWrapper.dropTargetValid` extracted; one test per survivor; rollover behavioural test; M14/M42 equivalent (reasons in the B-pass file) |

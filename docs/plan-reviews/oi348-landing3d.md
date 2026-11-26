@@ -5,7 +5,7 @@ blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/oi348-landing3d-bpass.md
 ---
 
@@ -52,4 +52,8 @@ restore merge (`sync_workout.dart:2611`, `:2810`, `:2860`), the cloud column lis
   plain date alone under-refunded.
 
 ## B-pass
-Pending: `/code-review` on the branch diff before the merge.
+Accepted: `docs/reviews/oi348-landing3d-bpass.md`, with two context-blind Sonnet seats on 666760a0.
+- Seat A (read-only lenses) found 1 P1: the refund's `is_swapped` test, which round 3 had added, refused a real rescue that sends earlier-swapped content home. It was dropped, because copies already fail the same-week test.
+- Seat A also found a pre-anchor day offered as missed, stale SoT cites, a capped refund marked and lost, and the `PAST` chip on a non-past day.
+- Seat B (54 mutants, 13 survivors) found test gaps only. Each survivor now has a test, or is recorded as equivalent with its reason.
+- All folded in 63ffa5fb and the follow-on commit.

@@ -17800,7 +17800,7 @@ concepts:
         fields_read: [via daySwapWeekProvider]
       - file: lib/features/train/widgets/day_swap_drag_wrapper.dart
         line_range: 1-9999
-        method: "isValidTarget follows DaySwapRules.pairLock"
+        method: "DaySwapDragWrapper.dropTargetValid (pure; pairLock while the rescue is on)"
         semantic: display-only
         fields_read: [via daySwapWeekProvider]
     class_constraints: |

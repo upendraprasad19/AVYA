@@ -61,6 +61,22 @@ final _liftedDateProvider =
     NotifierProvider<_LiftedDateNotifier, String?>(_LiftedDateNotifier.new);
 
 class DaySwapDragWrapper extends ConsumerWidget {
+  /// OI-348 P3: is [date] a drop target while [lifted] is held? It must be
+  /// movable, not the lifted day itself, and, while the rescue is on, a past
+  /// (missed) day pairs ONLY with today, both ways (the engine's
+  /// [DaySwapRules.pairLock]). Pure apart from the kill switch, so a test
+  /// holds the rule directly (B-pass seat B, mutants M03/M31).
+  static bool dropTargetValid({
+    required bool movable,
+    required String lifted,
+    required String date,
+    required String today,
+  }) =>
+      movable &&
+      lifted != date &&
+      (!missedDayRescueEnabled() ||
+          DaySwapRules.pairLock(lifted, date, today) == null);
+
   const DaySwapDragWrapper(
       {super.key, required this.date, required this.child});
 
@@ -84,12 +100,9 @@ class DaySwapDragWrapper extends ConsumerWidget {
     final lifted = ref.watch(_liftedDateProvider);
     final isDragging = lifted != null;
     final isLifted = lifted == date;
-    // OI-348 P3: a past (missed) day pairs ONLY with today, both ways.
-    final isValidTarget = movable &&
-        isDragging &&
-        lifted != date &&
-        (!missedDayRescueEnabled() ||
-            DaySwapRules.pairLock(lifted, date, istTodayStr()) == null);
+    final isValidTarget = lifted != null &&
+        dropTargetValid(
+            movable: movable, lifted: lifted, date: date, today: istTodayStr());
 
     Widget chrome(Widget inner, {required bool hovered}) {
       if (isValidTarget) {
