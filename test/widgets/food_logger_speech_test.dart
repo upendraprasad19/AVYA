@@ -9,9 +9,12 @@ library;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderEditable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/services/speech_input_lifecycle.dart';
 import 'package:icanbefitter/core/services/speech_input_service.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/features/nutrition/providers/nutrition_provider.dart';
 import 'package:icanbefitter/features/nutrition/widgets/food_logger_section.dart';
 
@@ -85,6 +88,49 @@ Future<void> _startListening(WidgetTester tester) async {
   await tester.tap(find.byIcon(Icons.mic));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 10));
+}
+
+// -- OI-348 Landing 3e helpers (plan `docs/plans/oi348-landing3e.md` §4) ------
+
+RenderEditable _editable(WidgetTester tester) => tester
+    .state<EditableTextState>(find.byType(EditableText))
+    .renderEditable;
+
+ScrollController _scroll(WidgetTester tester) =>
+    _field(tester).scrollController!;
+
+String _words(int n) => List<String>.generate(n, (i) => 'word$i').join(' ');
+
+Future<void> _phoneSurface(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(360, 800));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
+/// Speaks more and more words until the field's CONTENT (its height plus what
+/// it scrolled away) is at least [lines] lines of [lineHeight].
+Future<String> _speakLines(
+  WidgetTester tester,
+  _Rig rig,
+  double lineHeight,
+  int lines,
+) async {
+  for (var n = 1; n < 600; n += 2) {
+    final words = _words(n);
+    rig.engine.emitResult(words);
+    await tester.pump(); // the write, and the post-frame jump
+    await tester.pump();
+    final content = _editable(tester).size.height +
+        _scroll(tester).position.maxScrollExtent;
+    if (content >= lineHeight * (lines - 0.5)) return words;
+  }
+  fail('the field never reached $lines lines');
+}
+
+Map<String, dynamic> _lastClientConfig(WidgetTester tester) {
+  final call = tester.testTextInput.log.lastWhere(
+    (c) => c.method == 'TextInput.setClient',
+  );
+  return ((call.arguments as List)[1] as Map).cast<String, dynamic>();
 }
 
 void main() {
@@ -299,6 +345,122 @@ void main() {
       expect(_text(tester), 'two rotis');
       expect(rig.breakdown.calls, isEmpty);
       expect(_field(tester).focusNode!.hasFocus, isTrue);
+    });
+  });
+
+  group('OI-348 Landing 3e: the field grows to six lines', () {
+    testWidgets('T6: past six lines, each live write keeps the NEWEST in view', (
+      tester,
+    ) async {
+      await _phoneSurface(tester);
+      final rig = _Rig();
+      await rig.pump(tester);
+      final line = _editable(tester).size.height;
+      await _startListening(tester);
+      await _speakLines(tester, rig, line, 10);
+      final scroll = _scroll(tester);
+      expect(scroll.position.maxScrollExtent, greaterThan(0));
+      expect(scroll.offset, closeTo(scroll.position.maxScrollExtent, 0.5),
+          reason: 'the unfocused field was jumped to its end');
+      expect(_editable(tester).size.height,
+          closeTo(kDictationFieldMaxLines * line, 1.0));
+    });
+
+    testWidgets('T7: two lines show whole, nothing scrolled', (tester) async {
+      await _phoneSurface(tester);
+      final rig = _Rig();
+      await rig.pump(tester);
+      final line = _editable(tester).size.height;
+      await _startListening(tester);
+      await _speakLines(tester, rig, line, 2);
+      expect(_scroll(tester).offset, 0);
+      final height = _editable(tester).size.height;
+      expect(height, greaterThan(line * 1.5));
+      expect(height, lessThan(line * kDictationFieldMaxLines));
+    });
+
+    testWidgets('T8: after Stop, three lines; done keeps; Enter analyses once', (
+      tester,
+    ) async {
+      await _phoneSurface(tester);
+      final rig = _Rig();
+      await rig.pump(tester);
+      final field = _field(tester);
+      expect(field.minLines, 1);
+      expect(field.maxLines, kDictationFieldMaxLines);
+      final line = _editable(tester).size.height;
+      await _startListening(tester);
+      final words = await _speakLines(tester, rig, line, 3);
+      await tester.tap(find.byIcon(Icons.stop));
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(_text(tester), words);
+      expect(_editable(tester).size.height, closeTo(3 * line, 1.0));
+      expect(_field(tester).focusNode!.hasFocus, isTrue);
+      final config = _lastClientConfig(tester);
+      expect(
+        (config['inputType'] as Map)['name'],
+        'TextInputType.text',
+        reason: 'multiline would turn the action key into a newline',
+      );
+      expect(config['inputAction'], 'TextInputAction.done');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(rig.breakdown.calls, <String>[words]);
+    });
+
+    testWidgets('T8b: after Stop, ten lines show six with the caret end in view', (
+      tester,
+    ) async {
+      await _phoneSurface(tester);
+      final rig = _Rig();
+      await rig.pump(tester);
+      final line = _editable(tester).size.height;
+      await _startListening(tester);
+      final words = await _speakLines(tester, rig, line, 10);
+      await tester.tap(find.byIcon(Icons.stop));
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump(const Duration(milliseconds: 10));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(_text(tester), words);
+      final editable = _editable(tester);
+      expect(editable.size.height, closeTo(kDictationFieldMaxLines * line, 1.0));
+      // `getLocalRectForCaret` is in TEXT coordinates: subtract the scroll.
+      final caret = editable
+          .getLocalRectForCaret(TextPosition(offset: words.length))
+          .shift(Offset(0, -_scroll(tester).offset));
+      final box = Offset.zero & editable.size;
+      expect(caret.top, greaterThanOrEqualTo(box.top - 1.0));
+      expect(caret.bottom, lessThanOrEqualTo(box.bottom + 1.0),
+          reason: 'the end of the text is in view');
+    });
+
+    testWidgets('T8c: the strut, not the font, sets the field\'s line height', (
+      tester,
+    ) async {
+      await _phoneSurface(tester);
+      final rig = _Rig();
+      await rig.pump(tester);
+      final fieldLine = _editable(tester).size.height;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: Center(
+              child: Text(
+                'x',
+                key: const ValueKey('strut_probe'),
+                style: AppTypography.body,
+                strutStyle: kDictationStrut,
+              ),
+            ),
+          ),
+        ),
+      );
+      final probe =
+          tester.getSize(find.byKey(const ValueKey('strut_probe'))).height;
+      expect(fieldLine, closeTo(probe, 0.01));
     });
   });
 

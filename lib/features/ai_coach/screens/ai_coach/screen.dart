@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderProxyBox;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
@@ -391,6 +392,10 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
                       setState(() => _composerListening = listening);
                     }
                   },
+                  // OI-348 Landing 3e: the composer grows to six lines; a chat
+                  // at its bottom stays there (the chip's rule).
+                  onHeightGrew: (delta) =>
+                      keepBottomAfterChip(_scrollController, delta),
                 ),
               ],
             ),
