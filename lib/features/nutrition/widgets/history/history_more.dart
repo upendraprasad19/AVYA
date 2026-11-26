@@ -212,12 +212,30 @@ class HistoryMonthlyReport extends StatefulWidget {
 
 class _HistoryMonthlyReportState extends State<HistoryMonthlyReport> {
   final _open = <String>{};
+  List<MonthRow>? _rows;
+  List<JudgedDay>? _days;
+  List<WeightEntryData>? _weights;
+  String? _today;
+
+  /// Recomputed only when the inputs change, not on a year tap.
+  List<MonthRow> _rowsFor() {
+    if (_rows == null ||
+        !identical(_days, widget.days) ||
+        !identical(_weights, widget.weights) ||
+        _today != widget.todayKey) {
+      _days = widget.days;
+      _weights = widget.weights;
+      _today = widget.todayKey;
+      _rows = monthlyRows(widget.days, [
+        for (final w in widget.weights) (w.date, w.weight),
+      ], widget.todayKey);
+    }
+    return _rows!;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final rows = monthlyRows(widget.days, [
-      for (final w in widget.weights) (w.date, w.weight),
-    ], widget.todayKey);
+    final rows = _rowsFor();
     if (rows.isEmpty) return const SizedBox.shrink();
     final children = <Widget>[_header()];
     for (final r in rows) {
@@ -268,15 +286,15 @@ class _HistoryMonthlyReportState extends State<HistoryMonthlyReport> {
         : r.arrow < 0
         ? ' ▼'
         : '';
-    final w = r.weightChange;
-    final wText = w == null
+    final wText = r.weightChange == null
         ? '—'
-        : '${w > 0
-                  ? '+'
-                  : w < 0
-                  ? '−'
-                  : ''}${w.abs().toStringAsFixed(1)} kg'
+        : '${weightChangeText(r.weightChange)}'
               '${r.weightNote == null ? '' : '\n${r.weightNote}'}';
+    Widget num(String t) => FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerRight,
+      child: Text(t, style: _body, textAlign: TextAlign.right),
+    );
     final label = r.isYear
         ? '${_open.contains(r.key) ? '▾' : '▸'} ${r.label}'
         : '${indent ? '   ' : ''}${r.label}';
@@ -300,39 +318,16 @@ class _HistoryMonthlyReportState extends State<HistoryMonthlyReport> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(flex: 3, child: Text(label, style: _body)),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    '${r.logged}',
-                    style: _body,
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    n(r.avgKcal, ''),
-                    style: _body,
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    '${n(r.avgProtein, ' g')}$arrow',
-                    style: _body,
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(wText, style: _body, textAlign: TextAlign.right),
-                ),
+                Expanded(flex: 2, child: num('${r.logged}')),
+                Expanded(flex: 2, child: num(n(r.avgKcal, ''))),
+                Expanded(flex: 3, child: num('${n(r.avgProtein, ' g')}$arrow')),
+                Expanded(flex: 3, child: num(wText)),
               ],
             ),
     );
-    if (!r.isYear)
+    if (!r.isYear) {
       return KeyedSubtree(key: Key('history_month_${r.key}'), child: row);
+    }
     return InkWell(
       key: Key('history_year_${r.key}'),
       onTap: () => setState(

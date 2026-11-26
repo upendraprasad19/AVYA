@@ -181,6 +181,10 @@ class _SplitPainter extends CustomPainter {
     final slot = size.width / weeks.length;
     final w = math.min(28.0, slot * 0.72);
     final paint = Paint();
+    final grid = Paint()..color = AppColors.border;
+    for (final gy in [0.5, size.height / 2, size.height - 0.5]) {
+      canvas.drawLine(Offset(0, gy), Offset(size.width, gy), grid);
+    }
     for (var i = 0; i < weeks.length; i++) {
       final left = i * slot + (slot - w) / 2;
       var top = 0.0;
@@ -374,6 +378,7 @@ class HistoryWeightOverlay extends StatelessWidget {
       title: 'CALORIES VS WEIGHT',
       child: Semantics(
         label: 'Calories, 7-day average, and weight. $summary',
+        excludeSemantics: true,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -397,7 +402,12 @@ class HistoryWeightOverlay extends StatelessWidget {
               padding: EdgeInsets.only(left: axis),
               child: Row(children: [
                 Expanded(child: Text(historyDayLabel(from), style: _mute)),
-                Text(historyDayLabel(to), style: _mute),
+                Expanded(
+                    child: Text(historyDayLabel(days[days.length ~/ 2].date),
+                        textAlign: TextAlign.center, style: _mute)),
+                Expanded(
+                    child: Text(historyDayLabel(to),
+                        textAlign: TextAlign.right, style: _mute)),
               ]),
             ),
             const SizedBox(height: 8),

@@ -5,6 +5,8 @@ blast_radius: feature
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/8d09667b7e2f-review.md
 ---
 
 # Plan-review record - Nutrition History v2 (60dc46, 3cfcc6)

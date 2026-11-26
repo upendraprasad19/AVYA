@@ -317,6 +317,14 @@ List<(String, double)> weighIns(Iterable<(String, double)> raw) {
   return [for (final k in keys) (k, byDay[k]!)];
 }
 
+/// "+1.2 kg", "−0.4 kg", "0.0 kg" (never a signed zero), or "—".
+String weightChangeText(double? w) {
+  if (w == null) return '—';
+  final r = (w * 10).round() / 10;
+  if (r == 0) return '0.0 kg';
+  return '${r > 0 ? '+' : '−'}${r.abs().toStringAsFixed(1)} kg';
+}
+
 class MonthRow {
   /// `yyyy-MM` for a month, `yyyy` for a folded year.
   final String key;

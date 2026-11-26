@@ -18,6 +18,7 @@ import 'package:icanbefitter/features/nutrition/services/nutrition_history.dart'
 import 'package:icanbefitter/features/nutrition/services/nutrition_history_views.dart';
 import 'package:icanbefitter/features/nutrition/widgets/history/history_day_sheet.dart';
 import 'package:icanbefitter/features/nutrition/widgets/history/history_heatmap.dart';
+import 'package:icanbefitter/features/nutrition/widgets/history/history_more.dart';
 import 'package:icanbefitter/features/nutrition/widgets/history/history_trend_chart.dart';
 import 'package:icanbefitter/features/nutrition/widgets/insights_section.dart';
 import 'package:icanbefitter/features/nutrition/widgets/weekly_chart_card.dart';
@@ -141,6 +142,36 @@ void main() {
         matching: find.text('9')), findsOneWidget);
     // 8 full days of 1,950 kcal; today and the skipped day are not counted.
     expect(find.text('Average 1,950 kcal · 8 days'), findsOneWidget);
+  });
+
+  testWidgets('monthly report at 360 dp and text scale 1.3: numbers stay on '
+      'one line, a year expands (B-pass P3-1)', (tester) async {
+    final data = _data(400);
+    tester.view.physicalSize = const Size(360, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(
+            size: Size(360, 2400), textScaler: TextScaler.linear(1.3)),
+        child: Scaffold(
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: HistoryMonthlyReport(
+                days: data.days, weights: data.weights, todayKey: _today),
+          ),
+        ),
+      ),
+    ));
+    expect(tester.takeException(), isNull);
+    final kcal = find.text('1,950').first;
+    expect(tester.getSize(kcal).height, lessThan(30),
+        reason: 'one line, scaled down rather than wrapped');
+    expect(find.byKey(const Key('history_year_2025')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('history_year_2025')));
+    await tester.pump();
+    expect(find.byKey(const Key('history_month_2025-10')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('range and metric chips switch the chart', (tester) async {

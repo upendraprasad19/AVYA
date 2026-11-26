@@ -305,6 +305,14 @@ void main() {
     });
   });
 
+  test('weight change text never shows a signed zero (B-pass P3-2)', () {
+    expect(weightChangeText(-0.04), '0.0 kg');
+    expect(weightChangeText(0.04), '0.0 kg');
+    expect(weightChangeText(-0.06), '−0.1 kg');
+    expect(weightChangeText(1.25), '+1.3 kg');
+    expect(weightChangeText(null), '—');
+  });
+
   test('chart bounds include the target and widen a flat series', () {
     expect(chartBounds([1850, 2240], target: 2300, step: 100),
         (lo: 1800.0, hi: 2300.0));

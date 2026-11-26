@@ -54,8 +54,9 @@ List<MonthBlock> monthBlocks(
     }
     final m = int.parse(ym.substring(5, 7));
     var label = kHistoryMonthNames[m - 1];
-    if (spans && (out.isEmpty || m == 1))
+    if (spans && (out.isEmpty || m == 1)) {
       label = '$label ${ym.substring(0, 4)}';
+    }
     final firstRow = parseDayKey(days[i].date)!.weekday - 1;
     final cells = monthColumns(firstRow, n) * step - kHeatGap;
     final width = cells > labelWidth(label) ? cells : labelWidth(label);

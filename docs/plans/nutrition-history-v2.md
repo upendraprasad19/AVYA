@@ -331,3 +331,8 @@ Two survivors were EQUIVALENT (dead code), so the code was removed instead: M7 t
 column check in `monthBlockIndexAt` (a column past the cells always gives an index >= length).
 Not covered by a mutant: the trend y-label column outside the GestureDetector (the existing tap test
 taps the chart rect; `history_trend_plot` key added for a future check).
+
+## 14. B-pass (6 P3, all fixed)
+
+Monthly cells scale down (M19 red), no signed zero weight (M18 red), overlay mid date, macro split
+gridlines, y labels centred on gridlines + overlay excludeSemantics, monthly rows cached.

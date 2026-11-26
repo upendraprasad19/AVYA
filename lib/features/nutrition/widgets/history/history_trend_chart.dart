@@ -209,19 +209,28 @@ class YAxisLabels extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Each label is centred on its gridline (top, middle, bottom).
     return SizedBox(
       width: width,
       height: height,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          for (final l in labels)
-            Text(l,
-                maxLines: 1,
-                softWrap: false,
-                style:
-                    AppTypography.monoXs.copyWith(color: AppColors.textMute)),
+          for (var i = 0; i < labels.length; i++)
+            Positioned(
+              left: 0,
+              top: labels.length == 1
+                  ? 0
+                  : height * i / (labels.length - 1),
+              child: FractionalTranslation(
+                translation: const Offset(0, -0.5),
+                child: Text(labels[i],
+                    maxLines: 1,
+                    softWrap: false,
+                    style: AppTypography.monoXs
+                        .copyWith(color: AppColors.textMute)),
+              ),
+            ),
         ],
       ),
     );
