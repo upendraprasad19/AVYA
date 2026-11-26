@@ -304,6 +304,84 @@ void main() {
       expect(sparks.every((w) => w.step), isTrue);
     });
 
+    test('wardSparkVertices: a corner before EVERY change, rises and falls', () {
+      const size = Size(30, 12);
+      final plain = wardSparkVertices(const [40, 42.5, 45, 41], size);
+      final stepped = wardSparkVertices(const [40, 42.5, 45, 41], size, step: true);
+      expect(stepped, [
+        plain[0],
+        Offset(plain[1].dx, plain[0].dy), plain[1],
+        Offset(plain[2].dx, plain[1].dy), plain[2],
+        Offset(plain[3].dx, plain[2].dy), plain[3],
+      ]);
+    });
+
+    testWidgets('the spark painter draws the stepped vertices when step is on', (tester) async {
+      Path strokeOf(WardSpark w) {
+        final painter = (w.build(tester.element(find.byType(Scaffold))) as CustomPaint)
+            .painter!;
+        final canvas = _PathCanvas();
+        painter.paint(canvas, Size(w.width, w.height));
+        return canvas.paths.single;
+      }
+      await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+      const data = [40.0, 40.0, 42.5];
+      double len(Path p) => p.computeMetrics().fold(0.0, (a, m) => a + m.length);
+      double poly(List<Offset> v) {
+        var t = 0.0;
+        for (var i = 1; i < v.length; i++) {
+          t += (v[i] - v[i - 1]).distance;
+        }
+        return t;
+      }
+      const size = Size(64, 22);
+      final stepped = strokeOf(const WardSpark(data: data, width: 64, height: 22, step: true));
+      final plain = strokeOf(const WardSpark(data: data, width: 64, height: 22));
+      expect(len(stepped), closeTo(poly(wardSparkVertices(data, size, step: true)), 0.01));
+      expect(len(plain), closeTo(poly(wardSparkVertices(data, size)), 0.01));
+      expect(len(stepped), greaterThan(len(plain)));
+
+      final a = (const WardSpark(data: data, step: true)
+              .build(tester.element(find.byType(Scaffold))) as CustomPaint)
+          .painter!;
+      final b = (const WardSpark(data: data)
+              .build(tester.element(find.byType(Scaffold))) as CustomPaint)
+          .painter!;
+      expect(a.shouldRepaint(b), isTrue, reason: 'a step change repaints');
+    });
+
+    testWidgets('the PR dot sits on the PR bar at the PR day only, over a tint; legend labels',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: PrTrendSheet(pr: _pr('Bench', 'weight_reps', 42.5), series: dip))));
+      final bars = tester.widget<LineChart>(find.byType(LineChart)).data.lineBarsData;
+      final pr = bars[0];
+      final shown = [for (final s in pr.spots) pr.dotData.checkToShowDot(s, pr)];
+      expect(shown.take(3), [false, false, true]);
+      expect(shown.skip(3), everyElement(isFalse));
+      expect(pr.belowBarData.show, isTrue);
+      expect(find.text('Personal record'), findsOneWidget);
+      expect(find.text('Best set that day'), findsOneWidget);
+    });
+
+    test('the touch marker is on the lifted line only', () {
+      final pr = LineChartBarData(spots: const [FlSpot(0, 1), FlSpot(1, 1)], isStepLineChart: true);
+      final lifted = LineChartBarData(spots: const [FlSpot(0, 1), FlSpot(1, 1)]);
+      expect(prTouchedIndicators(pr, [1]), [null]);
+      expect(prTouchedIndicators(lifted, [1]).single, isNotNull);
+    });
+
+    testWidgets('day positions count calendar days across a DST change', (tester) async {
+      // In America/New_York, 8 Mar 2026 is 23 hours long. Run under
+      // TZ=America/New_York to exercise it; elsewhere it is a plain 2-day gap.
+      final s = _s([('2026-03-07', 40, 5), ('2026-03-09', 42.5, 5)]);
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(body: PrTrendSheet(pr: _pr('Bench', 'weight_reps', 42.5), series: s))));
+      final bars = tester.widget<LineChart>(find.byType(LineChart)).data.lineBarsData;
+      expect(bars[1].spots.map((p) => p.x), [0, 2]);
+    });
+
     testWidgets('a PR set before the range still holds inside it', (tester) async {
       // 1W is anchored to the last log (10 Nov): it shows 20 Oct (carried) and
       // 10 Nov. The 50 kg PR from May is before both.
@@ -376,4 +454,11 @@ void main() {
       expect(prJourneyLine(ExercisePrSeries.empty, _plank), 'Log it again to see your trend');
     });
   });
+}
+
+/// Records the paths a painter draws.
+class _PathCanvas extends Fake implements Canvas {
+  final paths = <Path>[];
+  @override
+  void drawPath(Path path, Paint paint) => paths.add(path);
 }

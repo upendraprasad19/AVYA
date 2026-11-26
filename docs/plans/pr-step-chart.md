@@ -61,10 +61,12 @@ step logic for every unit (reps, seconds, km); a tie is not a new step (running 
 
 ## 4. Tier
 
-Paths only `lib/features/home/**`, 2 product files, NOT a recurrence. Product diff ~145 lines
-(> 100) => **M**: two plan-review rounds before the code is treated as final, the gate loop + CI
-before every reviewer dispatch, a `/code-review` B-pass before the merge. Blast radius `feature`
-(`blast_radius_from_diff.dart` on both paths). Execution inline (one worktree,
+Paths `lib/features/home/widgets/{pr_snapshot,pr_trend_sheet}.dart` and, after round 1,
+`lib/shared/widgets/wardroom/ward_spark.dart` (a shared widget with four other callers, its default
+path pinned by a test): 3 product files, NOT a recurrence, over 100 lines => **M**: two plan-review
+rounds before the code is treated as final, the gate loop + CI before every reviewer dispatch, a
+`/code-review` B-pass before the merge. Blast radius `feature` (`blast_radius_from_diff.dart` on
+all three paths, re-run after round 1). Execution inline (one worktree,
 `pr-step-chart`). NOTE: a draft diff was written BEFORE this plan (process miss, memory
 `feedback_fix_authorisation_is_not_a_tier_decision`); it is a draft that this reviewed plan
 governs.
@@ -114,3 +116,16 @@ M8 the spark's corner removed, M9 no carry to today, M10 tooltip on the PR bar. 
   (W2 runs every range at 360 dp).
 - Checked: new widget tests pass under TZ=Etc/GMT+12 too; the contract file's old B1-B8 fail there
   on main as well (IST host assumption, CI pins IST).
+
+## 9. Round 2 (converged: 0 P0/P1, 1 P2, 4 P3), all folded
+
+- P2 the painter's use of `step` was untested (a mutant passing `step: false` inside `paint` stayed
+  green). Test paints `WardSpark` on a recording canvas and compares the stroke length with the
+  stepped / plain vertex polylines; mutant M12.
+- P3 `shouldRepaint` on `step` (M13); `_utcDay` under a real DST change (8 Mar 2026,
+  `TZ=America/New_York`, M14); the PR dot only at the PR day on bar 0 and the tint (M15); legend
+  labels (M16); vertex test with rises AND a fall.
+- P3 the touched-spot marker was drawn on the PR bar too: `prTouchedIndicators` (none on the
+  stepped bar, fl_chart's default on the lifted one); M17.
+- P3 section 4 refreshed (3 product files, the shared widget); a >80-column spark line wrapped.
+- 17 mutants in all (M1-M17), every one red; no compile errors.

@@ -350,7 +350,8 @@ class _PrTile extends StatelessWidget {
                         children: [
                           Expanded(child: _number(numeric, unit)),
                           const SizedBox(width: 8),
-                          WardSpark(data: spark, width: 40, height: 22, step: true),
+                          WardSpark(
+                              data: spark, width: 40, height: 22, step: true),
                         ],
                       )
                     else

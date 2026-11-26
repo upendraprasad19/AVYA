@@ -128,6 +128,14 @@ class PrTrendSheet extends StatefulWidget {
 /// Index of the lifted line in the chart's bars (0 is the PR step).
 const _liftedBar = 1;
 
+/// The touched-spot marker of the trend chart: fl_chart's default on the
+/// lifted line, none on the PR step (the only stepped bar).
+List<TouchedSpotIndicatorData?> prTouchedIndicators(
+        LineChartBarData bar, List<int> indexes) =>
+    bar.isStepLineChart
+        ? List<TouchedSpotIndicatorData?>.filled(indexes.length, null)
+        : defaultTouchedIndicators(bar, indexes);
+
 class _PrTrendSheetState extends State<PrTrendSheet> {
   String _range = 'All';
   static const _ranges = ['All', '1Y', '6M', '3M', '1M', '1W'];
@@ -373,6 +381,8 @@ class _PrTrendSheetState extends State<PrTrendSheet> {
         ),
         borderData: FlBorderData(show: false),
         lineTouchData: LineTouchData(
+          // The touch marker follows the tooltip: on the lifted line only.
+          getTouchedSpotIndicator: prTouchedIndicators,
           touchTooltipData: LineTouchTooltipData(
             getTooltipItems: (touched) => [
               for (final s in touched)
