@@ -231,6 +231,79 @@ void main() {
       expect(find.byKey(const Key('pr_trend_legend')), findsOneWidget);
     });
 
+    testWidgets('the PR step rises ON the new PR day (forward, not middle)',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: PrTrendSheet(pr: _pr('Bench', 'weight_reps', 42.5), series: dip))));
+      final bars = tester.widget<LineChart>(find.byType(LineChart)).data.lineBarsData;
+      expect(bars[0].lineChartStepData.stepDirection,
+          LineChartStepData.stepDirectionForward);
+    });
+
+    testWidgets('the PR step is carried on to today; the lifted line stops at the last log',
+        (tester) async {
+      // 2020 is before any "today" this test runs on.
+      final past = _s([('2020-01-10', 40, 5), ('2020-02-10', 35, 8)]);
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: PrTrendSheet(pr: _pr('Bench', 'weight_reps', 40), series: past))));
+      final data = tester.widget<LineChart>(find.byType(LineChart)).data;
+      final pr = data.lineBarsData[0].spots;
+      final lifted = data.lineBarsData[1].spots;
+      expect(lifted, hasLength(2));
+      expect(pr, hasLength(3));
+      expect(pr.last.y, 40);
+      expect(pr.last.x, greaterThan(lifted.last.x));
+      expect(data.maxX, pr.last.x);
+    });
+
+    testWidgets('the tooltip is on the lifted line only and names the standing PR',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: PrTrendSheet(pr: _pr('Bench', 'weight_reps', 42.5), series: dip))));
+      final data = tester.widget<LineChart>(find.byType(LineChart)).data;
+      final bars = data.lineBarsData;
+      final items = data.lineTouchData.touchTooltipData.getTooltipItems([
+        LineBarSpot(bars[0], 0, bars[0].spots[1]),
+        LineBarSpot(bars[1], 1, bars[1].spots[1]),
+      ]);
+      expect(items, hasLength(2));
+      expect(items[0], isNull);
+      expect(items[1]!.text, '35 kg x 8 · 10 Feb\nPR 40 kg');
+    });
+
+    test('wardSparkVertices: step off is the plain line; step on rises at the next point', () {
+      const size = Size(30, 12);
+      final plain = wardSparkVertices(const [40, 40, 42.5], size);
+      expect(plain.map((o) => o.dx), [0, 15, 30]);
+      final stepped = wardSparkVertices(const [40, 40, 42.5], size, step: true);
+      // Flat 40 to x=30, then straight up to 42.5 at x=30.
+      expect(stepped, [plain[0], plain[1], Offset(30, plain[1].dy), plain[2]]);
+    });
+
+    test('wardSparkVertices without step keeps the old path for every other caller', () {
+      // Hand-computed from the pre-592da4 painter: x = i/(n-1)*w,
+      // y = h - ((v-min)/span)*(h-2) - 1. A dipping series, no corners.
+      expect(wardSparkVertices(const [3, 1, 2], const Size(20, 12)),
+          const [Offset(0, 1), Offset(10, 11), Offset(20, 6)]);
+    });
+
+    testWidgets('every PR spark is drawn as a step', (tester) async {
+      await _pump(tester,
+          prs: [_bench, _pr('Deadlift', 'weight_reps', 120), _plank, _pr('Squat', 'weight_reps', 1), _pr('Row', 'weight_reps', 1)],
+          series: {
+            'barbell bench press': _benchSeries,
+            'deadlift': _s([('2026-10-01', 100, 5), ('2026-11-12', 120, 3)]),
+          });
+      await tester.tap(find.textContaining('SEE ALL 5'));
+      await tester.pumpAndSettle();
+      final sparks = tester.widgetList<WardSpark>(find.byType(WardSpark)).toList();
+      expect(sparks, isNotEmpty);
+      expect(sparks.every((w) => w.step), isTrue);
+    });
+
     testWidgets('a PR set before the range still holds inside it', (tester) async {
       // 1W is anchored to the last log (10 Nov): it shows 20 Oct (carried) and
       // 10 Nov. The 50 kg PR from May is before both.

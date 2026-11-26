@@ -265,7 +265,7 @@ class _PrListRow extends StatelessWidget {
                 ),
                 if (spark.isNotEmpty) ...[
                   const SizedBox(width: 8),
-                  WardSpark(data: spark, width: 64, height: 22),
+                  WardSpark(data: spark, width: 64, height: 22, step: true),
                   const SizedBox(width: 12),
                 ],
                 Text(
@@ -350,7 +350,7 @@ class _PrTile extends StatelessWidget {
                         children: [
                           Expanded(child: _number(numeric, unit)),
                           const SizedBox(width: 8),
-                          WardSpark(data: spark, width: 40, height: 22),
+                          WardSpark(data: spark, width: 40, height: 22, step: true),
                         ],
                       )
                     else

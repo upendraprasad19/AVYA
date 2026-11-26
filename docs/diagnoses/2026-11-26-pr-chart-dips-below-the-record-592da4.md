@@ -30,13 +30,14 @@ telemetry_op_types:
 cross_account_guard: "Unchanged: the series still comes from exercisePrSeriesProvider, which watches the auth token."
 forbidden_patterns_checked:
   - { pattern: "a change to the stored series or to buildExercisePrSeries (the lifted line needs the per-day values)", absent: true }
-  - { pattern: "a modification of the shared WardSpark widget", absent: true }
+  - { pattern: "a change to WardSpark's path when step is off (pinned by a hand-computed vertex test)", absent: true }
+  - { pattern: "fl_chart's default step direction (middle, rises half-way before the PR day)", absent: true }
 proposed_fix: |
-  Display only, plan docs/plans/pr-step-chart.md. New pure prRunningBest (running max over the points). The tile and see-all sparks draw the running best. The sheet draws two bars: the PR as an fl_chart step line (running best over the FULL series by date, carried on to today, with the PR marker) and the best set each day as a thin muted line, a tooltip with both values and a legend. The journey line's "now" is the standing PR.
+  Display only, plan docs/plans/pr-step-chart.md. New pure prRunningBest (running max over the points). The tile and see-all sparks draw the running best as a step (new optional WardSpark.step, off by default, so the four other spark callers draw the same path). The sheet draws two bars: the PR as an fl_chart step line, stepDirectionForward so it rises ON the PR day (running best over the FULL series by date, carried on to today, with the PR marker) and the best set each day as a thin muted line, a tooltip with both values and a legend. The journey line's "now" is the standing PR.
 regression_test_planned: |
   test/contracts/exercise_pr_series_writer_to_reader_test.dart B11: 40 / 35 / 42.5 logged through WorkoutWriteService.logExercise; the series keeps the 35 dip, prRunningBest and prSparkValues give 40, 40, 42.5, ending at the PR. test/features/home/pr_trend_widgets_test.dart: running best, spark, journey "now", the sheet's two bars (bar 0 stepped), the legend, a PR set before the selected range holding inside it.
 mutation_proof: |
-  Five mutants, each applied (count confirmed 1), run against both test files, reverted by a script; no compile errors. M1 running max -> per-day value: 6 red. M2 isStepLineChart false: 1 red. M3 prSparkValues back to p.value: 2 red. M4 journey "now" = last lift: 1 red. M5 PR spots from the shown window instead of the full series: 1 red.
+  Eleven mutants, each applied (count confirmed), run against both test files under TZ=Asia/Kolkata, reverted by a script; no compile errors. M1 running max -> per-day value: 8 red. M2 isStepLineChart false: 1. M3 prSparkValues back to p.value: 2. M4 journey "now" = last lift: 1. M5 PR spots from the shown window: 1. M6 step direction middle: 1. M7 tile spark step false: 1. M8 spark corner removed: 1. M9 no carry to today: 1. M10 tooltip on the PR bar: 1. M11 see-all spark step false: 1.
 impact_analysis: |
   Two Home widget files. One extra pass over an exercise's points per sheet build and per spark. No write, no sync, no server reader (grep of supabase/ for the readers: none).
 touched_layers_checked:
@@ -66,4 +67,6 @@ The PR is drawn as its running best (a step in the sheet, a never-dipping spark 
 
 ## Not established
 - Not yet seen on a device or the web app; founder check after the merge.
-- The tile spark is index-spaced (shared `WardSpark`, unchanged), so a new PR there is a short slope, not a vertical jump.
+- The tile spark is index-spaced (points evenly spread, not by date), so gaps between logs are not to scale there; the sheet is to scale.
+- The sheet's PR step runs on to today: a user whose last log is long ago sees a long flat line.
+- The old contract tests B1-B8 (and B11) assume an IST host: under TZ=Etc/GMT+12 main's own copy fails 9; CI pins IST. Not changed here.

@@ -109,7 +109,7 @@ Barrel: `lib/shared/widgets/wardroom/wardroom.dart` — 36 export lines. Counts 
 | WardStatTile | ward_stat_tile.dart | Mono label + Fraunces numeric + unit |
 | **Meter** | | |
 | WardBar | ward_bar.dart | Progress bar — optional `trailingLabel` for gold "25%" mono numeral, 400ms ease-out animate-fill |
-| WardSpark | ward_spark.dart | Sparkline with gold stroke |
+| WardSpark | ward_spark.dart | Sparkline with gold stroke; optional `step: true` (flat, then a rise at the next point; the PR sparks, 592da4), off by default |
 | WardRing / WardMultiRing | ward_ring.dart | Single + concentric ring progress |
 | **Structure** | | |
 | WardGlassGrid | ward_glass_grid.dart | 8-cell hydration tracker grid |

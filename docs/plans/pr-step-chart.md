@@ -41,7 +41,7 @@ Data unchanged. Display only, two files in `lib/features/home/widgets/`.
    of each point, oldest first: a running max. Never dips.
 2. Tile and see-all sparks: `prSparkValues` returns `prRunningBest(points)` (still empty under two
    days). `WardSpark` is shared and index-spaced; it is NOT modified, so a step there is drawn as a
-   short slope between two index slots. Accepted: the founder's rule is "never dips".
+   short slope between two index slots. SUPERSEDED by section 8 (round 1): a `step` flag.
 3. Sheet, two bars on one axis:
    - bar 0, the PR: `isStepLineChart: true` (fl_chart step, jump at the next point), accent gold,
      2.5 px, the existing below-area tint; the existing PR marker dot (first day at the PR) sits on
@@ -90,3 +90,27 @@ governs.
 SoT registry `exercise_pr_series`: reader notes for `prSparkValues` (running best) and the sheet
 (two bars), a class constraint "the PR line is the running best; it never dips".
 `lib/features/home/CLAUDE.md`: one line on the chart meaning.
+
+## 7. Mutants run (after round 1)
+
+M1-M5 as in section 5, plus M6 step direction middle, M7/M11 tile / see-all spark `step: false`,
+M8 the spark's corner removed, M9 no carry to today, M10 tooltip on the PR bar. All 11 red.
+
+## 8. Round 1 (needs-changes: 1 P1, 1 P2, 4 P3), all folded
+
+- P1 (verified in fl_chart 1.2.0 `line_chart_data.dart:514-523`, `line_chart_painter.dart:675-690`):
+  `LineChartStepData` defaults to `stepDirectionMiddle` (0.5), so the riser sat half-way between two
+  log days, showing the PR BEFORE it was set. Now `stepDirectionForward` (0.0: flat to the next
+  point, rise there). Test asserts the direction; mutant M6.
+- P2 the tile / see-all spark was a slope, not a step. `WardSpark` gets `step` (default false);
+  vertices extracted to pure `wardSparkVertices` (a corner at the next x with the current y). The
+  two PR sparks pass `step: true`. A hand-computed vertex test pins the step-off path for the four
+  other callers (admin ops/growth/engagement tabs, weekly report card). Blast radius stays
+  `feature`.
+- P3 day maths on UTC midnights (`_utcDay`), so a DST zone cannot lose a day; IST has no DST.
+- P3 tests for the today carry (a 2020 series: PR bar has one more spot, maxX = its x) and the
+  tooltip (null on bar 0, `35 kg x 8 · 10 Feb\nPR 40 kg` on bar 1); mutants M9, M10.
+- P3 (note, no change) a long-idle user sees a long flat PR line to today; legend fits at 360 dp
+  (W2 runs every range at 360 dp).
+- Checked: new widget tests pass under TZ=Etc/GMT+12 too; the contract file's old B1-B8 fail there
+  on main as well (IST host assumption, CI pins IST).

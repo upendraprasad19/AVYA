@@ -47,6 +47,13 @@ String prJourneyLine(ExercisePrSeries series, ExercisePR pr) {
       'now ${prValueLabel(prRunningBest(pts).last, pr)}';
 }
 
+/// A `yyyy-MM-dd` day as a UTC midnight: day differences never lose an hour
+/// to a daylight-saving change.
+DateTime _utcDay(String day) {
+  final d = DateTime.parse(day);
+  return DateTime.utc(d.year, d.month, d.day);
+}
+
 /// The personal record as of each of [points] (oldest first): the running
 /// best. A PR only ever rises or holds, so this never dips, whatever a later
 /// day lifted.
@@ -285,11 +292,11 @@ class _PrTrendSheetState extends State<PrTrendSheet> {
     final marker = prMarkerIndex(shown, widget.series, pr);
 
     // Date-proportional x: days since the first SHOWN point.
-    final first = DateTime.parse(shown.first.date);
+    final first = _utcDay(shown.first.date);
     final spots = [
       for (final p in shown)
         FlSpot(
-          DateTime.parse(p.date).difference(first).inDays.toDouble(),
+          _utcDay(p.date).difference(first).inDays.toDouble(),
           p.value,
         ),
     ];
@@ -305,11 +312,8 @@ class _PrTrendSheetState extends State<PrTrendSheet> {
         FlSpot(spots[i].x, bestByDate[shown[i].date]!),
     ];
     // The record still stands today: carry the step on to today.
-    final today = DateTime.tryParse(istTodayStr());
-    if (today != null) {
-      final todayX = today.difference(first).inDays.toDouble();
-      if (todayX > prSpots.last.x) prSpots.add(FlSpot(todayX, prSpots.last.y));
-    }
+    final todayX = _utcDay(istTodayStr()).difference(first).inDays.toDouble();
+    if (todayX > prSpots.last.x) prSpots.add(FlSpot(todayX, prSpots.last.y));
     final values = [...shown.map((p) => p.value), ...prSpots.map((s) => s.y)];
     final lo = values.reduce((a, b) => a < b ? a : b);
     final hi = values.reduce((a, b) => a > b ? a : b);
@@ -393,6 +397,10 @@ class _PrTrendSheetState extends State<PrTrendSheet> {
           LineChartBarData(
             spots: prSpots,
             isStepLineChart: true,
+            // Flat until the new PR's day, then the rise (the default,
+            // middle, would rise half-way BEFORE the record was set).
+            lineChartStepData: const LineChartStepData(
+                stepDirection: LineChartStepData.stepDirectionForward),
             color: AppColors.accent,
             barWidth: 2.5,
             dotData: FlDotData(
