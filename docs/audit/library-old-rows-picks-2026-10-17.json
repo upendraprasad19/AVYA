@@ -11,6 +11,23 @@
       "why": "GIF 0795 Standing Single Leg Curl is bodyweight; founder chose to treat the exercise as bodyweight"
     }
   },
+  "repicks": {
+    "E051": {
+      "gif_id": "0108",
+      "replaces": "0605",
+      "decided_by": "founder chat 2026-11-26: 'Yes, add the 3' (docs/plans/2026-11-26-media-three-adds.md)"
+    },
+    "E109": {
+      "gif_id": "0228",
+      "replaces": null,
+      "decided_by": "founder chat 2026-11-26: 'Yes, add the 3' (docs/plans/2026-11-26-media-three-adds.md)"
+    },
+    "E264": {
+      "gif_id": "9001",
+      "replaces": "N001",
+      "decided_by": "founder chat 2026-11-26: 'Yes, add the 3' (docs/plans/2026-11-26-media-three-adds.md)"
+    }
+  },
   "picks": [
     {
       "exercise_id": "E001",

@@ -232,6 +232,12 @@
       "equipment_checked": true
     },
     {
+      "id": "E051",
+      "gif": "0108",
+      "equipment_checked": true,
+      "released_by": "founder chat 2026-11-26: 'Yes, add the 3' (docs/plans/2026-11-26-media-three-adds.md)"
+    },
+    {
       "id": "E052",
       "gif": "0594",
       "equipment_checked": true
@@ -425,6 +431,12 @@
       "id": "E108",
       "gif": "0598",
       "equipment_checked": true
+    },
+    {
+      "id": "E109",
+      "gif": "0228",
+      "equipment_checked": true,
+      "released_by": "founder chat 2026-11-26: 'Yes, add the 3' (docs/plans/2026-11-26-media-three-adds.md)"
     },
     {
       "id": "E113",
@@ -683,6 +695,12 @@
       "equipment_checked": true
     },
     {
+      "id": "E264",
+      "gif": "9001",
+      "equipment_checked": true,
+      "released_by": "founder chat 2026-11-26: 'Yes, add the 3' (docs/plans/2026-11-26-media-three-adds.md)"
+    },
+    {
       "id": "E291",
       "gif": "3645",
       "equipment_checked": true
@@ -692,10 +710,6 @@
     {
       "id": "E027",
       "gif": "0606"
-    },
-    {
-      "id": "E051",
-      "gif": "0605"
     },
     {
       "id": "E095",
@@ -731,11 +745,6 @@
     }
   ],
   "removal_slated": [],
-  "left_out": [
-    {
-      "id": "E264",
-      "gif": "N001"
-    }
-  ],
+  "left_out": [],
   "retag_waits": []
 }

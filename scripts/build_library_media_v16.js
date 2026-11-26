@@ -40,6 +40,10 @@ const WEBP_BYTES_MAX = 1500000;
 const WARDROOM_REL = ['assets', 'exercise animations', 'forgetrainer_animations', 'gifs', 'wardroom customized gifs'];
 const GIF_RE = /^\d{4}$/;
 const OLD_ID_RE = /^E\d+$/;
+// Founder's own files: ledger entries with no gif number. Each gets ONE fixed number and slug here, nothing else is mappable.
+// Old rows (--old-rows) only; the G/N media map may not name these numbers. Leg (g) of the table checks repeats this pair.
+const FOUNDER_FILES = { 9001: { ledgerId: 'table-row-clean', slug: '9001-table-row-clean' } };
+const founderFile = (gif) => (Object.prototype.hasOwnProperty.call(FOUNDER_FILES, gif) ? FOUNDER_FILES[gif] : null);
 
 class Fail extends Error {}
 const fail = (m) => {
@@ -225,9 +229,11 @@ function buildFull(a) {
   const byNum = new Map();
   for (const e of ledger.entries) {
     const m = /^(\d{4})_/.exec(e.id || '');
-    if (!m) continue; // non-numeric ids (table-row-clean) are never mappable
-    if (byNum.has(m[1])) fail(`ledger has two entries for gif ${m[1]}`);
-    byNum.set(m[1], e);
+    const founder = Object.keys(FOUNDER_FILES).find((n) => FOUNDER_FILES[n].ledgerId === e.id);
+    const num = m ? m[1] : founder;
+    if (!num) continue; // any other non-numeric id is never mappable
+    if (byNum.has(num)) fail(`ledger has two entries for gif ${num}`);
+    byNum.set(num, e);
   }
 
   // Any map entry naming something other than a 4-digit gif number is refused, mapped or not.
@@ -235,6 +241,9 @@ function buildFull(a) {
     const g = v && v._gif;
     if (g !== undefined && g !== '' && !GIF_RE.test(String(g))) {
       fail(`media map entry ${id}: "${g}" is not a 4-digit gif number`);
+    }
+    if (g !== undefined && founderFile(String(g))) {
+      fail(`media map entry ${id}: gif ${g} is a founder file, mappable only through --old-rows`);
     }
   }
 
@@ -248,6 +257,12 @@ function buildFull(a) {
     if (gifSlug.has(gif)) return gifSlug.get(gif);
     const entry = byNum.get(gif);
     if (!entry) fail(`${ctx}: gif ${gif} has no entry in the ledger`);
+    const own = founderFile(gif);
+    if (own) {
+      if (entry.id !== own.ledgerId) fail(`${ctx}: gif ${gif} is reserved for ledger entry ${own.ledgerId}, not ${entry.id}`);
+      gifSlug.set(gif, own.slug);
+      return own.slug;
+    }
     const fromName = kebab(entry.name);
     const fromId = kebab(String(entry.id).slice(5));
     if (!fromName || !fromId) fail(`${ctx}: ledger entry ${entry.id} kebabs to an empty name`);

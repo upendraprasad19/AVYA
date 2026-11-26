@@ -15405,7 +15405,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 193-193
+        line_range: 196-196
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -15424,7 +15424,7 @@ concepts:
       Library rows that have a Wardroom animation carry three optional keys, written together or
       not at all, always last and in this order: `media_slug` (the file's stem, `<gif number>-<name>`),
       `media_version` (an integer, 1 for every file in M1) and `media_source` (`wardroom`). Introduced
-      in library v16 on 617 new rows; since v17 (OI-443) 137 old `E` rows carry them too, and the
+      in library v16 on 617 new rows; since v17 (OI-443) 137 old `E` rows (140 since v29, 2026-11-26) carry them too, and the
       table's `E` rows are rebuilt only from the entries of the cumulative input
       `docs/audit/library-old-rows-media-input.json`. The file is the private Storage object `<media_slug>_v<media_version>.webp` in the
       `exercise-media` bucket; the provenance (hashes, sizes, frames, the ledger id) lives in
@@ -15449,7 +15449,7 @@ concepts:
         line_range: 198-219
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 193-193
+        line_range: 196-196
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -15535,7 +15535,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 193-193
+        line_range: 196-196
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart
