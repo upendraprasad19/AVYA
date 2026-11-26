@@ -25,6 +25,9 @@ import 'package:icanbefitter/features/ai_coach/models/tool_intent.dart';
 import 'package:icanbefitter/features/ai_coach/services/tool_dispatcher.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart'
     show CreateCustomExerciseException, WorkoutRepository;
+import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 import 'package:uuid/uuid.dart';
 
 import '../helpers/hive_test_setup.dart';
@@ -81,6 +84,21 @@ void main() {
       .whereType<Map>()
       .map((m) => m['name'] as String)
       .toList();
+
+  group('search finds what the guard calls taken', () {
+    test('the library search ignores curly apostrophes and extra spaces', () {
+      final quote = String.fromCharCode(0x2019);
+      List<String> found(String q) => [
+            for (final e in ExerciseRepository.instance.search(q))
+              e['name'] as String
+          ];
+      expect(found('child${quote}s  pose'), ["Child's Pose"]);
+      expect(found('elevated  pike'), [_pike],
+          reason: 'older names are searched the same way');
+      expect(found('childs pose'), isEmpty,
+          reason: 'mirror: only apostrophe SHAPE is ignored, not its presence');
+    });
+  });
 
   group('REFUSED: a name the list already holds', () {
     test('the exact name of an exercise-list row', () async {
@@ -211,6 +229,132 @@ void main() {
         loggingType: 'weight_reps',
       );
       expect(customNames(), ['Bench Press']);
+    });
+  });
+
+  // Founder 2026-11-26 ("Yes, allow it"): the one exception to "refuse any duplicate". A community
+  // exercise that lists no equipment the app can read is hidden from every picker while the
+  // equipment rule is on, so refusing its name would leave the user unable to add it at all.
+  group('the ONE exception: a community row no picker can show', () {
+    const sled = 'Sled Push Test';
+
+    Future<void> signedInProfile() => HiveService.instance.userBox
+        .put('profile', <String, dynamic>{'equipment_access': 'full_gym'});
+
+    /// The key sorts BEFORE the bundled `E…` keys, so the lookup meets this row first.
+    Future<void> libraryRow(Object? equipment,
+            {String key = '0_community',
+            bool community = true,
+            String name = sled,
+            List<String>? aliases}) =>
+        HiveService.instance.exerciseBox.put(key, {
+          'id': key,
+          'name': name,
+          'category': 'Legs',
+          'logging_type': 'weight_reps',
+          if (community) 'source': 'community',
+          if (equipment != null) 'equipment_needed': equipment,
+          if (aliases != null) 'name_aliases': aliases,
+        });
+
+    Future<String> create(String name) =>
+        WorkoutRepository.instance.createCustomExercise(
+          name: name,
+          category: 'Legs',
+          loggingType: 'weight_reps',
+        );
+
+    /// The premise of the exception, read from the rule the pickers use.
+    void expectHiddenFromPickers(Object? equipment) {
+      final capability = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
+      expect(capability, isNotNull, reason: 'the equipment rule is on');
+      expect(EquipmentCapability.canPerform(equipment, capability!), isFalse,
+          reason: 'no picker offers this row');
+    }
+
+    for (final (label, equipment) in <(String, Object?)>[
+      ('an empty equipment list', <String>[]),
+      ('no equipment field at all', null),
+      ('only words the app cannot read', <String>['full_gym']),
+    ]) {
+      test('ALLOWED: a community row with $label', () async {
+        await signedInProfile();
+        await libraryRow(equipment);
+        expectHiddenFromPickers(equipment);
+
+        await create(sled);
+
+        expect(customNames(), [sled]);
+      });
+    }
+
+    test('ALLOWED also when only an OLDER name of that community row matches',
+        () async {
+      await signedInProfile();
+      await libraryRow(<String>[], name: 'Prowler Test', aliases: [sled]);
+
+      await create(sled);
+
+      expect(customNames(), [sled]);
+    });
+
+    test('mirror: the user\'s own exercise still takes the name', () async {
+      await signedInProfile();
+      await libraryRow(<String>[]);
+      await create(sled);
+
+      // Two spaces: a different v5 id, so only the NAME rule can refuse it.
+      expect((await refused('Sled  Push Test')).code, 'duplicate_name');
+      expect(customNames(), [sled]);
+    });
+
+    test('mirror: a community row that lists readable equipment is refused',
+        () async {
+      await signedInProfile();
+      await libraryRow(<String>['barbell']);
+
+      expect((await refused(sled)).code, 'duplicate_name');
+      expect(customNames(), isEmpty);
+    });
+
+    test('mirror: a BUILT-IN row with no equipment is still refused', () async {
+      await signedInProfile();
+      await libraryRow(<String>[], community: false);
+
+      expect((await refused(sled)).code, 'duplicate_name');
+      expect(customNames(), isEmpty);
+    });
+
+    test('mirror: a built-in row of the same name behind the community row refuses',
+        () async {
+      await signedInProfile();
+      await libraryRow(<String>[]);
+      await libraryRow(<String>['barbell'], key: 'E9', community: false);
+      expect(HiveService.instance.exerciseBox.keys.first, '0_community',
+          reason: 'premise: the skipped row comes first');
+
+      expect((await refused(sled)).code, 'duplicate_name');
+      expect(customNames(), isEmpty);
+    });
+
+    test('mirror: with the equipment rule switched off the pickers show it, so refused',
+        () async {
+      await signedInProfile();
+      await libraryRow(<String>[]);
+      await HiveService.instance.configBox
+          .put('disable_equipment_capability_floor', true);
+      expect(TrainingHistoryAnalyzer.resolveCapabilityFromProfile(), isNull);
+
+      expect((await refused(sled)).code, 'duplicate_name');
+      expect(customNames(), isEmpty);
+    });
+
+    test('mirror: with no profile the rule is not enforced, so refused', () async {
+      await HiveService.instance.userBox.delete('profile');
+      await libraryRow(<String>[]);
+
+      expect((await refused(sled)).code, 'duplicate_name');
+      expect(customNames(), isEmpty);
     });
   });
 

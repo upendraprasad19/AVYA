@@ -50,6 +50,20 @@ Future<ScreenHarness> _pump(WidgetTester tester, List<String> names) async {
       libraryRows: _library);
 }
 
+const _pose = "Child's Pose";
+const _ownApostrophe = "Zed's Hold";
+
+/// What a phone with smart punctuation types: a curly apostrophe, two spaces.
+final _typedPose = 'child${String.fromCharCode(0x2019)}s  pose';
+
+Future<ScreenHarness> _pumpWithPose(WidgetTester tester) async {
+  await ensureHive(tester);
+  await tester.runAsync(() => HiveService.instance.customBox.clear());
+  return pumpScreen(tester,
+      exercises: [exercise(name: _bench), exercise(name: _row)],
+      libraryRows: [..._library, _lib('E5', _pose)]);
+}
+
 Future<void> _settle(WidgetTester tester) async {
   for (var i = 0; i < 6; i++) {
     await tester.pump(const Duration(milliseconds: 100));
@@ -177,6 +191,42 @@ void main() {
       await _settle(tester);
       expect(_names(h), [_bench, _row]);
       expect(find.byType(BottomSheet), findsOneWidget, reason: 'nothing happened');
+    });
+
+    // f2a6c8: a name the create guard calls taken must be one the search finds,
+    // or the refusal sends the user to look for something search cannot show.
+    testWidgets('Add picker search ignores curly apostrophes and extra spaces',
+        (tester) async {
+      await _pumpWithPose(tester);
+      await _openAddPicker(tester);
+      await tester.enterText(_inSheet(find.byType(TextField)).first, _typedPose);
+      await _settle(tester);
+      expect(_inSheet(find.text(_pose)), findsOneWidget);
+      expect(_inSheet(find.text(_curl)), findsNothing,
+          reason: 'mirror: the search still narrows');
+    });
+
+    testWidgets('Swap sheet search does too, for the list and for own exercises',
+        (tester) async {
+      await _pumpWithPose(tester);
+      await tester.runAsync(() => HiveService.instance.customBox.put(
+          'custom_exercise_zed', <String, dynamic>{
+        'id': 'custom_exercise_zed',
+        'name': _ownApostrophe,
+        'type': 'exercise',
+        'category': 'Push',
+        'logging_type': 'weight_reps',
+      }));
+      await _openSwapSheet(tester, 0);
+      await tester.enterText(_inSheet(find.byType(TextField)).first, _typedPose);
+      await _settle(tester);
+      expect(_inSheet(find.text(_pose)), findsOneWidget);
+      expect(_inSheet(find.text(_curl)), findsNothing);
+
+      await tester.enterText(_inSheet(find.byType(TextField)).first,
+          'zed${String.fromCharCode(0x2019)}s  hold');
+      await _settle(tester);
+      expect(_inSheet(find.text(_ownApostrophe)), findsOneWidget);
     });
 
     testWidgets('a new name still adds and closes the sheet', (tester) async {

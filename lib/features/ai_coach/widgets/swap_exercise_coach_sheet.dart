@@ -131,10 +131,11 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
       if (name.isEmpty) return;
       final id = (m['id'] as String?) ?? fallbackId;
       if (id == fromId || name == fromId) return;
-      final equipment = m['equipment_needed']?.toString();
+      // The RAW value: the library stores a list, and the rule cannot read a
+      // list turned into text, so it refused every built-in exercise (a6f3d9).
       if (capability != null &&
-          equipment != null &&
-          !EquipmentCapability.canOfferInPicker(equipment, capability,
+          !EquipmentCapability.canOfferInPicker(
+              m['equipment_needed'], capability,
               isCustom: isCustom)) {
         return;
       }

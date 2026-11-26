@@ -1,8 +1,10 @@
+import 'package:icanbefitter/core/services/auto_appended_custom.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/equipment_vocab.dart';
 import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/same_movement.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
 /// Queries the exerciseBox (seeded from bundled JSON).
 ///
@@ -103,19 +105,20 @@ class ExerciseRepository {
 
   /// Full-text search across exercise name and name_aliases.
   ///
-  /// Case-insensitive substring match.
+  /// Substring match on [exerciseDuplicateKey] (case, extra spaces and curly
+  /// apostrophes ignored).
   List<Map<String, dynamic>> search(String query) {
     if (query.isEmpty) return getAll();
 
-    final q = query.toLowerCase();
+    final q = exerciseDuplicateKey(query);
     return getAll().where((e) {
-      final name = (e['name'] as String?)?.toLowerCase() ?? '';
+      final name = exerciseDuplicateKey(e['name'] as String? ?? '');
       if (name.contains(q)) return true;
 
       final aliases = e['name_aliases'];
       if (aliases is List) {
         for (final alias in aliases) {
-          if (alias.toString().toLowerCase().contains(q)) return true;
+          if (exerciseDuplicateKey(alias.toString()).contains(q)) return true;
         }
       }
       return false;
@@ -498,11 +501,18 @@ class ExerciseRepository {
   /// Whether the exercise list (a name, or an older name in `name_aliases`) or
   /// one of the user's own exercises already holds [name]
   /// ([exerciseDuplicateKey]). The custom-exercise create guard (f2a6c8).
+  ///
+  /// ONE exception (founder 2026-11-26): while the equipment rule is on, a
+  /// community row no picker can show ([_noPickerCanShow]) does not hold its
+  /// name, or the user could neither pick it nor create it.
   bool isNameTaken(String name) {
     final target = exerciseDuplicateKey(name);
     if (target.isEmpty) return false;
+    final equipmentRuleOn =
+        TrainingHistoryAnalyzer.resolveCapabilityFromProfile() != null;
     for (final raw in _hive.exerciseBox.values) {
       if (raw is! Map) continue;
+      if (equipmentRuleOn && _noPickerCanShow(raw)) continue;
       final n = raw['name'];
       if (n is String && exerciseDuplicateKey(n) == target) return true;
       final aliases = raw['name_aliases'];
@@ -513,6 +523,13 @@ class ExerciseRepository {
     }
     return customNamesLower().any((n) => exerciseDuplicateKey(n) == target);
   }
+
+  /// A community row listing no equipment the app can read. `canPerform` refuses
+  /// such a row under EVERY equipment setting, so every picker leaves it out. A
+  /// built-in row is never one ([isLibraryRow]).
+  static bool _noPickerCanShow(Map row) =>
+      !isLibraryRow(row) &&
+      EquipmentVocab.fromProfile(row['equipment_needed']).isEmpty;
 
   /// The user's custom exercise names, trimmed and lower-cased. Names only:
   /// the L2 repair (d4b8e1, Batch 0b) uses it to REMOVE customs the generator

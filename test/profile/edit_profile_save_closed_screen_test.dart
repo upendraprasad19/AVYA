@@ -10,9 +10,12 @@
 // BEHAVIOURAL: the REAL EditProfileScreen is pumped against real Hive, SAVE is tapped, the screen is
 // closed while the Save's first real await is pending, and the written profile and the telemetry are
 // read back. Harness copied from edit_profile_target_impact_test.dart.
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -123,7 +126,8 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  Future<void> boot(WidgetTester tester, Map<String, dynamic> profile) async {
+  Future<void> boot(WidgetTester tester, Map<String, dynamic> profile,
+      {bool pro = false, bool dietStrategy = false, bool inShell = false}) async {
     PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
     await tester.runAsync(() async {
       if (!hiveReady) {
@@ -149,9 +153,16 @@ void main() {
         'units_system': 'metric',
       });
       await MigratedKey.delete('prediction_stale');
+      await MigratedKey.delete('isPro');
+      await MigratedKey.delete('expiresAt');
+      if (pro) {
+        await MigratedKey.write('isPro', true);
+        await MigratedKey.write('expiresAt',
+            DateTime.now().add(const Duration(days: 30)).toIso8601String());
+      }
     });
     SyncService.pausedForSimulation = true;
-    DietStrategyFlags.debugEnabledOverride = false;
+    DietStrategyFlags.debugEnabledOverride = dietStrategy;
     SupabaseService.clientOverrideForTest =
         SupabaseClient('http://127.0.0.1:1', 'anon-key',
             authOptions: const AuthClientOptions(autoRefreshToken: false));
@@ -167,10 +178,17 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    router = GoRouter(routes: [
+    final routes = <RouteBase>[
       GoRoute(path: '/', builder: (_, __) => const EditProfileScreen()),
       GoRoute(path: '/profile', builder: (_, __) => const Scaffold(body: Text('PROFILE'))),
-    ]);
+    ];
+    // `inShell`: the app's shape, where the screen lives in a nested navigator
+    // and a dialog sits on the root one, so a route change can remove the screen
+    // while its question stays up.
+    router = GoRouter(
+        routes: inShell
+            ? [ShellRoute(builder: (_, __, child) => child, routes: routes)]
+            : routes);
     await tester.pumpWidget(ProviderScope(
       overrides: [
         authStateProvider.overrideWith((ref) => const Stream.empty()),
@@ -198,6 +216,15 @@ void main() {
           () => Future<void>.delayed(const Duration(milliseconds: 100)));
       await tester.pump(const Duration(milliseconds: 250));
     }
+  }
+
+  /// [settle] until [done] holds (bounded), then once more: the Save writes to disk
+  /// in real time, which a loaded machine does not finish in a fixed number of rounds.
+  Future<void> settleUntil(WidgetTester tester, bool Function() done) async {
+    for (var i = 0; i < 20 && !done(); i++) {
+      await settle(tester, rounds: 2);
+    }
+    await settle(tester);
   }
 
   // Two sinks: the Save's own failure event, and the non-fatal the profile-surface refresh logs
@@ -248,7 +275,9 @@ void main() {
     router.go('/profile');
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    await settle(tester);
+    await settleUntil(
+        tester,
+        () => (HiveService.instance.userBox.get('profile') as Map)['daily_calories'] != 2000);
 
     final after = Map<dynamic, dynamic>.from(
         (await tester.runAsync(() async => HiveService.instance.userBox.get('profile')))! as Map);
@@ -367,16 +396,281 @@ void main() {
     expect(events.any((e) => e.op == 'body_fat_assessment_owner_changed'), isTrue);
   });
 
-  test('wiring (source pin): nothing returns between the AI result and its save', () {
-    final src = File('lib/features/profile/screens/edit_profile_screen.dart')
-        .readAsLinesSync()
-        .where((l) => !l.trimLeft().startsWith('//'))
-        .join('\n');
-    final from = src.indexOf("final assessedAt = data['assessed_at'] as String;");
-    final to = src.indexOf('await saveBodyFatAssessment(');
-    expect(from, greaterThan(0));
-    expect(to, greaterThan(from));
-    expect(src.substring(from, to).contains('return'), isFalse,
-        reason: 'a closed screen must not drop the result before it is stored');
+  testWidgets(
+      'the screen removed while the reschedule question is open: Reschedule skips and says so',
+      (tester) async {
+    await boot(tester, _profile(), inShell: true);
+    await tester.runAsync(() async {
+      await HiveService.instance.workoutBox
+          .put('current_plan', <String, dynamic>{'plan': 'x'});
+    });
+    final five = find.text('5');
+    await tester.ensureVisible(five.first);
+    await tester.tap(five.first);
+    await tester.pump();
+    await tester.ensureVisible(find.text('SAVE'));
+    await tester.tap(find.text('SAVE'));
+    await settle(tester);
+    expect(find.text('Reschedule Workouts?'), findsOneWidget);
+    expect(skippedReschedule(), isFalse, reason: 'the question is on screen');
+
+    await closeScreen(tester);
+    expect(find.byType(EditProfileScreen), findsNothing);
+    await tester.tap(find.text('Reschedule'));
+    await settle(tester);
+
+    expect(skippedReschedule(), isTrue);
+    expect(saveFailures(), isEmpty);
+    expect(
+        (await tester.runAsync(() async =>
+            HiveService.instance.workoutBox.get('current_plan')) as Map)['plan'],
+        'x',
+        reason: 'no regeneration ran for a screen that is gone');
+  });
+
+  // ── Body fat: a result that lands while the form is open ─────────────────
+
+  Map<String, dynamic> withBodyFat() => <String, dynamic>{
+        ..._profile(),
+        'body_fat_percent': 22.0,
+        'body_fat_assessed_at': '2026-09-01T04:00:00.000Z',
+      };
+
+  final bodyFatField = find.widgetWithText(TextField, 'Body Fat % (optional)');
+
+  String bodyFatText(WidgetTester tester) =>
+      tester.widget<TextField>(bodyFatField).controller!.text;
+
+  /// A result stored from an earlier, closed copy of the screen.
+  Future<void> landResult(WidgetTester tester) async {
+    final container = appContainer(tester);
+    await tester.runAsync(() => saveBodyFatAssessment(
+        container: container,
+        ownerAtStart: _user,
+        ownerNow: _user,
+        updates: Map<String, dynamic>.from(assessment)));
+    await settle(tester);
+  }
+
+  Future<void> editCityAndSave(WidgetTester tester) async {
+    final city = find.widgetWithText(TextField, 'City');
+    await tester.ensureVisible(city);
+    await tester.enterText(city, 'Pune');
+    await tester.pump();
+    await tester.ensureVisible(find.text('SAVE'));
+    await tester.tap(find.text('SAVE'));
+    await tester.pump();
+  }
+
+  testWidgets('a result landing while the form is open is shown and survives SAVE',
+      (tester) async {
+    await boot(tester, withBodyFat());
+    expect(bodyFatText(tester), '22.0');
+
+    await landResult(tester);
+    expect(bodyFatText(tester), '18.0');
+    expect(find.text('Last assessed: 26 Nov 2026'), findsOneWidget);
+
+    await editCityAndSave(tester);
+    await settle(tester);
+
+    final stored = await storedProfile(tester);
+    expect(stored['city'], 'Pune', reason: 'the Save really ran');
+    expect(stored['body_fat_percent'], 18.0);
+    expect(stored['body_fat_assessed_at'], '2026-11-26T04:00:00.000Z');
+  });
+
+  testWidgets(
+      'a result landing while SAVE is asking about the diet strategy is not written over',
+      (tester) async {
+    await boot(tester, withBodyFat(), pro: true, dietStrategy: true);
+    final keto = find.text('Keto');
+    await tester.ensureVisible(keto.first);
+    await tester.tap(keto.first);
+    await tester.pump();
+    await tester.ensureVisible(find.text('SAVE'));
+    await tester.tap(find.text('SAVE'));
+    await settle(tester);
+    final confirm = find.byKey(const ValueKey('diet_strategy_confirm_switch'));
+    expect(confirm, findsOneWidget, reason: 'the Save is waiting on the question');
+
+    // The Save has already collected what it will write.
+    await landResult(tester);
+    await tester.tap(confirm);
+    await settle(tester);
+
+    final stored = await storedProfile(tester);
+    expect(stored['diet_strategy'], 'keto', reason: 'the Save really ran');
+    expect(stored['body_fat_percent'], 18.0);
+    expect(stored['body_fat_assessed_at'], '2026-11-26T04:00:00.000Z');
+  });
+
+  testWidgets('mirror: a body-fat value the user typed is saved', (tester) async {
+    await boot(tester, withBodyFat());
+    await tester.ensureVisible(bodyFatField);
+    await tester.enterText(bodyFatField, '15');
+    await tester.pump();
+
+    await editCityAndSave(tester);
+    await settle(tester);
+
+    expect((await storedProfile(tester))['body_fat_percent'], 15.0);
+  });
+
+  testWidgets('mirror: a typed value is not replaced by a result that lands after it',
+      (tester) async {
+    await boot(tester, withBodyFat());
+    await tester.ensureVisible(bodyFatField);
+    await tester.enterText(bodyFatField, '15');
+    await tester.pump();
+
+    await landResult(tester);
+    expect(bodyFatText(tester), '15');
+    await editCityAndSave(tester);
+    await settle(tester);
+
+    expect((await storedProfile(tester))['body_fat_percent'], 15.0);
+  });
+
+  // ── Body fat: the REAL AI Assess flow ────────────────────────────────────
+  // The photo picker is answered on its platform channel and the Edge Function
+  // by a loopback server, so the real `functions.invoke` runs.
+
+  const otherUser = 'aaaa0000-0000-0000-0000-000000000000';
+  const result = <String, Object?>{
+    'bf_low': 16,
+    'bf_high': 20,
+    'confidence': 'medium',
+    'assessed_at': '2026-11-26T04:00:00.000Z',
+  };
+
+  /// Taps AI Assess and returns once the function has been called; the answer is
+  /// held back until the returned callback runs.
+  Future<Future<void> Function()> startAssessment(
+      WidgetTester tester, int status, Map<String, Object?> body) async {
+    late HttpServer server;
+    final answer = Completer<void>();
+    var hits = 0;
+    await tester.runAsync(() async {
+      HttpOverrides.global = null;
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((req) async {
+        await req.drain<void>();
+        if (req.uri.path.endsWith('/functions/v1/assess-body-composition')) {
+          hits++;
+          await answer.future;
+          req.response.statusCode = status;
+          req.response.headers.contentType = ContentType.json;
+          req.response.write(jsonEncode(body));
+        } else {
+          req.response.statusCode = 200;
+          req.response.headers.contentType = ContentType.json;
+          req.response.write('{}');
+        }
+        await req.response.close();
+      });
+      final client = SupabaseClient(
+          'http://127.0.0.1:${server.port}', 'anon-key',
+          authOptions: const AuthClientOptions(autoRefreshToken: false));
+      await client.auth.setInitialSession(jsonEncode(<String, dynamic>{
+        'access_token': 'stub-access-token',
+        'token_type': 'bearer',
+        'expires_in': 3600,
+        'expires_at': DateTime.now()
+                .add(const Duration(hours: 1))
+                .millisecondsSinceEpoch ~/
+            1000,
+        'refresh_token': 'stub-refresh-token',
+        'user': <String, dynamic>{
+          'id': _user,
+          'aud': 'authenticated',
+          'app_metadata': <String, dynamic>{},
+          'user_metadata': <String, dynamic>{},
+          'created_at': '2026-01-01T00:00:00Z',
+        },
+      }));
+      SupabaseService.clientOverrideForTest = client;
+    });
+    addTearDown(() async {
+      await tester.runAsync(() => server.close(force: true));
+    });
+
+    final photo = File('${tempDir.path}/body.jpg')..writeAsBytesSync([1, 2, 3]);
+    const picker = MethodChannel('plugins.flutter.io/image_picker');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        picker, (call) async => call.method == 'pickImage' ? photo.path : null);
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(picker, null));
+
+    final button = find.text('AI Assess');
+    await tester.ensureVisible(button);
+    await tester.runAsync(() async {
+      await tester.tap(button);
+    });
+    for (var i = 0; i < 100 && hits == 0; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(hits, 1, reason: 'the real flow reached the Edge Function');
+    return () async {
+      await tester.runAsync(() async => answer.complete());
+      await settle(tester, rounds: 16);
+    };
+  }
+
+  testWidgets('AI Assess: the screen closed during the call, the result is still stored',
+      (tester) async {
+    await boot(tester, withBodyFat(), pro: true);
+    final reply = await startAssessment(tester, 200, result);
+    await closeScreen(tester);
+    await reply();
+
+    final stored = await storedProfile(tester);
+    expect(stored['body_fat_percent'], 18.0);
+    expect(stored['body_fat_assessed_at'], '2026-11-26T04:00:00.000Z');
+    expect(stored['body_fat_range'], '16-20%');
+    expect(nonFatals.where((s) => s.startsWith('body_fat_assessment')), isEmpty,
+        reason: '$nonFatals');
+  });
+
+  testWidgets(
+      'AI Assess mirror: another account signed in during the call gets nothing',
+      (tester) async {
+    await boot(tester, withBodyFat(), pro: true);
+    final reply = await startAssessment(tester, 200, result);
+    await tester.runAsync(() async {
+      await HiveUserSession.openForUser(otherUser);
+      await HiveService.instance.userBox.clear();
+    });
+    await reply();
+
+    final theirs = await tester.runAsync(
+        () async => HiveService.instance.userBox.get('profile')) as Map?;
+    expect(theirs?['body_fat_percent'], isNull, reason: 'stored: $theirs');
+    expect(bodyFatText(tester), '22.0',
+        reason: 'the open form must not take another account\'s result');
+    expect(events.any((e) => e.op == 'body_fat_assessment_owner_changed'), isTrue,
+        reason: '$events');
+
+    await tester.runAsync(() => HiveUserSession.openForUser(_user));
+    expect((await storedProfile(tester))['body_fat_percent'], 22.0,
+        reason: 'the account that asked is left as it was');
+  });
+
+  testWidgets('AI Assess: the monthly limit says when the next one is allowed',
+      (tester) async {
+    await boot(tester, withBodyFat(), pro: true);
+    final reply = await startAssessment(tester, 429, const {
+      'error': 'Body composition can only be assessed once every 30 days.',
+      'code': 'rate_limited',
+      'next_allowed_at': '2026-12-20T10:00:00.000Z',
+    });
+    await reply();
+
+    expect(find.text('Next assessment available: 20 Dec 2026'), findsOneWidget,
+        reason: 'events were $events, non-fatals were $nonFatals');
+    expect(nonFatals.where((s) => s.startsWith('body_fat_assessment')), isEmpty,
+        reason: 'an expected refusal is not an error report');
   });
 }

@@ -598,10 +598,10 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
       bundled = doable(repo.getAll()).take(30).toList();
       matchedCustom = custom;
     } else {
-      final q = query.toLowerCase();
+      final q = exerciseDuplicateKey(query);
       bundled = doable(repo.search(query)).take(30).toList();
       matchedCustom = custom.where((e) {
-        final name = (e['name'] as String?)?.toLowerCase() ?? '';
+        final name = exerciseDuplicateKey(e['name'] as String? ?? '');
         return name.contains(q);
       }).toList();
     }

@@ -30,7 +30,7 @@ cross_account_guard: "not applicable: the guard reads the signed-in user's own b
 forbidden_patterns_checked:
   - { pattern: "a custom exercise row created with a name the exercise list, an older list name, or another custom exercise already carries", absent: true }
 proposed_fix: |
-  In `_createCustomExerciseLocked` a name is TAKEN when (a) `ExerciseRepository.isNameTaken(name)` finds it as a list row's name or one of its `name_aliases`, or as one of the user's exercise rows (`customNamesLower`, so templates sharing the box are not compared), whatever id scheme it was stored with; or (b) a custom row carries the same v5 id (the earlier guard, kept). Names are compared by `exerciseDuplicateKey`: `exerciseNameKey` (trim, lower case; the identity `exlogKey` hashes, left unchanged) with runs of spaces, non-breaking ones too, read as one and curly apostrophes as straight ones. A taken name throws `duplicate_name` with `WardroomCopy.customExerciseNameTakenTemplate`; the sheet shows it and stays open, and the coach tool reports the same words. The copy's second sentence points at the equipment setting, because the pickers hide list exercises the user's equipment cannot do (plan review round 1: "Search for it instead" was a dead end for those; the coach also said "You already have an exercise called …" for a list name). Only an EXACT match refuses: a longer or shorter name creates. Rows already in the box are not touched (no migration); the edit sheet keeps its name read-only, so there is no rename door.
+  In `_createCustomExerciseLocked` a name is TAKEN when (a) `ExerciseRepository.isNameTaken(name)` finds it as a list row's name or one of its `name_aliases`, or as one of the user's exercise rows (`customNamesLower`, so templates sharing the box are not compared), whatever id scheme it was stored with; or (b) a custom row carries the same v5 id (the earlier guard, kept). Names are compared by `exerciseDuplicateKey`: `exerciseNameKey` (trim, lower case; the identity `exlogKey` hashes, left unchanged) with runs of spaces, non-breaking ones too, read as one and curly apostrophes as straight ones. ONE exception (founder 2026-11-26, "Yes, allow it"): while the equipment rule is on, a community row whose equipment the app cannot read does not take its name, because no picker can show it. A taken name throws `duplicate_name` with `WardroomCopy.customExerciseNameTakenTemplate`; the sheet shows it and stays open, and the coach tool reports the same words. The copy's second sentence points at the equipment setting, because the pickers hide list exercises the user's equipment cannot do (plan review round 1: "Search for it instead" was a dead end for those; the coach also said "You already have an exercise called …" for a list name). Only an EXACT match refuses: a longer or shorter name creates. Rows already in the box are not touched (no migration); the edit sheet keeps its name read-only, so there is no rename door.
 regression_test_planned: |
   test/contracts/custom_exercise_name_unique_behavioral_test.dart (real Hive, real repository): refused = the exact list name, case, leading, repeated inner and non-breaking spaces, a curly apostrophe, an alias (stored with stray spaces and capitals), a custom under an older id scheme, a custom with the same id under another name, an earlier user-created custom, the message names the exercise; mirror = a new name, a longer name containing a list name, a shorter name that is part of one, a TEMPLATE of that name; the coach intent for a list name fails with exactly the shared copy and writes nothing. Screens: test/features/train/exercise_name_unique_screen_test.dart and template_builder_unique_names_test.dart: the sheet stays open with the message and no row is stored; and, for a name in the session or template that is in NO list (so the create is allowed), the workout add, the auto-swap (no UNDO) and the builder each refuse it with their own message.
 mutation_proof: |
@@ -62,6 +62,33 @@ related_bugs: [d5c2e8, e6a4d9]
 
 ## Fix
 One rule at the one create path: a name the list holds (by name or older name), or any of the user's exercises carries, is refused with a message that says where it already is. Only an exact match (case and spaces ignored) refuses.
+
+## Plan review round 2 (2026-11-26)
+The guard ignores curly apostrophes and extra spaces; picker search did not, so a name typed on a phone with smart punctuation was refused as taken and could not be found. Library search, the add picker, the swap sheet and the template builder now compare with the same `exerciseDuplicateKey`. Names that differ by other characters (zero-width characters, a non-breaking hyphen, an acute accent used as an apostrophe) still create: they are outside the stated rule.
+
+Mutations (mutate/run/restore, restore verified by bytes), the old plain-text search put back in
+each of the five places (library search, swap list, swap own list, add picker, template builder
+own list): each 1 RED.
+
+## The one exception (founder, 2026-11-26)
+
+Round 2 also found that a community exercise listing no equipment is hidden by every picker under
+EVERY equipment setting (`canPerform` refuses an empty list, and approved community rows go into
+the shared exercise box), yet the guard counted its name: once such a row was approved, another
+user could neither find it nor create it, and the message's equipment advice was false for them.
+Read live on 2026-11-26: 19 custom rows, 0 approved, 13 submitted, 18 with no equipment listed,
+so it had not happened yet. Founder, asked whether to allow the create: "Yes, allow it".
+
+Rule (`ExerciseRepository.isNameTaken` + `_noPickerCanShow`): while
+`resolveCapabilityFromProfile()` is not null, a list row that is a community row
+(`source: community`) with no readable equipment is skipped, name and older names alike. Still
+refused: a community row with readable equipment, every built-in row (also one of the same name
+behind the skipped row), the user's own exercises, and everything when the equipment rule is off
+(the pickers then show the row).
+
+Tests, red before the change (the four ALLOWED rows and the own-exercise mirror that starts with
+one). Mutations: exception removed, 5 RED; rule switch ignored, 5 RED; built-in rows skipped too,
+1 RED; every community row skipped, 1 RED; the first skipped row ending the lookup, 2 RED.
 
 ## Open calls (for the founder, not decided here)
 A custom exercise that already shares a list name and was created before this fix is left as it is. Renaming or merging those rows would change their logs' keys.

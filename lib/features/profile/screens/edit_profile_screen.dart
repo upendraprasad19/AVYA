@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
@@ -138,6 +139,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   TimeOfDay? _preferredWorkoutTime; // stored as 'HH:MM' string in Hive/Supabase
   late final TextEditingController _bodyFatController;
   String? _bodyFatAssessedAt;
+  // What the form last took from the profile for the body-fat field and its
+  // assessed date. Save writes either key only when the form's value differs, so
+  // an untouched form never writes an older value over a result stored while it
+  // was open.
+  String _seededBfText = '';
+  String? _seededBfAssessedAt;
+  ProviderSubscription<Map<String, dynamic>>? _bodyFatSub;
   bool _isAssessingBf = false;
   bool _isSaving = false;
   Map<String, dynamic> _profileAtOpen = const <String, dynamic>{};
@@ -354,10 +362,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _injuries = ['none'];
     }
     final bfPercent = profile['body_fat_percent'];
-    _bodyFatController = TextEditingController(
-      text: bfPercent != null ? bfPercent.toString() : '',
-    );
+    _seededBfText = bfPercent != null ? bfPercent.toString() : '';
+    _bodyFatController = TextEditingController(text: _seededBfText);
     _bodyFatAssessedAt = profile['body_fat_assessed_at'] as String?;
+    _seededBfAssessedAt = _bodyFatAssessedAt;
+    _bodyFatSub = ref.listenManual<Map<String, dynamic>>(
+      userProfileProvider,
+      (prev, next) {
+        if (mounted) _followStoredBodyFat(next);
+      },
+    );
 
     // Date of birth: stored as "YYYY-MM-DD" string. Parse if present.
     final dobStr = (profile['date_of_birth'] as String?)?.trim() ?? '';
@@ -470,6 +484,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   void dispose() {
     _nameHealSub?.close();
+    _bodyFatSub?.close();
     _nameController.dispose();
     _heightController.dispose();
     _weightController.dispose();
@@ -1849,6 +1864,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
+  /// A body-fat result can be stored while this form is open (an assessment
+  /// started on an earlier copy of the screen). A field the user has not edited
+  /// then shows the stored value and date.
+  void _followStoredBodyFat(Map<String, dynamic> profile) {
+    if (_bodyFatController.text != _seededBfText) return; // the user's own edit
+    final text = profile['body_fat_percent']?.toString() ?? '';
+    final assessedAt = profile['body_fat_assessed_at'] as String?;
+    if (text == _seededBfText && assessedAt == _seededBfAssessedAt) return;
+    setState(() {
+      _seededBfText = text;
+      _seededBfAssessedAt = assessedAt;
+      _bodyFatController.text = text;
+      _bodyFatAssessedAt = assessedAt;
+    });
+  }
+
   Future<void> _runBfAssessment() async {
     final picker = ImagePicker();
     final XFile? file = await picker.pickImage(
@@ -1864,7 +1895,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // container: the result must be stored even if this screen closes while the
     // AI call runs.
     final container = ProviderScope.containerOf(context, listen: false);
-    final ownerAtStart = SupabaseService.instance.currentUser?.id;
+    // Whose local profile is open: that is where the result will be written.
+    final ownerAtStart = HiveUserSession.currentOwnerFullId;
 
     try {
       final bytes = await file.readAsBytes();
@@ -1912,7 +1944,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final bfMid = ((bfLow + bfHigh) / 2).roundToDouble();
       final assessedAt = data['assessed_at'] as String;
 
-      if (mounted) {
+      // Shown before the save: if the save throws, SAVE still carries it.
+      if (mounted && HiveUserSession.currentOwnerFullId == ownerAtStart) {
         setState(() {
           _bodyFatController.text = bfMid.toStringAsFixed(1);
           _bodyFatAssessedAt = assessedAt;
@@ -1923,7 +1956,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final saved = await saveBodyFatAssessment(
         container: container,
         ownerAtStart: ownerAtStart,
-        ownerNow: SupabaseService.instance.currentUser?.id,
+        ownerNow: HiveUserSession.currentOwnerFullId,
         updates: {
           'body_fat_percent': bfMid,
           'body_fat_assessed_at': assessedAt,
@@ -1932,6 +1965,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       );
 
       if (saved && mounted) {
+        // Stored: the form now holds what the profile holds.
+        _seededBfText = bfMid.toStringAsFixed(1);
+        _seededBfAssessedAt = assessedAt;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -2103,9 +2139,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'date_of_birth': ?dobIso,
         'wake_up_time': ?wakeIso,
         'preferred_workout_time': ?pwtIso,
-        if (_bodyFatController.text.isNotEmpty)
+        if (_bodyFatController.text.isNotEmpty &&
+            _bodyFatController.text != _seededBfText)
           'body_fat_percent': double.tryParse(_bodyFatController.text),
-        if (_bodyFatAssessedAt != null)
+        if (_bodyFatAssessedAt != null &&
+            _bodyFatAssessedAt != _seededBfAssessedAt)
           'body_fat_assessed_at': _bodyFatAssessedAt,
         if (_sessionDuration != null)
           'session_duration_minutes': _sessionDuration,
@@ -2359,6 +2397,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           ),
         );
 
+        if (shouldReschedule == true && !mounted) {
+          // The screen went while the question was open: same skip, recorded.
+          unawaited(
+              ErrorTelemetry.logEvent('profile_edit_reschedule_skipped_closed'));
+        }
         if (shouldReschedule == true && mounted) {
           final profile = ref.read(userProfileProvider);
           final experience = (profile['fitness_experience'] as String?) ?? 'intermediate';
