@@ -5,6 +5,8 @@ blast_radius: account
 review_rounds: 2
 ground_truth_verified: true
 verdict: converged
+bpass: accepted
+bpass_review: docs/reviews/6976a9f52b48-review.md
 ---
 
 # Plan-review record — one PR card + one plateau definition (83e031, 8300e1)

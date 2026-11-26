@@ -5359,7 +5359,7 @@ concepts:
         method: loadAllExercisePRs (two-pass cardio unit) + ExercisePR.unit / formattedValue
         semantic: per-set
         fields_read: [logging_type, sets, distance_km, duration_sec]
-        notes: OI-389 — a cardio exercise with any km is ranked in km, else by best set duration in seconds; ExercisePR carries its unit (the PR card / graduation never compare across units). Behavioral test/contracts/cardio_duration_distance_writer_to_reader_test.dart (T16a, T16c), test/features/train/stats_grid_cardio_pr_test.dart (T16b).
+        notes: OI-389 — a cardio exercise with any km is ranked in km, else by best set duration in seconds; ExercisePR carries its unit (the PR card / graduation never compare across units). Behavioral test/contracts/cardio_duration_distance_writer_to_reader_test.dart (T16a, T16c), test/contracts/pr_card_unify_behavioral_test.dart (T16b, ported from the deleted stats_grid_cardio_pr_test.dart).
       - file: lib/features/train/repositories/workout_repository.dart
         line_range: 1-9999
         method: loadAllExercisePRs
@@ -6651,7 +6651,7 @@ concepts:
         fields_read: [current_streak_weeks]
         notes: the 4/8/12-week streak badges.
       - file: lib/features/ai_coach/services/pattern_detector.dart
-        line_range: 112-127
+        line_range: 112-129
         method: _streakRisk
         semantic: pass-through
         fields_read: [current_streak_weeks]
