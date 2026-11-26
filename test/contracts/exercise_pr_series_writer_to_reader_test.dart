@@ -12,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/workout_write_service.dart';
 import 'package:icanbefitter/core/services/write_result.dart';
+import 'package:icanbefitter/features/home/widgets/pr_snapshot.dart';
+import 'package:icanbefitter/features/home/widgets/pr_trend_sheet.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 import 'package:icanbefitter/features/train/services/exercise_pr_series.dart';
 
@@ -278,6 +280,23 @@ void main() {
     });
     expect(_series('PUSH UP'), ['2026-10-12=10.0', '2026-10-13=14.0']);
     expect(_repo.loadAllExercisePRs().length, 1);
+  });
+
+  // 592da4 (founder observation 2026-11-26): a PR only rises or holds. The
+  // series keeps what was LIFTED each day; the PR line drawn from it is the
+  // running best, which never dips and ends at the PR.
+  test('B11: 40 -> 35 -> 42.5 keeps the lifted dip; the PR line steps 40, 40, 42.5',
+      () async {
+    await _log('Bench Press', 1, [_set(w: 40, r: 5)]);
+    await _log('Bench Press', 2, [_set(w: 35, r: 8)]);
+    await _log('Bench Press', 3, [_set(w: 42.5, r: 3)]);
+    expect(_series('Bench Press'),
+        ['2026-10-01=40.0x5', '2026-10-02=35.0x8', '2026-10-03=42.5x3']);
+    final prs = _repo.loadAllExercisePRs();
+    final series = _repo.loadAllExercisePrSeries(prs)[exercisePrNameKey('Bench Press')]!;
+    expect(prRunningBest(series.points), [40, 40, 42.5]);
+    expect(prSparkValues(series), [40, 40, 42.5]);
+    expect(prRunningBest(series.points).last, _pr('Bench Press').bestValue);
   });
 
   test('a box of 3,000 rows: one build (time printed, not asserted)', () async {
