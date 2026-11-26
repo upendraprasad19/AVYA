@@ -72,5 +72,6 @@ findings:
 
   - id: EF-DEPLOY
     title: "Redeploy ai-proxy and ai-media-proxy from main so the prompt change is live"
-    terminal_state: blocked_on_user
-    reason: "A live Edge Function deploy needs its own founder go (CLAUDE.md 4.3), after the merge."
+    terminal_state: closed_in_commit
+    commit: "oi348-3b-efdeploy@branch"
+    verification: "Founder go 2026-11-26 ('Yes, redeploy both'). Deployed from main a91c0028 (PR #352 merge): ai-proxy v114 -> v115 (verify_jwt false), ai-media-proxy v38 -> v39 (verify_jwt true). Before: live decoded files equal dbf88dd9 (ai-proxy, 67 of 68; the type-only _shared/tools/types.ts is an empty part) and 2816fb37 (ai-media-proxy, 9 of 9); rollback payloads rebuilt with --rollback --dry-run and kept. After: ai-proxy 67 of 68 and ai-media-proxy 9 of 9 equal a91c0028; both answer an anon Bearer with the module's own 401 'Invalid or expired token' (booted). Not checked: a live chat turn (needs a signed-in user); its proof is the ai-proxy log line `meal_items_rule=true` on the next coach message."
