@@ -1774,7 +1774,7 @@ concepts:
           fires syncProfileNow); signed in: pushSnapshot, and the
           coach-extraction lock ONLY when the food type itself changed.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1864-2319
+        line_range: 1949-2433
         method: _save (writes _foodType.storageKey; lock compare on canonical keys)
       - file: lib/features/onboarding/providers/onboarding_provider.dart
         line_range: 1005-1006
@@ -1810,7 +1810,7 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1353-1411
+        line_range: 1438-1472
         method: _buildDietPreferenceChips (FoodTypeChips; no Keto)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -1907,7 +1907,7 @@ concepts:
           itself; invalidating a provider that watches userProfileProvider
           from inside it is a CircularDependencyError in debug builds).
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1864-2004
+        line_range: 1949-2433
         method: _save (adds diet_strategy only with the flag on, for a chip different from the EFFECTIVE strategy, after confirmEditProfileDietStrategy; PRO re-checked at Save)
         notes: |
           PRESENCE ONLY for the screen wiring (B-pass seat C finding 3): the
@@ -6339,7 +6339,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 338-359
+        line_range: 340-361
         method: reckonStreakDecayAndPersist
         semantic: flag-check
         fields_read: [restoreSettledForCurrentUser]
@@ -6417,13 +6417,13 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 423-600
+        line_range: 425-602
         method: _calculateStreak
         semantic: flag-check
         fields_read: [schedule_<date> presence]
         notes: a rowless day before today ends the chain (no freeze spent); today is tolerated.
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 638-686
+        line_range: 640-688
         method: completionRateOverWindow
         semantic: flag-check
         fields_read: [schedule_<date> presence]
@@ -6833,7 +6833,7 @@ concepts:
         method: completeOnboarding
         notes: writes to userBox['profile']['full_name'] + syncs to users table
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1864-2319
+        line_range: 1949-2433
         method: _save
         notes: calls syncProfileNow after updating userBox
       - file: lib/features/profile/services/profile_write_service.dart
@@ -11454,7 +11454,7 @@ concepts:
         method: InjuryVocab.normalize / canonicalTokens / chipTokens / toggleChip
         notes: canonical 9-token set + read-side alias (back to lower_back, free-text to token); Ship 3 added chipTokens (single chip-UI source == none ∪ canonicalTokens) + chipLabel + pure toggleChip shared by both chip screens
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 1412-1477
+        line_range: 1497-1562
         method: _buildInjuriesChips + profile reader
         notes: chips emit canonical tokens (via InjuryVocab.chipTokens/toggleChip Ship 3); reader normalizes legacy stored values
       - file: lib/features/onboarding/screens/details_screen.dart
@@ -18076,7 +18076,7 @@ concepts:
           once, a much smaller harm than blocking the profile save this
           runs alongside.
       - file: lib/features/profile/screens/edit_profile_screen.dart
-        line_range: 2014-2043
+        line_range: 2141-2157
         method: "_save (via the pure computeCoachExtractionFieldsToLock helper)"
         notes: |
           Locks only fields that ACTUALLY changed this save (diet_preference /
