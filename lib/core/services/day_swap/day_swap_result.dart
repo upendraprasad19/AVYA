@@ -117,11 +117,16 @@ class DaySwapDone extends DaySwapResult {
     required this.dateB,
     required this.allowanceAfter,
     this.warning,
+    this.freezeRefunded = false,
   });
   final String dateA;
   final String dateB;
   final DayAllowance allowanceAfter;
   final RestRunWarning? warning;
+
+  /// A missed-day rescue (OI-348 P3) gave back the streak freeze that had
+  /// been spent on the past day.
+  final bool freezeRefunded;
 }
 
 /// A rule said no. Nothing was written and nothing was counted.

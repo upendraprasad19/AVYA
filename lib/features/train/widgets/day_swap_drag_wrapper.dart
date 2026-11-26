@@ -20,9 +20,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_copy.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_rules.dart';
+import 'package:icanbefitter/core/services/day_swap/missed_day_rescue_flag.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 import '../providers/day_swap_provider.dart';
@@ -59,6 +61,22 @@ final _liftedDateProvider =
     NotifierProvider<_LiftedDateNotifier, String?>(_LiftedDateNotifier.new);
 
 class DaySwapDragWrapper extends ConsumerWidget {
+  /// OI-348 P3: is [date] a drop target while [lifted] is held? It must be
+  /// movable, not the lifted day itself, and, while the rescue is on, a past
+  /// (missed) day pairs ONLY with today, both ways (the engine's
+  /// [DaySwapRules.pairLock]). Pure apart from the kill switch, so a test
+  /// holds the rule directly (B-pass seat B, mutants M03/M31).
+  static bool dropTargetValid({
+    required bool movable,
+    required String lifted,
+    required String date,
+    required String today,
+  }) =>
+      movable &&
+      lifted != date &&
+      (!missedDayRescueEnabled() ||
+          DaySwapRules.pairLock(lifted, date, today) == null);
+
   const DaySwapDragWrapper(
       {super.key, required this.date, required this.child});
 
@@ -82,7 +100,9 @@ class DaySwapDragWrapper extends ConsumerWidget {
     final lifted = ref.watch(_liftedDateProvider);
     final isDragging = lifted != null;
     final isLifted = lifted == date;
-    final isValidTarget = movable && isDragging && lifted != date;
+    final isValidTarget = lifted != null &&
+        dropTargetValid(
+            movable: movable, lifted: lifted, date: date, today: istTodayStr());
 
     Widget chrome(Widget inner, {required bool hovered}) {
       if (isValidTarget) {

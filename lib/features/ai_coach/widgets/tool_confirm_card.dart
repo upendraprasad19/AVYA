@@ -375,7 +375,8 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
     final a = stateOf(dateA);
     final b = stateOf(dateB);
     final preview =
-        ref.read(daySwapControllerProvider).preview(dateA, dateB);
+        ref.read(daySwapControllerProvider).preview(dateA, dateB,
+            origin: DaySwapOrigin.coach);
     final lines = <String>[
       DaySwapCopy.coachCardTitle(dateA, dateB),
       DaySwapCopy.coachCardMove(title: a.title, from: dateA, to: dateB),
