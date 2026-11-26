@@ -107,7 +107,7 @@ BEGIN
     SELECT 1 FROM public.progress_photos p
     WHERE p.user_id = NEW.user_id
       AND p.created_at >= v_week
-      AND p.created_at < v_week + interval '7 days'
+      AND p.created_at < v_week + interval '168 hours'
   ) THEN
     RAISE EXCEPTION 'progress_photo_pro_required' USING ERRCODE = 'P0001';
   END IF;
@@ -211,7 +211,7 @@ const List<(String, String, String)> _mutants = [
   ('row created_at never taken from the object (always now())',
       "          AND o.name = NEW.storage_path\n", "          AND false\n"),
   ('row created_at may adopt another user\'s object', "          AND o.name LIKE NEW.user_id::text || '/%'),\n", '),\n'),
-  ('row week upper bound dropped', "        AND p.created_at < v_week + interval '7 days'\n", ''),
+  ('row week upper bound dropped', "        AND p.created_at < v_week + interval '168 hours'\n", ''),
   ('UPDATE guard dropped', "    NEW.created_at := OLD.created_at;\n", ''),
   ('policy keeps the 154 subscription conjunct',
       "        AND (storage.foldername(name))[1] = (SELECT auth.uid())::text\n      );\n  ELSE",

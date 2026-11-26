@@ -26,7 +26,7 @@ void main() {
         'lib/features/profile/repositories/progress_photo_repository.dart');
     final start = src.indexOf('Future<String?> capture(');
     expect(start, greaterThanOrEqualTo(0));
-    final end = src.indexOf('Future<void> removeIfNoRow(');
+    final end = src.indexOf('Future<void> cleanupAfterFailedInsert(');
     expect(end, greaterThan(start));
     capture = src.substring(start, end);
   });
@@ -78,9 +78,12 @@ void main() {
         reason: 'the path is remembered only once the upload succeeded');
     final catchAt = capture.lastIndexOf('} catch (e) {');
     final tail = capture.substring(catchAt);
-    final cleanup = tail.indexOf('await removeIfNoRow(userId, uploadedPath)');
+    final cleanup =
+        tail.indexOf('await cleanupAfterFailedInsert(userId, uploadedPath, e)');
     expect(cleanup, greaterThan(-1));
     expect(tail.indexOf('isProgressPhotoProRefusal('), greaterThan(cleanup));
+    // Its branch (a PostgREST answer cleans up now, a transport failure goes
+    // to the 2-minute sweep) is BEHAVIOURAL in progress_photo_free_slot_test.
     final rin = src.indexOf('Future<void> removeIfNoRow(');
     final rbody = src.substring(rin, src.indexOf('ownFailedCleanups =', rin));
     final read = rbody.indexOf('await _rowPaths(userId, [path])');
@@ -90,6 +93,18 @@ void main() {
     expect(guard, greaterThan(read));
     expect(remove, greaterThan(guard),
         reason: 'an insert that committed and lost its response keeps its object');
+  });
+
+  test('the free-slot pre-check is bounded: a hung listing lets the server '
+      'decide instead of holding the Add spinner (PRESENCE only: '
+      'ensureFreeSlotOpen needs a signed-in user)', () {
+    final at = src.indexOf('Future<void> ensureFreeSlotOpen()');
+    final body = src.substring(at, src.indexOf('Future<String?> capture(', at));
+    expect(
+        body.contains('await freeSlotOpen(userId)\n'
+            '        .timeout(progressPhotoStorageCallTimeout, onTimeout: () => null);'),
+        isTrue);
+    expect(body.contains('if (open == false) {'), isTrue);
   });
 
 

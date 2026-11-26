@@ -17,10 +17,13 @@
 @Timeout(Duration(minutes: 2))
 library;
 
+import 'dart:async';
+
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/profile/repositories/progress_photo_repository.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show FileObject;
+import 'package:supabase_flutter/supabase_flutter.dart' show FileObject, PostgrestException;
 
 FileObject _obj(String name, String? createdAt) => FileObject(
     name: name,
@@ -190,6 +193,63 @@ void main() {
       repo.ownFailedCleanups.add('$_u/x.jpg');
       listing = [_obj('x.jpg', '2026-11-26T09:57:00Z')];
       rowPaths = {'$_u/x.jpg'};
+      expect(await repo.freeSlotOpen(_u), isFalse);
+      expect(removed, isEmpty);
+      expect(repo.ownFailedCleanups, isEmpty);
+    });
+
+    test('a hung row read times out: kept, remembered, never removed',
+        () async {
+      ProgressPhotoRepository.debugRowPathsOverride =
+          (userId, paths) => Completer<Set<String>>().future;
+      fakeAsync((async) {
+        var done = false;
+        repo.removeIfNoRow(_u, '$_u/x.jpg').then((_) => done = true);
+        async.elapse(
+            progressPhotoStorageCallTimeout - const Duration(milliseconds: 1));
+        expect(done, isFalse, reason: 'waits the full timeout');
+        async.elapse(const Duration(milliseconds: 2));
+        expect(done, isTrue);
+      });
+      expect(removed, isEmpty);
+      expect(repo.ownFailedCleanups, {'$_u/x.jpg'});
+    });
+  });
+
+  // B-pass F4 (2026-11-26): a row insert that failed WITHOUT a server answer
+  // may still commit; removing its object then leaves a row with no picture.
+  group('cleanupAfterFailedInsert', () {
+    test('a PostgREST error (the server answered): removed now', () async {
+      await repo.cleanupAfterFailedInsert(_u, '$_u/x.jpg',
+          const PostgrestException(message: 'boom', code: '23505'));
+      expect(rowReads, [
+        ['$_u/x.jpg']
+      ]);
+      expect(removed, [
+        ['$_u/x.jpg']
+      ]);
+      expect(repo.ownFailedCleanups, isEmpty);
+    });
+
+    for (final e in <Object>[
+      TimeoutException('insert'),
+      Exception('SocketException: Failed host lookup'),
+    ]) {
+      test('a transport failure ($e): nothing read or removed now; left to '
+          'the 2-minute sweep', () async {
+        await repo.cleanupAfterFailedInsert(_u, '$_u/x.jpg', e);
+        expect(rowReads, isEmpty);
+        expect(removed, isEmpty);
+        expect(repo.ownFailedCleanups, {'$_u/x.jpg'});
+      });
+    }
+
+    test('then the late row is seen by the sweep: kept and forgotten',
+        () async {
+      await repo.cleanupAfterFailedInsert(
+          _u, '$_u/x.jpg', TimeoutException('insert'));
+      listing = [_obj('x.jpg', '2026-11-26T09:57:00Z')]; // 3 min old
+      rowPaths = {'$_u/x.jpg'}; // the insert committed after all
       expect(await repo.freeSlotOpen(_u), isFalse);
       expect(removed, isEmpty);
       expect(repo.ownFailedCleanups, isEmpty);

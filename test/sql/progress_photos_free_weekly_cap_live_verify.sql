@@ -291,6 +291,24 @@ BEGIN
                        ELSE 'W15=fail (' || v_state || ' ' || v_msg || E')\n' END;
   END;
 
+  -- W16 (B-pass F5): a NESTED name in lapsed N's own folder is capped by the same owner (folder[1]),
+  -- so a subfolder is no way round the week. The client never writes one (it uploads `<uid>/<file>` and
+  -- its courtesy check lists direct children only), so such an object is counted by the server alone.
+  -- NOT covered on purpose: an `upsert` (ON CONFLICT) re-upload of a held path. A BEFORE INSERT trigger
+  -- fires before conflict resolution, so a free user would be refused; the client sends `upsert: false`.
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_n, 'role', 'authenticated')::text, true);
+    PERFORM set_config('request.jwt.claim.sub', v_n::text, true);
+    INSERT INTO storage.objects (bucket_id, name, owner_id) VALUES ('progress-photos', v_n::text || '/sub/w16.jpg', v_n::text);
+    RESET ROLE;
+    v_r := v_r || E'W16=fail (a nested name escaped the cap)\n';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
+    v_r := v_r || CASE WHEN v_state = '42501' AND v_msg = 'progress_photo_pro_required' THEN E'W16=ok\n'
+                       ELSE 'W16=fail (' || v_state || ' ' || v_msg || E')\n' END;
+  END;
+
   -- C1: the three trigger functions are SECURITY DEFINER with the pinned path; nobody but the owner and
   -- service_role / postgres may EXECUTE any of the four functions.
   SELECT count(*) INTO v_cnt FROM pg_proc

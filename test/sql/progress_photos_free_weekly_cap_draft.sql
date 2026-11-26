@@ -189,7 +189,7 @@ BEGIN
       SELECT 1 FROM public.progress_photos p
       WHERE p.user_id = NEW.user_id
         AND p.created_at >= v_week
-        AND p.created_at < v_week + interval '7 days'
+        AND p.created_at < v_week + interval '168 hours'
     ) THEN
       RAISE EXCEPTION 'progress_photo_pro_required' USING ERRCODE = 'P0001';
     END IF;

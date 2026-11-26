@@ -39,7 +39,7 @@ forbidden_patterns_checked:
 proposed_fix: |
   Plan docs/plans/oi348-landing3c.md (plan review x2, both rounds' findings folded: sections 2 and 6a). Server, one migration drafted at test/sql/progress_photos_free_weekly_cap_draft.sql (number minted after the founder's go): week-start function; a BEFORE INSERT trigger on storage.objects WHEN bucket = progress-photos (SECURITY DEFINER, advisory lock per owner, PRO passes, a non-PRO owner may hold one object created this IST week; anon/authenticated into another folder left to RLS; NULL / non-uuid folder refused); the INSERT policy back to own-folder only; the row door made SECURITY DEFINER and week-aware (created_at from the object, count in that week); a BEFORE UPDATE guard keeping created_at; EXECUTE revoked; inline rollback to 154's live state including its ACL. Client: capture makes no tier decision, picks 2048/2048/85, uploads bytes (uploadBinary), removes its own object after a failed row insert only once a read shows no row; ensureFreeSlotOpen (list, bounded sweep, count) before the picker for a free verdict; the screen shows everyone the gallery and Add, the free caption, the weekly-used snackbar (GO PRO behind showsUpgradeAffordance()); copy in lib/core/copy/progress_photo_copy.dart; paywall benefit and subtitle; hub subtitle.
 regression_test_planned: |
-  test/contracts/progress_photos_free_weekly_cap_rule_test.dart (19: whole-text pins + 15 in-process mutants + rollback = 154); test/contracts/progress_photo_client_rules_test.dart (week start, held count, orphan candidates, content type, classifier literal); test/contracts/progress_photo_free_slot_test.dart (14, repository seams); test/contracts/progress_photo_capture_wiring_test.dart (presence); screen: progress_photos_screen_gate_test.dart, progress_photos_lapsed_flow_test.dart, progress_photos_free_flow_test.dart; live: test/sql/progress_photos_free_weekly_cap_live_verify.sql (W1-W15, C1-C5).
+  test/contracts/progress_photos_free_weekly_cap_rule_test.dart (19: whole-text pins + 15 in-process mutants + rollback = 154); test/contracts/progress_photo_client_rules_test.dart (week start, held count, orphan candidates, content type, classifier literal); test/contracts/progress_photo_free_slot_test.dart (14, repository seams); test/contracts/progress_photo_capture_wiring_test.dart (presence); screen: progress_photos_screen_gate_test.dart, progress_photos_lapsed_flow_test.dart, progress_photos_free_flow_test.dart; live: test/sql/progress_photos_free_weekly_cap_live_verify.sql (W1-W16, C1-C5).
 mutation_proof: |
   SQL text: 15 mutants applied in-process by the rule test (each asserts its pattern occurs in the draft before rewriting it), 15 of 15 break at least one pin. Repository: see "Mutations" below. Screen: see "Mutations" below.
 impact_analysis: |
@@ -74,7 +74,7 @@ Reading the upload path turned up two defects that would have broken the new fea
 - The screen's free / PRO / lapsed / refusal flows (widget tests, real SubscriptionService).
 
 ## NOT YET PROVEN (founder go needed)
-- The migration on the live database: the always-aborting rehearsal (draft + live verify in one statement), then the apply and the live verify (W1-W15, C1-C5).
+- The migration on the live database: the always-aborting rehearsal (draft + live verify in one statement), then the apply and the live verify (W1-W16, C1-C5).
 - Storage's answer to a trigger refusal and a real upload from the web app (the founder's check, plan section 6, including two tabs at once for the concurrency design).
 
 ## Mutations
@@ -100,3 +100,9 @@ by `cp` from a snapshot and `cmp`-identical after every mutant (never `git check
 - Concurrency of two parallel free uploads is designed (advisory lock, fresh snapshot), measured only by the founder's two-tab check.
 - A device clock hours behind across Monday can make the courtesy pre-check refuse a free user whom the server would accept.
 - The rule fails open if the storage trigger is dropped (OI-316).
+- An upload whose row insert failed WITHOUT a server answer (no network, a timeout) holds the free slot for about 2 minutes: its object waits for the 2-minute sweep instead of being removed at once, because the insert may still commit (B-pass F4). The retry inside those 2 minutes shows the weekly-used snackbar.
+
+## B-pass folds (2026-11-26, `docs/reviews/oi348-landing3c-bpass.md`)
+- F4: `cleanupAfterFailedInsert` cleans up at once only after a `PostgrestException` (the server answered, the insert did not commit); a transport failure goes to the 2-minute sweep, which reads the row again first. Every cleanup step and the free-slot pre-check are bounded by `progressPhotoStorageCallTimeout` (10 s). Mutations (`cp` / `cmp`): `if (error is PostgrestException)` to `if (true)` [3 red], the old direct `removeIfNoRow` call restored in `capture` [1], the row-read timeout dropped [1, the hung-read test], the pre-check timeout dropped [1, a presence pin: `ensureFreeSlotOpen` needs a signed-in user].
+- F5: the row door's upper bound is `v_week + interval '168 hours'` (an exact width in any session time zone; `'7 days'` is calendar-aware on `timestamptz`); live verify W16 (a nested name is capped by its folder's owner); the upsert case is left uncovered on purpose (the client sends `upsert: false`).
+- F1: the migration is CATASTROPHIC by content (`SECURITY DEFINER` in a `supabase/migrations/` file, `blast_radius_content_rules_lib.dart`): its commit takes a staged review and the merge a Hermes pass; the plan-review record says so.

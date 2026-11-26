@@ -1168,10 +1168,10 @@ concepts:
           deletes them. Gating never reads them. Behavioral:
           test/contracts/play_subscription_display_state_behavioral_test.dart.
       - file: lib/core/services/subscription_service.dart
-        line_range: 1099-1143
+        line_range: 1256-1318
         method: _downgradeLocally (the SINGLE downgrade sink — every path funnels here)
       - file: lib/core/services/subscription_service.dart
-        line_range: 460-526
+        line_range: 470-526
         method: _enforceEntitlementInvariants (cross-account guard + genuine-expiry downgrade)
         notes: |
           OI-44 Unit 6 (diagnose a9c4e1) — the MUTATING half extracted out of
@@ -1180,7 +1180,7 @@ concepts:
           never on the cross-account wipe; it survives the expiresAt wipe so the
           Home expiry banner can surface "PRO expired".
       - file: lib/core/services/subscription_service.dart
-        line_range: 527-535
+        line_range: 528-570
         method: evaluateEntitlement (explicit public enforcement entry point)
         notes: |
           Called at the two moments local state can BECOME cross-account:
@@ -1189,15 +1189,15 @@ concepts:
           refreshFromSupabase does NOT cover it (it decides from the SERVER
           response and never compares Hive profile.id against the session).
       - file: lib/core/services/subscription_service.dart
-        line_range: 296-383
+        line_range: 308-387
         method: writeSubscriptionState (atomic putAll; clears pro_lapsed_at on renewal)
       - file: lib/core/services/subscription_service.dart
-        line_range: 924-1028
+        line_range: 1054-1164
         method: verifyFromServer (server-confirmed upgrade / anti-spoof downgrade)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 384-412
+        line_range: 391-420
         method: isPro — the DECISION entry point
         semantic: flag-check
         fields_read: [isPro, expiresAt, plan]
@@ -1206,7 +1206,7 @@ concepts:
           byte-identical to the pre-split version, so all 32 decision callsites
           keep their defense-in-depth. Use this for an entitlement DECISION.
       - file: lib/core/services/subscription_service.dart
-        line_range: 413-437
+        line_range: 422-448
         method: proStateSnapshot — the PURE read
         semantic: flag-check
         fields_read: [isPro, expiresAt]
@@ -1217,8 +1217,8 @@ concepts:
           (build -> isPro -> _downgradeLocally -> onStateChanged -> app.dart:47
           ref.invalidate). Diagnose a9c4e1.
       - file: lib/core/services/subscription_service.dart
-        line_range: 656-746
-        method: gateAndVerify (gate() retained as a @Deprecated shim at :578)
+        line_range: 741-864
+        method: gateAndVerify (gate() retained as a @Deprecated shim at :732)
         semantic: flag-check
         fields_read: [isPro, expiresAt, plan]
         notes: |
@@ -4795,8 +4795,8 @@ concepts:
           ceiling as fallback safety cap). Legacy paymentInFlightUntil read
           once per device after upgrade until first event-based write.
       - file: lib/core/services/subscription_service.dart
-        line_range: 1072-1197
-        method: verifyFromServer (isPaymentInFlight guard; gateAndVerify at 729 and refreshFromSupabase at 834 also read it)
+        line_range: 1054-1164
+        method: verifyFromServer (isPaymentInFlight guard; gateAndVerify at 779 and refreshFromSupabase at 907 also read it)
         semantic: flag-check
         fields_read: [paymentInFlightOrder]
         notes: |
@@ -8353,7 +8353,7 @@ concepts:
           Fires hive_session_opened / hive_session_closed /
           hive_session_reopen_noop events for every owner transition.
       - file: lib/core/services/subscription_service.dart
-        line_range: 235-1317
+        line_range: 235-1318
         method: subscription refresh + verify events
         semantic: pass-through
         fields_read: []
@@ -10384,7 +10384,7 @@ concepts:
       round 2, single-owner-a — see its writers: entry above.)
     writers:
       - { file: lib/core/services/sync_service.dart, line: 87, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
-      - { file: lib/core/services/subscription_service.dart, line: 17, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
+      - { file: lib/core/services/subscription_service.dart, line: 50, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
       - { file: lib/core/services/workout_schedule_service.dart, line: 177, method: "WorkoutScheduleService._() constructor → _registerLifecycle()", notes: "All state in workoutBox / userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/usage_counter_service.dart, line: 13, method: "UsageCounterService._() constructor → _registerLifecycle()", notes: "Counters live in per-user userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/ai_service.dart, line: 76, method: "AiService._() constructor → _registerLifecycle()", notes: "Reset closes + drops the cached http.Client via dispose()." }
@@ -20409,7 +20409,7 @@ concepts:
         semantic: cloud-write
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 255-306
+        line_range: 256-307
         method: _validatePromoCode — valid == true, else shows data['reason']; the call passes spendsQuotaPerCall (OI-414), so a thrown gateway error reaches the catch after one attempt
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
@@ -20834,7 +20834,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 446-475
+        line_range: 466-476
         method: _PaywallSheetState.build (none-mode branch)
         semantic: flag-check
         fields_read: [showsPurchaseUi]

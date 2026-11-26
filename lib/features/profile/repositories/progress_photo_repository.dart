@@ -99,6 +99,12 @@ const Duration progressPhotoOrphanMinAge = Duration(minutes: 60);
 /// can be mid-capture on that exact path, so only clock skew is covered.
 const Duration progressPhotoOwnOrphanMinAge = Duration(minutes: 2);
 
+/// The longest the client waits on one Storage housekeeping call: the free
+/// slot pre-check (the Add spinner waits on it) and each step of a failed
+/// capture's cleanup. A timeout is a failure: the pre-check lets the server
+/// decide, a cleanup leaves the path to the sweep.
+const Duration progressPhotoStorageCallTimeout = Duration(seconds: 10);
+
 /// The `taken_at` value sent to the `timestamptz` column: the instant in UTC,
 /// with an explicit `Z`. (OI-322: `toIso8601String()` on a local time carries no
 /// offset and Postgres read it as UTC, storing an IST user's value 5.5 h late.)
@@ -256,7 +262,9 @@ class ProgressPhotoRepository {
     if (override != null) return override();
     final userId = _s.currentUser?.id;
     if (userId == null) return;
-    if (await freeSlotOpen(userId) == false) {
+    final open = await freeSlotOpen(userId)
+        .timeout(progressPhotoStorageCallTimeout, onTimeout: () => null);
+    if (open == false) {
       throw const PhotoQuotaException(
         weeklyCap: progressPhotoFreeWeeklyCap,
         message: 'Free photo for this week already used.',
@@ -338,7 +346,7 @@ class ProgressPhotoRepository {
     } catch (e) {
       debugPrint('[ProgressPhotoRepository.capture] $e');
       if (uploadedPath != null) {
-        await removeIfNoRow(userId, uploadedPath);
+        await cleanupAfterFailedInsert(userId, uploadedPath, e);
       }
       if (isProgressPhotoProRefusal(
         e,
@@ -351,17 +359,34 @@ class ProgressPhotoRepository {
     }
   }
 
-  /// The object of THIS capture was uploaded but its row insert failed:
-  /// remove the object so it cannot hold the free slot, but ONLY after a
-  /// successful read shows no row with that path (an insert that committed
-  /// and lost only its response must keep its object). Any failure removes
-  /// nothing; the bounded sweep retries after [progressPhotoOrphanMinAge].
+  /// The object of THIS capture was uploaded and its row insert then failed
+  /// with [error]. A [PostgrestException] is the server's answer, so the
+  /// insert did not commit: clean up now ([removeIfNoRow]). Any other failure
+  /// (no network, a timeout) may still be running on the server, where the
+  /// row can commit AFTER a read that found none, and removing the object
+  /// then would leave a row with no picture: the path goes to the 2-minute
+  /// sweep ([ownFailedCleanups]), which reads the row again first. Until
+  /// then the object holds the free slot (the server counts it too).
+  @visibleForTesting
+  Future<void> cleanupAfterFailedInsert(
+      String userId, String path, Object error) async {
+    if (error is PostgrestException) {
+      await removeIfNoRow(userId, path);
+    } else {
+      ownFailedCleanups.add(path);
+    }
+  }
+
+  /// Remove [path] so it cannot hold the free slot, but ONLY after a
+  /// successful read shows no row with that path. Any failure (a timeout
+  /// included) removes nothing and remembers the path for the 2-minute sweep.
   @visibleForTesting
   Future<void> removeIfNoRow(String userId, String path) async {
     try {
-      final withRow = await _rowPaths(userId, [path]);
+      final withRow = await _rowPaths(userId, [path])
+          .timeout(progressPhotoStorageCallTimeout);
       if (withRow.contains(path)) return;
-      await _removeObjects([path]);
+      await _removeObjects([path]).timeout(progressPhotoStorageCallTimeout);
     } catch (e) {
       // Remembered for this app run: the sweep retries it after
       // [progressPhotoOwnOrphanMinAge] instead of an hour.

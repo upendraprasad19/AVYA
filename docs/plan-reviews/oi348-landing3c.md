@@ -1,19 +1,23 @@
 ---
 branch: oi348-landing3c
 date: 2026-11-26
-blast_radius: account
+blast_radius: catastrophic
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
 bpass_review: docs/reviews/oi348-landing3c-bpass.md
+hermes: pending
+hermes_report: docs/audit/2026-11-26-hermes-oi348-landing3c.md
 ---
 
 # Plan-review record — OI-348 Landing 3c (P2: free progress-photo upload, 1 per IST week)
 
 Keystone record for the §4.12 merge gate (`check_plan_review_record_exists.dart`). Tier L (schema + Storage
-trigger + subscription-adjacent gate + a root CLAUDE.md row), at least `account` blast radius, so it carries a
-B-pass. Not catastrophic, so no Hermes.
+trigger + subscription-adjacent gate + a root CLAUDE.md row). CATASTROPHIC: the migration this branch lands is a
+`supabase/migrations/` file with `SECURITY DEFINER` content, which `blast_radius_content_rules_lib.dart` forces to
+catastrophic at commit and at merge (the B-pass found the record said `account`; migration 154, the same shape,
+was catastrophic too). So: a B-pass, a staged catastrophic review on the migration commit, and a Hermes pass.
 
 Plan: `docs/plans/oi348-landing3c.md`. Founder calls 2026-11-26 (Q1-Q4: 1 free photo per IST week, server-counted;
 2048 px; PRO uncapped; lapsed = free) and "Start both" (3c here, 3d in its own session).
@@ -45,4 +49,11 @@ existing triggers there, `auth.role()` / `auth.uid()` definitions. Every file:li
 `8cd4556f`.
 
 ## B-pass
-(pending)
+`docs/reviews/oi348-landing3c-bpass.md` (one fresh Sonnet seat, eight lenses, head 6766a101): 0 P0, 0 P1, 5 P2,
+all accepted and fixed: the tier (catastrophic by content, so a Hermes pass is owed), the SoT cites of
+`paywall_sheet.dart` / `subscription_service.dart` (stale-on-main ones re-derived too), the superseded
+`subscription.md` paragraph marked, a failed insert without a server answer left to the 2-minute sweep plus
+10 s bounds on the cleanup and the pre-check, the row door's bound as `168 hours`, live-verify W16.
+
+## Hermes
+(pending: owed before the merge; seats run as Sonnet per the founder's 2026-10-07 rule.)
