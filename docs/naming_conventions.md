@@ -137,6 +137,8 @@ Rows stored under prefixed keys are `Map<String, dynamic>`. The field name contr
 - **`exlog_*`:** `exercise_name`, `date`, `sets[]` (List of Map), `set_number`, `reps_completed`, `weight_kg`, `volume_kg`, `logging_type`, `is_pr`, `source`, `updated_at_ms`, optional `notes`, optional `workout_log_id`.
 - **`nlog_*`:** `log_key`, `date`, `meal_type`, `total_calories`, `total_protein`, `total_carbs`, `total_fat`, `total_fiber`, `items[]` (per-item: `name`, `quantity_g`, `calories`, `protein`, `carbs`, `fat`, `fiber`), `source`, `logged_at`, `created_at`.
 - **`schedule_*`:** `arranged_at_ms` (day-swapper + sync-load batch) — the swap timestamp; identical on both rows of a day-swap; computed by `DaySwapRules.buildSwap`/`landed` (one `nowMs`, inside `SwapService.swapDays`'s build function; `WorkoutWriteService.swapScheduledDays` only writes it) and carried forward by `upsertScheduled`'s `carriesArrangement` on a later non-swap, non-restore rewrite of an already-arranged row; NEVER removed by a swap-back. Read by the restore-merge L3 rule (`docs/architecture/sync.md`).
+- **`schedule_*`:** `rescued_into` (OI-348 P3, 2026-11-26) — on the PAST date's row of a missed-day rescue, the IST date the workout moved to; a `DaySwapRules.markerKeys` member (never carried by `contentOf`), written in `SwapService`'s swap build; read only by `StreakProgressService.settleRescueRefunds`.
+- **`progress.streak_freeze_used_dates` entries:** a plain IST date (a freeze spent covering that day) or `refund:<YYYY-MM-DD>` (OI-348 P3: that spend was given back by a rescue; the plain date stays). Split by `FreezeLedger` (`streak_progress_service.dart`); never filter the ledger by "looks like a date" without it.
 
 **Renaming a field:** update the writer + every consumer in the same PR + update or add a contract test in `test/contracts/<x>_write_to_read_contract_test.dart`. The 2026-05-03 receipt-rendering bug (set_number vs sets_completed) is the canonical failure mode this contract prevents.
 
@@ -743,6 +745,8 @@ Every term that has SPECIFIC meaning in this app. New features that use any of t
 | **pastWeekDateTime** / **pastWeekRangeLabel** | `past_week_days.dart` (D3/D5): a stored `yyyy-MM-dd` as UTC noon (maps to the same IST date on any device) and the chip/label range `Oct 12–18` / `Oct 26–Nov 1` from the group's first row; ONE implementation for the chip, the label line and the chip's Semantics label. | NOT `DateTime.parse` for a schedule key. |
 | **workoutLogNameForIstDate** / **workoutLogName** | `WorkoutReadService` (D3): the `workout_name` of a `wlog_<date>` row by key (static `workoutLogName(Object?)` is the `is Map`-guarded parse). | NOT an `exlog_*` read. |
 | **trainPastWeekEmpty** | `WardroomCopy`: "No workouts recorded for this week." (a picked past week with no row left to show). | — |
+| **missed-day rescue** / **missed day** | OI-348 P3: a planned training day before today with no `wlog_`/`exlog_` and no session in progress (derived, never stored as a status), swapped with TODAY's true rest day through `SwapService.swapDays` (`DaySwapRules.isMissed` / `rescueLockOf` / `isRescueHost` / `pairLock`; kill switch `disable_missed_day_rescue`). | NOT a `status: missed` (none exists). NOT the coach's `rescheduleWeek` (moved/dropped rows). |
+| **FreezeLedger** / **settleRescueRefunds** | `streak_progress_service.dart`: the ledger's two entry shapes (plain date, `refund:` marker) and the derived, idempotent refund of a freeze spent on a rescued day (current IST week only, tier cap). | NOT `commitRefill` (the weekly +1). |
 
 ---
 

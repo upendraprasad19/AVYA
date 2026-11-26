@@ -20,9 +20,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_copy.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_rules.dart';
+import 'package:icanbefitter/core/services/day_swap/missed_day_rescue_flag.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 
 import '../providers/day_swap_provider.dart';
@@ -82,7 +84,12 @@ class DaySwapDragWrapper extends ConsumerWidget {
     final lifted = ref.watch(_liftedDateProvider);
     final isDragging = lifted != null;
     final isLifted = lifted == date;
-    final isValidTarget = movable && isDragging && lifted != date;
+    // OI-348 P3: a past (missed) day pairs ONLY with today, both ways.
+    final isValidTarget = movable &&
+        isDragging &&
+        lifted != date &&
+        (!missedDayRescueEnabled() ||
+            DaySwapRules.pairLock(lifted, date, istTodayStr()) == null);
 
     Widget chrome(Widget inner, {required bool hovered}) {
       if (isValidTarget) {

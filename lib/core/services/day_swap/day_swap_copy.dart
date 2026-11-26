@@ -181,6 +181,14 @@ class DaySwapCopy {
   // ── Picker ──────────────────────────────────────────────────────
   static const pickerTodayTag = 'today';
   static const pickerFooter = 'DONE, STARTED, PAUSED AND PAST DAYS STAY PUT';
+
+  /// NEW (OI-348 P3): the footer while the missed-day rescue is on.
+  static const pickerFooterRescue =
+      "DONE, STARTED, PAUSED AND PAST DAYS STAY PUT · A MISSED DAY CAN TAKE TODAY'S REST DAY";
+
+  /// NEW (OI-348 P3): appended to the swap toast when a rescue gave the
+  /// streak freeze back.
+  static const freezeRefundedLine = 'Your Streak Freeze is back.';
   static const spentTitleFree = "This week's swap is spent.";
   static const spentBodyFree =
       'Your allowance resets Monday. PRO gets 3 swaps a week, from the Train tab, Home, or by asking the coach.';
@@ -220,8 +228,16 @@ class DaySwapCopy {
 
   /// "Friday is already done. Nothing was changed." — every other reason
   /// is NEW.
-  static String staleLine(DaySwapRefusal reason, String date) {
-    final phrase = switch (reason) {
+  static String staleLine(DaySwapRefusal reason, String date) =>
+      '${weekdayLong(date)} ${_lockPhrase(reason)}. Nothing was changed.';
+
+  /// NEW (OI-348): the picker opened on a day that cannot move:
+  /// "Wednesday has already passed. It stays put."
+  static String sourceLockedLine(DaySwapRefusal reason, String date) =>
+      '${weekdayLong(date)} ${_lockPhrase(reason)}. It stays put.';
+
+  static String _lockPhrase(DaySwapRefusal reason) {
+    return switch (reason) {
       DaySwapRefusal.completed => 'is already done',
       DaySwapRefusal.started => 'is already started',
       DaySwapRefusal.paused => 'is paused',
@@ -235,7 +251,6 @@ class DaySwapCopy {
       DaySwapRefusal.allowanceSpent =>
         'cannot be swapped',
     };
-    return '${weekdayLong(date)} $phrase. Nothing was changed.';
   }
 
   /// The line a result should show, or null on success. "No signal /

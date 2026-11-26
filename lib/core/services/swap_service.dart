@@ -22,10 +22,12 @@ import 'day_swap/day_swap_allowance.dart';
 import 'day_swap/day_swap_copy.dart';
 import 'day_swap/day_swap_result.dart';
 import 'day_swap/day_swap_rules.dart';
+import 'day_swap/missed_day_rescue_flag.dart';
 import 'error_telemetry.dart';
 import 'hive_service.dart';
 import 'migrated_key.dart';
 import 'singleton_lifecycle_registry.dart';
+import 'streak_progress_service.dart';
 import 'sync_service.dart';
 import 'template_service.dart' show LoggingTypeResolver;
 import 'workout_read_service.dart';
@@ -41,6 +43,7 @@ import '../../shared/repositories/plan_engine/finisher_show_context.dart';
 import '../../shared/repositories/plan_engine/session_budget.dart' show SessionBudget;
 import '../../shared/repositories/plan_engine/session_estimate.dart' show budgetedDaySeconds, fallbackExerciseListSeconds;
 import '../../shared/repositories/plan_engine/training_history_analyzer.dart';
+import '../../features/train/repositories/workout_repository.dart';
 
 /// Result returned by [SwapService.swapExerciseInDay].
 class SwapExerciseResult {
@@ -173,6 +176,76 @@ class SwapService {
     return WorkoutReadService.instance.exerciseLogsForIstDate(date).isNotEmpty;
   }
 
+  /// Test seam: replaces [StreakProgressService.settleRescueRefunds] after a
+  /// rescue. Lets a test force the refund to throw.
+  @visibleForTesting
+  static int Function({required bool isPro})? debugSettleRefundsForTests;
+
+  /// OI-348 P3: does a missed past day have ANY log? One key pass for the
+  /// exercise logs ([logDates], computed lazily once per call) plus the
+  /// `wlog_<date>` row. Unlike [_hasLoggedSets] this answers for any date.
+  bool _hasAnyLogs(String date, Set<String> Function() logDates) {
+    if (logDates().contains(date)) return true;
+    return _hive.workoutBox
+            .get(WorkoutWriteService.wlogKey(DaySwapRules.utcDate(date))) !=
+        null;
+  }
+
+  /// OI-348 P3: today can host a rescue — it passes every lock of its own
+  /// and is a TRUE rest row ([DaySwapRules.isRescueHost]).
+  bool _todayHostsRescue(String today, Map<String, dynamic>? todayRow,
+          String? inProgressDate) =>
+      DaySwapRules.isRescueHost(todayRow) &&
+      DaySwapRules.lockOf(
+            date: today,
+            row: todayRow,
+            today: today,
+            hasLoggedSets: _hasLoggedSets(today, today),
+            inProgressDate: inProgressDate,
+          ) ==
+          null;
+
+  /// OI-348 P3: is the rescue on for a request from [origin]? Off under the
+  /// kill switch and for the coach (whose lookahead never shows a past day,
+  /// so a model-supplied past date keeps the old `past` refusal).
+  static bool _rescueOn(DaySwapOrigin? origin) =>
+      origin != DaySwapOrigin.coach && missedDayRescueEnabled();
+
+  /// The lock of one date. A date today or later, or any date while
+  /// [rescue] is off, is [DaySwapRules.lockOf] verbatim. A past date in a
+  /// week whose today hosts a rescue is [DaySwapRules.rescueLockOf].
+  DaySwapRefusal? _lockFor(
+    String date,
+    Map<String, dynamic>? row, {
+    required String today,
+    required String? inProgressDate,
+    required bool rescue,
+    required Set<String> Function() logDates,
+  }) {
+    if (!rescue || date.compareTo(today) >= 0) {
+      return DaySwapRules.lockOf(
+        date: date,
+        row: row,
+        today: today,
+        hasLoggedSets: _hasLoggedSets(date, today),
+        inProgressDate: inProgressDate,
+      );
+    }
+    return DaySwapRules.rescueLockOf(
+      date: date,
+      row: row,
+      today: today,
+      hasLogs: _hasAnyLogs(date, logDates),
+      inProgressDate: inProgressDate,
+    );
+  }
+
+  /// Lazy, memoized `datesWithExerciseLogs()` for one call.
+  static Set<String> Function() _lazyLogDates() {
+    Set<String>? cache;
+    return () => cache ??= WorkoutReadService.instance.datesWithExerciseLogs();
+  }
+
   DaySwapRefused? _firstLock(
     String dateA,
     Map<String, dynamic>? rowA,
@@ -180,44 +253,99 @@ class SwapService {
     Map<String, dynamic>? rowB, {
     required String today,
     String? inProgressDate,
+    bool rescueOn = false,
   }) {
+    if (!rescueOn) {
+      for (final (date, row) in [(dateA, rowA), (dateB, rowB)]) {
+        final lock = DaySwapRules.lockOf(
+          date: date,
+          row: row,
+          today: today,
+          hasLoggedSets: _hasLoggedSets(date, today),
+          inProgressDate: inProgressDate,
+        );
+        if (lock != null) return DaySwapRefused(reason: lock, date: date);
+      }
+      return null;
+    }
+    // OI-348 P3. Today's row: the LIVE one when today is in the pair.
+    final rescue = _weekHostsRescue(
+      anyDateInWeek: dateA,
+      today: today,
+      todayRow: dateA == today
+          ? rowA
+          : (dateB == today ? rowB : _row(today)),
+      inProgressDate: inProgressDate,
+    );
+    final logDates = _lazyLogDates();
     for (final (date, row) in [(dateA, rowA), (dateB, rowB)]) {
-      final lock = DaySwapRules.lockOf(
-        date: date,
-        row: row,
-        today: today,
-        hasLoggedSets: _hasLoggedSets(date, today),
-        inProgressDate: inProgressDate,
-      );
+      final lock = _lockFor(date, row,
+          today: today,
+          inProgressDate: inProgressDate,
+          rescue: rescue,
+          logDates: logDates);
       if (lock != null) return DaySwapRefused(reason: lock, date: date);
     }
-    return null;
+    // Every date may move on its own; a past one may move ONLY with today.
+    return DaySwapRules.pairLock(dateA, dateB, today);
   }
+
+  /// True when today lies in [anyDateInWeek]'s Mon–Sun week and hosts a
+  /// rescue.
+  bool _weekHostsRescue({
+    required String anyDateInWeek,
+    required String today,
+    required Map<String, dynamic>? todayRow,
+    required String? inProgressDate,
+  }) =>
+      DaySwapRules.mondayOf(anyDateInWeek) == DaySwapRules.mondayOf(today) &&
+      _todayHostsRescue(today, todayRow, inProgressDate);
 
   /// Mon–Sun states of the week containing [anyDateInWeek] (spec §6.1,
   /// §6.3). Reads only; logs nothing.
   List<DaySwapDayState> weekStates(String anyDateInWeek,
       {String? inProgressDate}) {
     final today = istTodayStr();
+    final dates = DaySwapRules.weekDates(anyDateInWeek);
+    final rows = <String, Map<String, dynamic>?>{
+      for (final date in dates) date: _row(date),
+    };
+    // OI-348 P3: no origin here (the picker and Train); the coach's
+    // lookahead lists today onward only, so a past state never reaches it.
+    final rescue = _rescueOn(null) &&
+        _weekHostsRescue(
+          anyDateInWeek: anyDateInWeek,
+          today: today,
+          todayRow: rows[today],
+          inProgressDate: inProgressDate,
+        );
+    final logDates = _lazyLogDates();
     return [
-      for (final date in DaySwapRules.weekDates(anyDateInWeek))
-        _stateOf(date, _row(date),
-            today: today, inProgressDate: inProgressDate),
+      for (final date in dates)
+        _stateOf(date, rows[date],
+            today: today,
+            inProgressDate: inProgressDate,
+            rescue: rescue,
+            logDates: logDates),
     ];
   }
 
-  DaySwapDayState _stateOf(String date, Map<String, dynamic>? row,
-          {required String today, String? inProgressDate}) =>
+  DaySwapDayState _stateOf(
+    String date,
+    Map<String, dynamic>? row, {
+    required String today,
+    String? inProgressDate,
+    required bool rescue,
+    required Set<String> Function() logDates,
+  }) =>
       DaySwapDayState(
         date: date,
         row: row,
-        lock: DaySwapRules.lockOf(
-          date: date,
-          row: row,
-          today: today,
-          hasLoggedSets: _hasLoggedSets(date, today),
-          inProgressDate: inProgressDate,
-        ),
+        lock: _lockFor(date, row,
+            today: today,
+            inProgressDate: inProgressDate,
+            rescue: rescue,
+            logDates: logDates),
         isMoved: DaySwapRules.isMoved(row),
         title: DaySwapCopy.titleOf(row),
       );
@@ -229,6 +357,9 @@ class SwapService {
     required String dateB,
     required bool isPro,
     String? inProgressDate,
+    // OI-348 P3: the same origin the swap will carry, so the preview applies
+    // the same rescue rule (the coach card passes `coach`).
+    DaySwapOrigin? origin,
   }) {
     final allowance = DaySwapAllowance.instance
         .current(DaySwapRules.mondayOf(dateA), isPro: isPro);
@@ -238,7 +369,9 @@ class SwapService {
       for (final d in DaySwapRules.weekDates(dateA)) d: _row(d),
     };
     final lock = _firstLock(dateA, rows[dateA], dateB, rows[dateB],
-        today: istTodayStr(), inProgressDate: inProgressDate);
+        today: istTodayStr(),
+        inProgressDate: inProgressDate,
+        rescueOn: _rescueOn(origin));
     return DaySwapPreview(
       allowance: allowance,
       // Same precedence as swapDays' `build` (allowance, then locks), so the
@@ -318,6 +451,14 @@ class SwapService {
   }) async {
     final today = istTodayStr();
     final nowMs = nowWall().millisecondsSinceEpoch;
+    final rescueOn = _rescueOn(origin);
+    // OI-348 P3: a pair that passed every lock with a date before today is a
+    // missed-day rescue (the pair rule only lets a past date move to today).
+    final String? rescuedDate = !rescueOn
+        ? null
+        : (dateA.compareTo(today) < 0
+            ? dateA
+            : (dateB.compareTo(today) < 0 ? dateB : null));
     DaySwapRefused? refusal;
     RestRunWarning? warning;
 
@@ -328,7 +469,7 @@ class SwapService {
         return null;
       }
       final lock = _firstLock(dateA, live.rowA, dateB, live.rowB,
-          today: today, inProgressDate: inProgressDate);
+          today: today, inProgressDate: inProgressDate, rescueOn: rescueOn);
       if (lock != null) {
         refusal = lock;
         return null;
@@ -342,7 +483,7 @@ class SwapService {
           rows: rows,
           dateA: dateA,
           dateB: dateB);
-      return DaySwapRules.buildSwap(
+      final w = DaySwapRules.buildSwap(
         dateA: dateA,
         dateB: dateB,
         rowA: live.rowA!,
@@ -350,6 +491,17 @@ class SwapService {
         displacedA: live.displacedA,
         displacedB: live.displacedB,
         nowMs: nowMs,
+      );
+      if (rescuedDate == null) return w;
+      // The past date's row records where its workout went; the freeze
+      // refund keys on this mark (never on the row shape).
+      Map<String, dynamic> mark(Map<String, dynamic> row) =>
+          {...row, DaySwapRules.rescuedIntoKey: today};
+      return (
+        rowA: rescuedDate == dateA ? mark(w.rowA) : w.rowA,
+        rowB: rescuedDate == dateB ? mark(w.rowB) : w.rowB,
+        displacedA: w.displacedA,
+        displacedB: w.displacedB,
       );
     }
 
@@ -395,11 +547,37 @@ class SwapService {
       after = DaySwapAllowance.instance.current(weekStart, isPro: isPro);
     }
     _pushPlan();
+    var refunded = 0;
+    if (rescuedDate != null) {
+      // OI-348 P3: give back a freeze spent on the rescued day, then re-walk
+      // the streak (a chain the missed day broke counts again). Neither may
+      // fail the swap that already happened; a refund that throws here is
+      // derived again by the next rollover (settleRescueRefunds).
+      try {
+        final settle = debugSettleRefundsForTests ??
+            StreakProgressService.instance.settleRescueRefunds;
+        refunded = settle(isPro: isPro);
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'day_swap_freeze_refund_threw'));
+      }
+      try {
+        WorkoutRepository.instance.reckonStreakDecayAndPersist();
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'day_swap_rescue_reckon_threw'));
+      }
+    }
     unawaited(ErrorTelemetry.logEvent('day_swap_done',
         message:
-            'origin=${origin.name} week=$weekStart used=${after.used}/${after.limit}'));
+            'origin=${origin.name} week=$weekStart used=${after.used}/${after.limit}'
+            '${rescuedDate != null ? ' rescue=1 refund=$refunded' : ''}'));
     return DaySwapDone(
-        dateA: dateA, dateB: dateB, allowanceAfter: after, warning: warning);
+        dateA: dateA,
+        dateB: dateB,
+        allowanceAfter: after,
+        warning: warning,
+        freezeRefunded: refunded > 0);
   }
 
   DaySwapRefused _refused(DaySwapRefused r, DaySwapOrigin origin) {

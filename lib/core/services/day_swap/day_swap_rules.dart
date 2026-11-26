@@ -26,11 +26,18 @@ class DaySwapRules {
   };
 
   /// Swap markers: rebuilt on every swap, never copied with content.
+  /// `rescued_into` (OI-348 P3) marks a past day whose missed workout was
+  /// rescued into [rescuedIntoKey]'s date; it belongs to that past date only.
   static const Set<String> markerKeys = {
     'is_swapped',
     'original_date',
     'arranged_at_ms',
+    rescuedIntoKey,
   };
+
+  /// Row key written on the PAST date of a missed-day rescue: the IST date the
+  /// workout moved to. The freeze refund keys on it (never on the row shape).
+  static const String rescuedIntoKey = 'rescued_into';
 
   /// Write stamps: `swapScheduledDays` re-stamps them.
   static const Set<String> writeStampKeys = {'source', 'updated_at_ms'};
@@ -100,6 +107,75 @@ class DaySwapRules {
       return DaySwapRefusal.noRow;
     }
     return null;
+  }
+
+  // ── Missed-day rescue (OI-348 P3, docs/plans/oi348-landing3d.md) ──
+  //
+  // A past day may swap ONLY with TODAY, only when today is a true rest day,
+  // only inside the same Mon–Sun week (the pair rule is [pairRefusal]'s). A
+  // past day is rescuable ("missed") when its row is a planned training day
+  // with no logs and no session in progress. Everything else about a past day
+  // is locked exactly as [lockOf] locks it.
+
+  /// Today can host a rescue: a TRUE rest row (`type` AND `status` rest). A
+  /// rest hybrid ([isRestHybrid]) is not a host: landed on the past date it
+  /// would read as a missed workout to the streak walk (which skips by type).
+  static bool isRescueHost(Map<String, dynamic>? row) =>
+      row != null && row['type'] == 'rest' && row['status'] == 'rest';
+
+  /// A past planned training day with no logs and no live session.
+  static bool isMissed({
+    required String date,
+    required Map<String, dynamic>? row,
+    required String today,
+    required bool hasLogs,
+    required String? inProgressDate,
+  }) =>
+      date.compareTo(today) < 0 &&
+      row != null &&
+      row['status'] == 'planned' &&
+      !isRest(row) &&
+      !hasLogs &&
+      inProgressDate != date;
+
+  /// The lock of a PAST [date] in a week whose today hosts a rescue. Same
+  /// labels as [lockOf] for completed / paused; a missed day is movable; any
+  /// other past day stays `past`.
+  static DaySwapRefusal? rescueLockOf({
+    required String date,
+    required Map<String, dynamic>? row,
+    required String today,
+    required bool hasLogs,
+    required String? inProgressDate,
+  }) {
+    final status = row?['status'];
+    if (status == 'completed') return DaySwapRefusal.completed;
+    if (status == 'paused') return DaySwapRefusal.paused;
+    if (isMissed(
+        date: date,
+        row: row,
+        today: today,
+        hasLogs: hasLogs,
+        inProgressDate: inProgressDate)) {
+      return null;
+    }
+    return DaySwapRefusal.past;
+  }
+
+  /// The pair rule of a rescue: when either date is before [today], the
+  /// other must BE today. Refused as `past` on the past date (the earlier
+  /// one when both are past). Shared by the engine, the picker and the drag
+  /// target so none of them can disagree.
+  static DaySwapRefused? pairLock(String dateA, String dateB, String today) {
+    final aPast = dateA.compareTo(today) < 0;
+    final bPast = dateB.compareTo(today) < 0;
+    if (!aPast && !bPast) return null;
+    if (aPast && dateB == today) return null;
+    if (bPast && dateA == today) return null;
+    final lockedDate = aPast && bPast
+        ? (dateA.compareTo(dateB) <= 0 ? dateA : dateB)
+        : (aPast ? dateA : dateB);
+    return DaySwapRefused(reason: DaySwapRefusal.past, date: lockedDate);
   }
 
   /// "⇄ MOVED": swapped content that is not completed (spec §6.1).

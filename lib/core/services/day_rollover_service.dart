@@ -6,6 +6,7 @@ import 'package:icanbefitter/core/services/deload_evaluator.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
+import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/services/sync_flags.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/services/target_history_service.dart';
@@ -223,6 +224,20 @@ class DayRolloverObserver with WidgetsBindingObserver {
       debugPrint('[DayRollover] refillIfNewWeek failed (non-fatal): $e\n$st');
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
           reason: 'day_rollover_streak_freeze_refill'));
+    }
+
+    // OI-348 P3 — give back a freeze spent on a day whose missed workout was
+    // rescued this week, if the swap's own refund never landed (a crash
+    // between the swap write and the refund). Derived and idempotent; reads
+    // only the local ledger and local rows, so it is safe before the restore
+    // settles; current week only (never against the new week's stock). Off
+    // under `disable_missed_day_rescue` (checked inside).
+    try {
+      StreakProgressService.instance.settleRescueRefunds(
+          isPro: SubscriptionService.instance.proStateSnapshot());
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'day_rollover_rescue_refund'));
     }
 
     // D2 (f9d2e7) — streak-decay reckon: an idle user's missed days are consumed
