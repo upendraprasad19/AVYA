@@ -38,13 +38,15 @@ String prPointLabel(PrSeriesPoint point, ExercisePR pr) {
 }
 
 /// The one-line summary under the chart, over the FULL series (never the
-/// selected range). "now" is the record that stands, not the last day lifted.
+/// selected range). "now" is the PR itself (the record that stands), not the
+/// last day lifted, and not the series' running best, which misses a PR whose
+/// own row has no day.
 String prJourneyLine(ExercisePrSeries series, ExercisePR pr) {
   final pts = series.points;
   if (pts.length < 2) return 'Log it again to see your trend';
   return 'First log ${prDayLabel(pts.first.date)}: '
       '${prValueLabel(pts.first.value, pr)} · '
-      'now ${prValueLabel(prRunningBest(pts).last, pr)}';
+      'now ${prValueLabel(pr.bestValue, pr)}';
 }
 
 /// A `yyyy-MM-dd` day as a UTC midnight: day differences never lose an hour
@@ -123,6 +125,21 @@ class PrTrendSheet extends StatefulWidget {
 
   @override
   State<PrTrendSheet> createState() => _PrTrendSheetState();
+}
+
+/// Where the PR step's carried tail ends, or null for no tail. The record
+/// still stands today, so on All the step runs on to today; a range chip is
+/// anchored to the last log, so there the tail is at most the chip's own span
+/// (a 1W view of a log months old stays a week wide).
+double? prTailX({
+  required double todayX,
+  required double lastX,
+  required Duration? window,
+}) {
+  if (todayX <= lastX) return null;
+  if (window == null) return todayX;
+  final cap = lastX + window.inDays;
+  return todayX < cap ? todayX : cap;
 }
 
 /// Index of the lifted line in the chart's bars (0 is the PR step).
@@ -320,8 +337,12 @@ class _PrTrendSheetState extends State<PrTrendSheet> {
         FlSpot(spots[i].x, bestByDate[shown[i].date]!),
     ];
     // The record still stands today: carry the step on to today.
-    final todayX = _utcDay(istTodayStr()).difference(first).inDays.toDouble();
-    if (todayX > prSpots.last.x) prSpots.add(FlSpot(todayX, prSpots.last.y));
+    final tailX = prTailX(
+      todayX: _utcDay(istTodayStr()).difference(first).inDays.toDouble(),
+      lastX: prSpots.last.x,
+      window: _window,
+    );
+    if (tailX != null) prSpots.add(FlSpot(tailX, prSpots.last.y));
     final values = [...shown.map((p) => p.value), ...prSpots.map((s) => s.y)];
     final lo = values.reduce((a, b) => a < b ? a : b);
     final hi = values.reduce((a, b) => a > b ? a : b);

@@ -5606,10 +5606,10 @@ concepts:
         notes: 592da4 — the spark draws prRunningBest(points), the PR as of each day; it never dips.
       - file: lib/features/home/widgets/pr_trend_sheet.dart
         line_range: 1-9999
-        method: PrTrendSheet (prRunningBest / prWindowPoints / prMarkerIndex / prPointLabel / prJourneyLine)
+        method: PrTrendSheet (prRunningBest / prTailX / prTouchedIndicators / prWindowPoints / prMarkerIndex / prPointLabel / prJourneyLine)
         semantic: display-only
         fields_read: [points.date, points.value, points.reps]
-        notes: 592da4 — two bars. Bar 0 the PR, a step line of the running best over the FULL series by date, carried on to today (istTodayStr), with the PR marker. Bar 1 the best set each day. The journey line's "now" is the standing PR.
+        notes: 592da4 — two bars. Bar 0 the PR, a step line of the running best over the FULL series by date, carried on to today (istTodayStr; on a range chip capped at the chip span, prTailX), with the PR marker. Bar 1 the best set each day. The journey line's "now" is pr.bestValue.
     regression_test: test/features/home/pr_trend_widgets_test.dart
     provider_invalidation_set: [allExercisePRsProvider]
     class_constraints: |

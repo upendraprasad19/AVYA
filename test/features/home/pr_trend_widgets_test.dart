@@ -8,6 +8,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/features/home/providers/pr_series_provider.dart';
 import 'package:icanbefitter/features/home/widgets/pr_snapshot.dart';
@@ -382,6 +383,59 @@ void main() {
       expect(bars[1].spots.map((p) => p.x), [0, 2]);
     });
 
+    testWidgets('the built chart puts no touch marker on the PR bar', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: PrTrendSheet(pr: _pr('Bench', 'weight_reps', 42.5), series: dip))));
+      final data = tester.widget<LineChart>(find.byType(LineChart)).data;
+      final bars = data.lineBarsData;
+      expect(data.lineTouchData.getTouchedSpotIndicator(bars[0], [1]), [null]);
+      expect(data.lineTouchData.getTouchedSpotIndicator(bars[1], [1]).single, isNotNull);
+    });
+
+    testWidgets('the PR step ends on the IST day, not the UTC one', (tester) async {
+      // 20:00 UTC on 10 Mar is 01:30 on 11 Mar in India.
+      setTestClockTo(DateTime.utc(2026, 3, 10, 20));
+      addTearDown(resetTestClock);
+      final s = _s([('2026-03-01', 40, 5), ('2026-03-05', 42.5, 5)]);
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(body: PrTrendSheet(pr: _pr('Bench', 'weight_reps', 42.5), series: s))));
+      final pr = tester.widget<LineChart>(find.byType(LineChart)).data.lineBarsData[0].spots;
+      expect(pr.last.x, 10, reason: '1 Mar -> 11 Mar');
+    });
+
+    test('prTailX: to today on All, capped at the chip span, none when today is not later', () {
+      expect(prTailX(todayX: 400, lastX: 30, window: null), 400);
+      expect(prTailX(todayX: 400, lastX: 30, window: const Duration(days: 7)), 37);
+      expect(prTailX(todayX: 33, lastX: 30, window: const Duration(days: 7)), 33);
+      expect(prTailX(todayX: 30, lastX: 30, window: null), isNull);
+      expect(prTailX(todayX: 10, lastX: 30, window: null), isNull);
+    });
+
+    test('prJourneyLine: "now" is the PR even when its own day has no series point', () {
+      final s = _s([('2026-01-10', 40, 5), ('2026-02-10', 38, 8)]);
+      expect(prJourneyLine(s, _pr('Bench', 'weight_reps', 42.5)),
+          'First log 10 Jan: 40 kg · now 42.5 kg');
+    });
+
+    testWidgets('legend colours match the bars; lifted dots hide past 30 days', (tester) async {
+      final long = _s([
+        for (var d = 1; d <= 31; d++)
+          ('2026-01-${d.toString().padLeft(2, '0')}', 40.0 + d % 3, 5),
+      ]);
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(body: PrTrendSheet(pr: _pr('Bench', 'weight_reps', 42), series: long))));
+      final bars = tester.widget<LineChart>(find.byType(LineChart)).data.lineBarsData;
+      final swatches = tester
+          .widgetList<Container>(find.descendant(
+              of: find.byKey(const Key('pr_trend_legend')), matching: find.byType(Container)))
+          .map((c) => c.color)
+          .toList();
+      expect(swatches, [bars[0].color, bars[1].color]);
+      final lifted = bars[1];
+      expect(lifted.spots.where((p) => lifted.dotData.checkToShowDot(p, lifted)), isEmpty);
+    });
+
     testWidgets('a PR set before the range still holds inside it', (tester) async {
       // 1W is anchored to the last log (10 Nov): it shows 20 Oct (carried) and
       // 10 Nov. The 50 kg PR from May is before both.
@@ -398,6 +452,12 @@ void main() {
       final bars = tester.widget<LineChart>(find.byType(LineChart)).data.lineBarsData;
       expect(bars[1].spots.map((s) => s.y), [40, 45]);
       expect(bars[0].spots.take(2).map((s) => s.y), [50, 50]);
+      // The axis makes room for the PR line, not only the lifted values.
+      final data = tester.widget<LineChart>(find.byType(LineChart)).data;
+      expect(data.maxY, greaterThanOrEqualTo(50));
+      expect(data.minY, lessThanOrEqualTo(40));
+      // 1W: the carried tail is at most a week past the last log, however old.
+      expect(bars[0].spots.last.x - bars[1].spots.last.x, lessThanOrEqualTo(7));
     });
 
     test('W4: a range keeps its days plus ONE carried-forward day', () {

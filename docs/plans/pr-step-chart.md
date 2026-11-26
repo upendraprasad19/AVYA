@@ -129,3 +129,16 @@ M8 the spark's corner removed, M9 no carry to today, M10 tooltip on the PR bar. 
   stepped bar, fl_chart's default on the lifted one); M17.
 - P3 section 4 refreshed (3 product files, the shared widget); a >80-column spark line wrapped.
 - 17 mutants in all (M1-M17), every one red; no compile errors.
+
+## 10. B-pass on 27737fe2 (5 P3, all accepted and fixed)
+
+- The y range already covered the PR line; now a test pins it (M18).
+- The built chart's touch-marker wiring is pinned (M19), not only the helper.
+- The carry to today is pinned to the IST day with a fixed clock (20:00 UTC = next day IST; M20).
+- Range chips vs. the carry to today: a chip is anchored to the last log, so a 1W view of an old
+  log stretched to months. `prTailX`: on All the step runs on to today (founder decision kept); on
+  a range chip the tail is at most the chip's span (M21, M9b).
+- The journey line's "now" is `pr.bestValue` (the series' running best misses a PR whose row has
+  no day; M22, replaces M4).
+- Smaller survivors pinned: legend colours equal the bar colours (M23); lifted dots hidden past 30
+  days (M24).

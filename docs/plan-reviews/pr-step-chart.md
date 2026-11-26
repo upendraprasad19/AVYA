@@ -26,3 +26,7 @@ governs it.
 ## Round 2 — converged (0 P0/P1, 1 P2, 4 P3), all folded (plan section 9)
 Painter wiring test (recording canvas), shouldRepaint, a real DST case, PR dot and tint, legend
 labels, the touch marker off the PR bar, the tier section refreshed. 17 mutants, all red.
+
+## B-pass (code-review skill) on 27737fe2 — 5 P3, all accepted and fixed (plan section 10)
+Run although feature tier skips it by default (M-tier pipeline). Y range, touch-marker wiring and
+IST-today pins; the range-chip tail cap; "now" = the PR. 25 mutants in all, every one red.
