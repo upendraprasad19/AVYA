@@ -214,6 +214,8 @@ So:
 2. Founder go. `sh scripts/mint_migration.sh --stub` reserves 190; the draft body is moved
    byte-for-byte to `supabase/migrations/190_target_history.sql` (four-tag header added by the
    stub, body unchanged); applied through MCP; verified live.
+   **Done 2026-11-26** (cloud version 20261126012225; the draft file is gone, the rehearsal
+   script now defaults to the migration file; record: `backups/applied_migrations.json` 190).
 3. ONE commit: the migration file, the ledger entry (hash from
    `dart run scripts/migration_ledger_hash.dart 190`), `backups/live_schema_columns.json`, the
    draft deleted, the script default repointed. Push, CI, then `land_pr`. The delta since the

@@ -71,6 +71,8 @@ Every `mcp__supabase__apply_migration` call MUST be paired with a `backups/appli
 
 **Order against the pull request's CI (OI-527, 2026-11-25).** `Supabase Integration Tests` runs on every pull request against the LIVE project. A pull request whose client code or tests need an ADDITIVE migration stays red until that migration is applied (per-action founder go, §4.3), so apply it before landing, then re-run the job. A DESTRUCTIVE migration keeps its own order: the code half is merged first.
 
+**Review a migration as a DRAFT outside this directory (migration 190, 2026-11-26).** A file under `supabase/migrations/` cannot be committed before its apply (Gate 14 and the ledger pairing need an entry, and an entry before the apply would claim one that has not happened), and an applied file is immutable, so the review has to finish first. Keep the SQL at `test/sql/<slug>_draft.sql` with the four-tag header, rehearse and mutate it in the local docker image, run plan review and the B-pass on it; after the founder's go reserve the number, copy the draft to its migration name (`cmp` must report identical), rehearse that file once more, apply it, and commit the file, the ledger entry and the schema snapshot together, deleting the draft. The pull request's `Supabase Integration Tests` job stays the only red check until then.
+
 ### Allocating a migration number — `scripts/mint_migration.sh` (OI-263)
 
 Never read the next number off `ls supabase/migrations/`: a number applied **live** from an unmerged branch is invisible to every other branch's tree (148 → the 145→147→148→149 renumber, 2026-09-28). Reserve it:
@@ -156,6 +158,7 @@ SoT concept's columns must stay in sync"):
 | `ai_coach_interactions` | `coach_interactions`, `food_text_analysis_daily_cap` | `ai-proxy` Edge Function + `ai_coach_repository` |
 | `coach_memory` | `coach_memory_coach_notes_upward_sync`, `coach_extraction_locked_fields` (conflict-marker half) | `ai_coach_repository` upward sync; `daily-snapshot`'s `mergeCoachingNotes` (conflict markers) |
 | `user_profile` (`coach_extraction_locked_fields` column) | `coach_extraction_locked_fields` | `lock_coach_extraction_fields` RPC (migration 148), ONLY writer — never a plain UPDATE |
+| `user_profile` (`target_history` column) | `nutrition_target_history` | `merge_target_history` RPC (migration 190), called by `SyncService.pushTargetHistory` |
 | `rank_promotion_log` | `rank_promotion_log` | server-side `evaluate-rank-promotions` cron |
 | `client_errors` | `log_client_error_payload` | client `ErrorTelemetry.recordNonFatal` → `log-client-error` Edge Function |
 

@@ -20,7 +20,8 @@ in the code first; the live `user_profile` policies and its one trigger were rea
 ## Round 1 — needs-changes (5 P1, 6 P2, 4 P3), folded as plan section 9
 - P1 order: a migration file cannot be committed before its apply (Gate 14, ledger pairing), so
   the SQL is reviewed and rehearsed as `test/sql/target_history_merge_draft.sql` and becomes
-  migration 190 only in the commit of the apply.
+  migration 190 only in the commit of the apply (done 2026-11-26:
+  `supabase/migrations/190_target_history.sql`, the draft file removed).
 - P1 a second cloud-to-profile merge (`mergeCloudProfileWithTargets`, the bootstrapper) would
   copy the list into the profile map: one strip helper on both paths.
 - P1 push gating: the reliability branch returns normally on a FAILED upsert; the function

@@ -14,7 +14,7 @@
 set -u -o pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-F190="${F190:-$HERE/target_history_merge_draft.sql}"
+F190="${F190:-$HERE/../../supabase/migrations/190_target_history.sql}"
 C="${THC_CONTAINER:-thc-pgtest}"
 IMG="public.ecr.aws/supabase/postgres:17.6.1.084"
 FAILS=0

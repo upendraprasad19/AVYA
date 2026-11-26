@@ -8,14 +8,14 @@ plan_review_record: docs/plan-reviews/target-history-cloud.md
 
 findings:
   - id: M
-    title: "SQL: column user_profile.target_history + merge function merge_target_history (reviewed as test/sql/target_history_merge_draft.sql)"
+    title: "SQL: column user_profile.target_history + merge function merge_target_history (reviewed as the draft test/sql/target_history_merge_draft.sql, now supabase/migrations/190_target_history.sql)"
     terminal_state: closed_in_commit
     commit: target-history-cloud@branch
     verification: >
       test/sql/target_history_merge_local.sh in a throwaway supabase/postgres 17.6 container
       (fixture: the live own-row policies and the onboarding trigger): every case passes. 46 SQL
       mutants run through it, all KILLED (two redundant type checks that could not be killed
-      were removed from the SQL). NOT applied to production: see entry APPLY.
+      were removed from the SQL). Applied to production on 2026-11-26: see entry APPLY.
 
   - id: PUSH
     title: "Client push: pushTargetHistory after a successful profile upsert and at sign-out"
@@ -82,10 +82,15 @@ findings:
 
   - id: APPLY
     title: "Apply migration 190 on production, then the ledger + schema snapshot commit and the merge"
-    terminal_state: blocked_on_user
-    reason: >
-      A production apply takes the founder's explicit per-action go (CLAUDE.md 4.3). The client
-      must not reach main before the function exists, so the PR waits for it. Nothing has been
-      applied.
+    terminal_state: closed_in_commit
+    commit: target-history-cloud@branch
+    verification: >
+      Founder go 2026-11-26 ("Apply"). Draft copied to supabase/migrations/190_target_history.sql
+      (cmp: identical), rehearsal re-run on that file (fails=0), applied through MCP to
+      dedsavbjuwgarrhphgnl, cloud version 20261126012225. Live after the apply: md5 and length of
+      prosrc equal the file's function body, prosecdef false, anon cannot execute, authenticated
+      can, column jsonb nullable with NULL on all 39 rows; a push as an authenticated test user
+      inside BEGIN .. ROLLBACK merged as the rule says. Ledger entry 190 and the schema snapshot
+      are in the same commit as the migration file.
 
 closed_count: 9

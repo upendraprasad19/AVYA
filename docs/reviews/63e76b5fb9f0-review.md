@@ -14,6 +14,10 @@ verdict_note: one fresh context-blind seat on the CI-green head (three-dot diff 
 The SQL reviewed here is the DRAFT `test/sql/target_history_merge_draft.sql`. It is not applied
 anywhere; it becomes `supabase/migrations/190_*.sql` byte for byte after the founder's go.
 
+> **2026-11-26:** applied after the founder's go. The draft is now
+> `supabase/migrations/190_target_history.sql` (same bytes, `cmp`); the draft path cited below no
+> longer exists, read the migration file for those cites.
+
 ## Finding 1 — P2 — missing_input
 - **file:line:** test/sql/target_history_merge_draft.sql (`pg_input_is_valid(e->>'from', 'date')`)
 - **claim:** the function exists only on PostgreSQL 16+; the rehearsal image is 17.6 but nothing proved production is. On 15 the migration would apply and every call would fail at run time.
