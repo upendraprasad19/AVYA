@@ -291,6 +291,22 @@ class WorkoutReadService {
     return (v != null && v > 0) ? v : null;
   }
 
+  /// The `workout_name` stored on a `wlog_<date>` WORKOUT-LOG row (not an
+  /// `exlog_*` row), or null when the row is absent, not a map, or holds no
+  /// non-blank name. The past-week Train list (docs/plans/train-past-week-in-place.md
+  /// D3) takes a completed day's title from it, the `completed_title_follows_log`
+  /// contract the old Completed-history sheet also followed.
+  static String? workoutLogName(Object? wlog) {
+    if (wlog is! Map) return null;
+    final v = wlog['workout_name'];
+    return (v is String && v.trim().isNotEmpty) ? v : null;
+  }
+
+  /// [workoutLogName] of the `wlog_<[istDate]>` row, by key (one `get`, never a
+  /// box scan).
+  String? workoutLogNameForIstDate(String istDate) =>
+      workoutLogName(HiveService.instance.workoutBox.get('wlog_$istDate'));
+
   /// TOTAL distance in km for an `exlog_*` row (OI-389), mirroring
   /// [aggregateDurationSeconds]:
   ///   1. SUM of per-set `distance_km` over [perSetList] (the longer of

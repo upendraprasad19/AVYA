@@ -63,7 +63,8 @@ extension _WeekRows on _TrainScreenState {
   // ── 3. Compact Week Rows ──────────────────────────────────────
 
   Widget _buildCompactWeekRows(
-      BuildContext context, List<WorkoutDayData> weekDays) {
+      BuildContext context, List<WorkoutDayData> weekDays,
+      {bool showAllowanceFooter = true}) {
     final todayStr = istTodayStr();
     final expandedIdx = ref.watch(expandedDayProvider);
     final firstDated = weekDays.where((d) => d.date != null).toList();
@@ -117,10 +118,48 @@ extension _WeekRows on _TrainScreenState {
       // unchanged (F2).
       child: wrapWithDaySwapAllowanceFooter(
         card,
-        firstDated.isNotEmpty ? istDateStr(firstDated.first.date!) : null,
+        // A past week (docs/plans/train-past-week-in-place.md D4) has no swap allowance to show.
+        showAllowanceFooter && firstDated.isNotEmpty
+            ? istDateStr(firstDated.first.date!)
+            : null,
       ),
     );
   }
+
+  /// The line above a past week's list: `PHASE IV · WEEK 1 · OCT 12–18`, announced when it changes so a
+  /// screen-reader user hears which week the list now shows. [pastWeekRangeLabel] is the chip's own range.
+  Widget _buildPastWeekLabel(PastWeekSelection sel) {
+    final text = 'PHASE ${phaseRoman(sel.phaseNumber)} \u00b7 WEEK ${sel.weekInPhase}'
+        ' \u00b7 ${pastWeekRangeLabel(sel.phaseStart, sel.weekInPhase).toUpperCase()}';
+    return Padding(
+      key: const ValueKey('past-week-label'),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.screenPadding, 0, AppSpacing.screenPadding, 8),
+      child: Semantics(
+        liveRegion: true,
+        child: Text(
+          text,
+          style: AppTypography.monoXs.copyWith(
+            color: AppColors.accent,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A picked past week that has no row left to show.
+  Widget _buildPastWeekEmpty() => Padding(
+        key: const ValueKey('past-week-empty'),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.screenPadding, vertical: 12),
+        child: Text(
+          WardroomCopy.trainPastWeekEmpty,
+          style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
+        ),
+      );
 
   Widget _buildCompactRow(BuildContext context, WorkoutDayData day,
       String todayStr, int dayIndex, bool hasLogs) {
