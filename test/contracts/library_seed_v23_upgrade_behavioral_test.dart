@@ -20,6 +20,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 
 import '../helpers/hive_test_setup.dart';
+import '../helpers/library_media_three_v29.dart';
 import '../helpers/library_g0355_v25.dart';
 import '../helpers/library_lunge_alias_v28.dart';
 import '../helpers/library_overlay_v26.dart';
@@ -101,11 +102,11 @@ void main() {
       for (final r in _v23Bundle())
         if (!_newIds.contains(r['id'])) (_v22Suitable[r['id']] == null ? r : {...r, 'suitable_for': _v22Suitable[r['id']]}),
     ];
-    expect(sha256.convert(utf8.encode(jsonEncode(rebuilt))).toString(),
+    expect(sha256.convert(utf8.encode(jsonEncode(rebuilt.map(withoutMediaV29).toList()))).toString(),
         '7a37c26c8fdc14e075c90558e4cf6adea71ab91f7614982e910d23e4962065d8');
   });
 
-  test('a v22 box ends at the current version (v28) with the nine rows and the widened suitable_for, and every other row unchanged', () async {
+  test('a v22 box ends at the current version (v29) with the nine rows and the widened suitable_for, and every other row unchanged', () async {
     final hive = HiveService.instance;
     await _putV22Box(hive);
     await _markSeeded(hive, 22);
@@ -126,16 +127,16 @@ void main() {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 28);
+    expect(hive.configBox.get('exercise_library_version') as int, 29);
   });
 
-  test('MIRROR: a box already at the current version (v28, OI-523) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v29) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV22Box(hive);
-    await _markSeeded(hive, 28);
+    await _markSeeded(hive, 29);
     await SeedService.instance.seedIfNeeded();
     expect(hive.exerciseBox.get('N14'), isNull);
     expect(_asJson(hive.exerciseBox.get('E045'))['suitable_for'], ['Intermediate', 'Advanced']);
-    expect(hive.configBox.get('exercise_library_version') as int, 28);
+    expect(hive.configBox.get('exercise_library_version') as int, 29);
   });
 }

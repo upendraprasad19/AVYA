@@ -190,7 +190,10 @@ class SeedService {
   //   "Reverse Lunge" (a forward lunge is not a reverse lunge; the coach tool getFormCues reads name_aliases). The cloud
   //   name_aliases of the row is NULL in its reseed migration. putAll rewrites the row by id. Without this bump an existing
   //   install keeps the alias (library_seed_v28_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 28;
+  //   v29 (docs/plans/2026-11-26-media-three-adds.md): E051 Standing Calf Raise, E109 Glute Kickback (Cable) and E264
+  //   Table Row gain their animation keys. No cloud reseed (the cloud tuples do not carry media keys). Without this bump
+  //   an existing install never gets the three animations (library_seed_v29_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 29;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

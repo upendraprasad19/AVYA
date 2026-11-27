@@ -4132,7 +4132,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "calf_raise"
+    "variant_family": "calf_raise",
+    "media_slug": "0108-barbell-standing-leg-calf-raise",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E052",
@@ -8291,7 +8294,10 @@
     "gym_availability": "standard_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "glute_kickback"
+    "variant_family": "glute_kickback",
+    "media_slug": "0228-cable-standing-kickback",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E110",
@@ -16526,7 +16532,10 @@
     "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "inverted_row"
+    "variant_family": "inverted_row",
+    "media_slug": "9001-table-row-clean",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E266",

@@ -14,6 +14,9 @@
 // pair into `entries` stays legal, but only with a recorded decision (P7): an entry whose id the equipment check held, or
 // the founder decided to retag, carries `released_by`, a non-empty string naming the decision and its date. The builder
 // ignores that key (it reads `id`, `gif` and `equipment_checked`).
+//
+// A later founder decision that changes or adds a pick is recorded in the picks record's `repicks` (the original `picks` list
+// is never edited). P1 and P2 read `picks` overlaid with `repicks`; P8 guards the overlay itself.
 library;
 
 import 'library_media_table_checks.dart' show Json;
@@ -41,6 +44,41 @@ List<String> oldRowsInputViolations({
     for (final p in (picks['picks'] as List)) (p as Json)['exercise_id'] as String: '${p['gif_id']}',
   };
   final entries = ((input['entries'] as List?) ?? const []).cast<Json>();
+
+  // (P8) a repick is a recorded decision on a library E row that is applied. `replaces` is compared with the ORIGINAL picks,
+  // so this runs before the overlay. A missing or non-map `repicks` fails closed.
+  final repicks = picks['repicks'];
+  if (repicks is! Map) {
+    out.add('(P8) the picks record has no repicks map');
+  } else {
+    final original = Map<String, String>.of(pickGif);
+    for (final r in repicks.entries) {
+      final id = '${r.key}';
+      final v = r.value;
+      if (v is! Map) {
+        out.add('(P8) repick $id is not an object');
+        continue;
+      }
+      final gif = v['gif_id'];
+      final by = v['decided_by'];
+      if (!_oldId.hasMatch(id) || !libById.containsKey(id)) out.add('(P8) repick $id is not an E row of the library');
+      if (by is! String || by.trim().isEmpty) out.add('(P8) repick $id has no decided_by');
+      if (!v.containsKey('replaces') || v['replaces'] != original[id]) {
+        out.add('(P8) repick $id replaces ${v['replaces']}, the original pick is ${original[id]}');
+      }
+      final applied = entries.where((e) => e['id'] == id);
+      final released = applied.length == 1 ? applied.first['released_by'] : null;
+      if (released is! String || released.trim().isEmpty) {
+        out.add('(P8) repick $id is not applied as an entry with released_by');
+      }
+      if (gif is! String || gif.isEmpty) {
+        out.add('(P8) repick $id has no gif_id');
+        continue;
+      }
+      if (gif == original[id]) out.add('(P8) repick $id changes nothing');
+      pickGif[id] = gif;
+    }
+  }
   List<Json> bucket(String name) => ((input[name] as List?) ?? const []).cast<Json>();
 
   final where = <String, List<String>>{};
