@@ -34,6 +34,7 @@ import 'package:icanbefitter/core/services/sync_domains/streaks_sync_domain.dart
 import 'package:icanbefitter/core/services/sync_domains/workouts_sync_domain.dart';
 import 'package:icanbefitter/core/services/sync/schedule_completion_time.dart';
 import 'package:icanbefitter/core/services/sync/sync_skip_index.dart';
+import 'package:icanbefitter/core/services/sync/sched_unpushed_swaps.dart';
 import 'package:icanbefitter/core/services/target_history_service.dart';
 import 'package:icanbefitter/core/services/sync/nutrition_slot_engine.dart';
 import 'package:icanbefitter/core/services/sync/nutrition_slot_remote.dart';
@@ -217,6 +218,8 @@ class SyncService {
     _lastRestoreWithheldReason = null;
     // OI-503: the previous account's live coach sends are not this account's.
     CoachInteractionRepository.clearInFlight();
+    // OI-532: the in-memory swap dates belong to the previous account's box.
+    SchedUnpushedSwaps.resetForUser();
 
     // Complete any in-flight health-sync waiter so callers awaiting
     // the previous user's pass do not hang on the new user's session.
@@ -2399,6 +2402,10 @@ class SyncService {
         read: () => _fetchReadinessRows(userId, since),
       );
 
+      // OI-532: taken BEFORE the fetch, so a swap marked or cleared while the
+      // bundle is in flight (or while steps A/B run) still guards its date.
+      final schedFetchMark = SchedUnpushedSwaps.fetchMark();
+
       // ── Fetch (one round-trip; e8a1c3 auth via callFunction/fresh token) ──
       final FunctionResponse resp =
           await _supabase.callFunction('restore-user-snapshot');
@@ -2510,7 +2517,8 @@ class SyncService {
       await _safeRestoreOp(
           'scheduled_workouts',
           _restoreScheduledWorkouts(userId, since,
-              preFetched: row('scheduled_workouts')));
+              preFetched: row('scheduled_workouts'),
+              fetchMark: schedFetchMark));
       await _safeRestoreOp(
           'schedule_completions',
           _restoreScheduleCompletions(userId, since,

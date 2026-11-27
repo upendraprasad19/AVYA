@@ -2310,6 +2310,12 @@ extension SyncServiceWorkout on SyncService {
       final date = entry['date'] as String?;
       if (date == null) continue;
       liveDates.add(date);
+      // OI-532: this date's unpushed-swap token, read in the SAME synchronous
+      // run as the row above (no await between them), so the clear below
+      // only removes the mark of the content this pass actually sent.
+      final swapToken = SchedUnpushedSwaps.tokenOf(workoutBox, date);
+      final keepMarkedUnconfirmed =
+          swapToken != null && SyncFlags.schedUnpushedSwapGuardEnabled;
 
       try {
         // OI-170: `parsedDate` lived here solely to feed
@@ -2356,7 +2362,7 @@ extension SyncServiceWorkout on SyncService {
               if (completedAt != null) 'completed_at': completedAt,
             };
 
-        await index.pushIfChanged(
+        final confirmed = await index.pushIfChanged(
           date,
           // The LOCAL template ref, not the cloud id (spec §5.9): a changed
           // local ref or a template arriving on this phone re-pushes.
@@ -2404,7 +2410,13 @@ extension SyncServiceWorkout on SyncService {
             if (tmplName == null) {
               final keyId = resolveCloudTemplateId(rawTemplateId);
               if (keyId != null && await upsertOnce(keyId, true)) return true;
-              return upsertOnce(null, false);
+              final sent = await upsertOnce(null, false);
+              // OI-532 R2-2: the omitted key leaves the cloud's PRE-swap
+              // template_id in place, so a row with an unpushed swap stays
+              // unconfirmed (re-pushed next pass, mark kept) instead of being
+              // recorded as sent and later cleared by the skip branch.
+              if (sent && keepMarkedUnconfirmed) return false;
+              return sent;
             }
 
             // Case 3 — the id comes from the key (OI-252), no SELECT.
@@ -2490,6 +2502,19 @@ extension SyncServiceWorkout on SyncService {
             return false;
           },
         );
+        // OI-532: the cloud now holds this date's row (pushed and confirmed,
+        // or skipped because the confirmed fingerprint equals it), so its
+        // unpushed-swap mark goes, but only while it still holds the token
+        // read with the row: a swap that landed during the push keeps its mark.
+        if (confirmed && swapToken != null && !index.aborted) {
+          try {
+            await SchedUnpushedSwaps.clearIfUnchanged(
+                workoutBox, date, swapToken);
+          } catch (e, st) {
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'sched_swap_unpushed_clear'));
+          }
+        }
       } catch (e, st) {
         debugPrint('[SyncService._syncScheduledWorkouts] $e');
         // audit-2026-05-11 H-42 — telemetry pair.
@@ -2514,6 +2539,15 @@ extension SyncServiceWorkout on SyncService {
     }
 
     await index.commit(liveKeys: liveDates);
+    // OI-532: marks of dates whose row is gone.
+    if (!index.aborted && !ownerChangedSince(userId)) {
+      try {
+        await SchedUnpushedSwaps.prune(workoutBox);
+      } catch (e, st) {
+        unawaited(ErrorTelemetry.recordNonFatal(e, st,
+            reason: 'sched_swap_unpushed_prune'));
+      }
+    }
   }
 
   /// Restores scheduled workouts from Supabase (supplement to plan restore).
@@ -2539,8 +2573,15 @@ extension SyncServiceWorkout on SyncService {
   /// carrying its nested `template{… template_exercises[]}` embed (the verbatim
   /// PostgREST shape the parser reads). Legacy callers omit it → network read.
   /// Plan §4 (H-1 embed nesting preserved).
+  ///
+  /// OI-532: [fetchMark] is `SchedUnpushedSwaps.fetchMark()` taken BEFORE the
+  /// cloud rows were fetched (the single-call caller fetches long before this
+  /// runs); without it the mark is taken here, before this method's own read.
   Future<void> _restoreScheduledWorkouts(String userId, String since,
-      {Object? preFetched = _kNoInject}) async {
+      {Object? preFetched = _kNoInject, int? fetchMark}) async {
+    assert(identical(preFetched, _kNoInject) || fetchMark != null,
+        'OI-532: injected rows need the fetchMark taken before their fetch');
+    final schedFetchMark = fetchMark ?? SchedUnpushedSwaps.fetchMark();
     try {
       // APK Test #15.3 / Bug 4a — direct query with embed instead of
       // _fetchAllRows so we can pull the parent template + its
@@ -2869,6 +2910,23 @@ extension SyncServiceWorkout on SyncService {
             merged['exercises'] = <Map<String, dynamic>>[];
           }
         }
+        // OI-532 (plan 5.5): a date carrying a local day swap the cloud has
+        // not confirmed — or one marked or cleared since these cloud rows
+        // were fetched — keeps its local row byte-identical: these rows
+        // predate the swap. Checked synchronously right before the put (no
+        // await between), and a swap marks before its first row write, so a
+        // swap in flight is seen here or lands after this put. A cloud
+        // completion still lands (spec I6; a swap never moves a completed
+        // day). No local row: the cloud row restores as before.
+        if (SyncFlags.schedUnpushedSwapGuardEnabled &&
+            cloudStatus != 'completed' &&
+            _hive.workoutBox.get(key) is Map &&
+            (SchedUnpushedSwaps.isPending(_hive.workoutBox, date) ||
+                SchedUnpushedSwaps.touchedSince(date, schedFetchMark))) {
+          unawaited(ErrorTelemetry.logEvent('sched_restore_kept_unpushed_swap',
+              message: 'date=$date'));
+          continue;
+        }
         await _hive.workoutBox.put(key, merged);
       }
     } catch (e, st) {
@@ -2990,10 +3048,14 @@ extension SyncServiceWorkout on SyncService {
     String userId, {
     Object? preFetched,
     String? since,
+    int? fetchMark,
   }) =>
       _restoreScheduledWorkouts(
           userId, since ?? _kSyncDomainRestoreSince,
-          preFetched: preFetched);
+          preFetched: preFetched,
+          // OI-532: a test's injected rows are "fetched" now unless it says
+          // otherwise (T9 passes the mark it took before its swap).
+          fetchMark: fetchMark ?? SchedUnpushedSwaps.fetchMark());
 
   /// Test seam: runs `_restoreWorkoutPlan` with INJECTED
   /// `user_progress` rows AND (optionally) a pre-resolved deleted-template-id

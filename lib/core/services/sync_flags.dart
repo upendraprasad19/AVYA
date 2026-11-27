@@ -403,6 +403,22 @@ class SyncFlags {
     }
   }
 
+  /// OI-532 kill switch (plan docs/plans/oi532-sched-restore-unpushed-swap.md
+  /// 5.6). On: `_restoreScheduledWorkouts` leaves a date with an unpushed local
+  /// day swap alone, and the schedule push keeps such a date unconfirmed while
+  /// it omits its template link. `configBox['disable_sched_unpushed_swap_guard']
+  /// = true` restores both paths verbatim. With the box not open the guard
+  /// stays ON.
+  static bool get schedUnpushedSwapGuardEnabled {
+    try {
+      return HiveService.instance.configBox
+              .get('disable_sched_unpushed_swap_guard') !=
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Kill switch for the incremental `SyncSkipIndex` flush (plan
   /// sync-storm-first-sweep W2). On: every `kSkipIndexFlushEvery` confirmed
   /// rows are persisted while the pass runs. `configBox[
