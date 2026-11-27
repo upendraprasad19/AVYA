@@ -642,7 +642,7 @@ concepts:
         semantic: pass-through
         fields_read: [via service.getScheduleForDate(day)]
       - file: lib/core/services/swap_service.dart
-        line_range: 159-162
+        line_range: 162-165
         method: SwapService._row(date) (weekStates / preview / swapDays)
         semantic: pass-through
         fields_read: [raw workoutBox schedule_<date> row]
@@ -1510,7 +1510,7 @@ concepts:
       TodaysMealsCard for "FROM YOUR DIET PLAN" hints on empty slots.
     writers:
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1199-1210
+        line_range: 1204-1215
         method: saveDietPlan + getSavedDietPlan
         notes: |
           Wrappers over MigratedKey.write/read for the
@@ -2287,13 +2287,13 @@ concepts:
       truth for which providers must rebuild when the date flips.
     writers:
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 117-126
+        line_range: 118-127
         method: runRolloverNow
         notes: "Class is DayRolloverObserver (not DayRolloverService — stale name in registry)"
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 197-355
+        line_range: 198-370
         method: _doRolloverWithRef (self-contained)
         semantic: pass-through
         fields_read: [<provider invalidation only — no Hive read>]
@@ -2364,7 +2364,7 @@ concepts:
       - usageWeeksProvider  # bug ff3131, 2026-09-28 — had write-time invalidation, missing rollover leg only
       - bodyMeasurementsProvider  # L2b Landing B, 2026-10-12 — "due" reads the clock; a no-op until built (flag OFF)
     ist_sites:
-      - { file: lib/core/services/day_rollover_service.dart, line: 121, fn: runRolloverNow }
+      - { file: lib/core/services/day_rollover_service.dart, line: 122, fn: runRolloverNow }
     class_constraints: |
       All "today"-derived providers (todayWorkoutProvider,
       dailyNutritionProvider, streakProvider, aiInsightProvider,
@@ -4634,7 +4634,7 @@ concepts:
         semantic: pass-through
         fields_read: [is_pro, expires_at, plan, paymentInFlightOrder]
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1064-1066
+        line_range: 1069-1071
         method: isOnboarded
         semantic: flag-check
         fields_read: [onboarding_completed]
@@ -5707,7 +5707,7 @@ concepts:
         semantic: pass-through
         fields_read: [healthBox keys starting with 'water_ml_']
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 159-164
+        line_range: 160-165
         method: runRolloverNow (invalidate waterIntakeProvider at IST midnight)
         semantic: pass-through
         fields_read: [waterIntakeProvider (invalidate only — no value read)]
@@ -6186,14 +6186,14 @@ concepts:
       re-purchase after lapse does not re-grant.
     writers:
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 308-329
+        line_range: 398-419
         method: grantFirstProFreezes
         notes: |
           Reads flag from progress map; no-op if already true. Sets
           streak_freezes_available = max(current, 3) then flag = true.
           Fire-and-forget syncFreezes() + telemetry.
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 340-363
+        line_range: 430-453
         method: resetToFreeCapOnLapse
         notes: |
           Clamps streak_freezes_available to 1 on lapse. Does NOT touch
@@ -6215,7 +6215,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 308-315
+        line_range: 398-405
         method: grantFirstProFreezes (idempotency check)
         semantic: pass-through
         fields_read: [streak_freezes_first_pro_grant_done]
@@ -6319,7 +6319,7 @@ concepts:
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
-        line_range: 150-171
+        line_range: 151-172
         method: reckonAndNotifyAfterRestore
         notes: |
           Post-restore: reckon + persist (gated by the marker), ONE best-effort LOW
@@ -6351,7 +6351,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 340-361
+        line_range: 345-366
         method: reckonStreakDecayAndPersist
         semantic: flag-check
         fields_read: [restoreSettledForCurrentUser]
@@ -6423,19 +6423,19 @@ concepts:
         method: _runAdvanceWith
         notes: calls resetFreezesAfterGap ONLY when commitPhaseAdvance returned true and the written window left >= 7 blank days (freezeResetGapDays); runGraduationPhaseAdvance does the same at ~895-902.
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 375-388
+        line_range: 465-476
         method: resetFreezesAfterGap
         notes: writes ONLY streak_freezes_available (0) via updateProgress, then syncFreezes; flag and ledger untouched.
     reader_manifest_complete: false
     readers:
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 425-602
+        line_range: 430-607
         method: _calculateStreak
         semantic: flag-check
         fields_read: [schedule_<date> presence]
         notes: a rowless day before today ends the chain (no freeze spent); today is tolerated.
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 640-688
+        line_range: 645-693
         method: completionRateOverWindow
         semantic: flag-check
         fields_read: [schedule_<date> presence]
@@ -6508,7 +6508,7 @@ concepts:
         method: mergeCloudProgress
         notes: skips the freeze family and the control-plane keys in the cloud-copy loop when the freeze merge is on.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 834-947
+        line_range: 834-952
         method: _mergeFreezeFamily
         notes: the post-pass; delegates to StreakProgressService.mergeFreezeProgress.
       - file: lib/core/services/sync/sync_profile.dart
@@ -7125,7 +7125,7 @@ concepts:
           stayed NULL -> forced re-onboard on a new device. Now carries the
           column (guarded SyncService._hasValue, never clobbers with null).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1069-1071
+        line_range: 1074-1076
         method: setOnboarded
       - file: lib/core/services/auth_session_bootstrapper.dart
         line_range: 761-1118
@@ -17777,6 +17777,87 @@ concepts:
       `refusal`). Swap-back re-runs DaySwapRules.buildSwap with a fresh
       nowMs, so the newer arranged_at_ms naturally wins (never cleared to a
       pre-swap value).
+      OI-348 P3 (2026-11-26, concept missed_day_rescue): ONE exception to the
+      past-date refusal. A MISSED day (planned training row before today, no
+      wlog_/exlog_, no session in progress) may swap with TODAY only, only while
+      today is a true rest row (type AND status rest) passing its own locks, same
+      Mon-Sun week (DaySwapRules.isMissed / rescueLockOf / isRescueHost / pairLock;
+      the engine re-checks inside the write lock). Never for DaySwapOrigin.coach
+      (preview takes the same origin). The past row gets `rescued_into: <today>`
+      (a markerKeys member, never carried by contentOf). After the write:
+      StreakProgressService.settleRescueRefunds + reckonStreakDecayAndPersist,
+      neither can fail the swap. Kill switch configBox['disable_missed_day_rescue'].
+
+  - concept: missed_day_rescue
+    domain: workout
+    behavioral_test_path: test/services/day_swap/missed_day_rescue_test.dart
+    description: |
+      OI-348 P3 (docs/plans/oi348-landing3d.md, diagnose b3f7d2): rescue a workout
+      missed earlier this IST week into TODAY's rest day through the one day-swap
+      engine, and give back a streak freeze spent on the missed day. Two stored
+      shapes: the row key `rescued_into` on the past schedule_<date> row, and the
+      freeze-ledger marker `refund:<YYYY-MM-DD>` in streak_freeze_used_dates (cloud
+      streak_freezes_used_dates, text[], stored verbatim by update_streak_progress;
+      the plain date STAYS next to its marker so the day stays covered).
+    writers:
+      - file: lib/core/services/swap_service.dart
+        line_range: 1-9999
+        method: "SwapService._swapDaysInWeek build (marks the past landed row rescued_into) and the post-write settleRescueRefunds + reckon"
+      - file: lib/core/services/streak_progress_service.dart
+        line_range: 1-9999
+        method: "settleRescueRefunds (derived, idempotent; current week only; keys on rescued_into + type rest, NOT is_swapped (a rescue sending content home drops it, B-pass F1); tier cap; adds refund:<D> only for the dates it pays)"
+      - file: lib/core/services/day_rollover_service.dart
+        line_range: 1-9999
+        method: "_doRolloverWithRef calls settleRescueRefunds after refillIfNewWeek (heals a refund a crash dropped)"
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/streak_progress_service.dart
+        line_range: 1-9999
+        method: "mergeFreezeProgress (+1 per marker the other side has, this side lacks, on a date this side holds, on/after its last_refill), prunePastHorizon (marker by its date), FreezeLedger"
+        semantic: aggregated
+        fields_read: [streak_freeze_used_dates, streak_freezes_available, streak_freezes_last_refill]
+      - file: lib/shared/repositories/user_repository.dart
+        line_range: 1-9999
+        method: "_mergeFreezeFamily grant carry (net spends: plain dates minus refunded ones)"
+        semantic: aggregated
+        fields_read: [streak_freeze_used_dates]
+      - file: lib/features/train/repositories/workout_repository.dart
+        line_range: 1-9999
+        method: "_calculateStreak: usedDates.contains(date) never matches a marker; the rescued day is type rest (skipped). earliestUserAnchorKey: the engine locks a day before the anchor as past (B-pass F2)"
+        semantic: flag-check
+        fields_read: [streak_freeze_used_dates]
+      - file: lib/core/services/sync/sync_restore_completeness.dart
+        line_range: 1-9999
+        method: "syncFreezes pushes the raw ledger (markers verbatim); the version-conflict retry and the restore merge call mergeFreezeProgress"
+        semantic: aggregated
+        fields_read: [streak_freeze_used_dates, streak_freezes_available, streak_freezes_last_refill]
+      - file: lib/core/services/streak_progress_service.dart
+        line_range: 1-9999
+        method: "commitConsume writes back the ledger it read (markers survive a spend)"
+        semantic: aggregated
+        fields_read: [streak_freeze_used_dates]
+      - file: lib/features/train/widgets/swap_picker_sheet.dart
+        line_range: 1-9999
+        method: "SwapPickerSheet (pairLock per target, locked-source line, rescue footer, refund toast line)"
+        semantic: display-only
+        fields_read: [via daySwapWeekProvider]
+      - file: lib/features/train/widgets/day_swap_drag_wrapper.dart
+        line_range: 1-9999
+        method: "DaySwapDragWrapper.dropTargetValid (pure; pairLock while the rescue is on)"
+        semantic: display-only
+        fields_read: [via daySwapWeekProvider]
+    class_constraints: |
+      A past date moves only with today, today only as a true rest row; the coach
+      never rescues. A refund is given once per date (the marker), never for a date
+      outside the current IST week, never above the tier cap (a date the cap
+      holds back stays owed, unmarked), never from the row shape alone
+      (rescued_into is required and is never re-dated, so a copy in another week
+      fails the same-week test). A day before the user's anchor is never missed.
+      The merge never raises a side that did not
+      debit the date; with no markers it is the pre-P3 rule. Kill switch
+      configBox['disable_missed_day_rescue'] (the merge's marker accounting is not
+      switched: no markers, no change). The per-row restore race of every swap is a
+      separate OI.
 
   - concept: day_swap_allowance
     domain: workout
@@ -18178,7 +18259,7 @@ concepts:
           without this, the very next extraction pass would silently
           overwrite every pre-existing user's genuine profile values.
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1413-1433
+        line_range: 1418-1438
         method: lockCoachExtractionFields
         notes: |
           Client call site: `.rpc('lock_coach_extraction_fields', params: {'p_fields': fields})`.
@@ -18202,7 +18283,7 @@ concepts:
           actually added; a lock that throws or times out is non-fatal
           (accepted residue: an extraction may run before it lands).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1308-1410
+        line_range: 1313-1415
         method: "syncOnboardingToSupabase (onboarding injuries trigger) + shouldLockOnboardingInjuries (pure decision, line 941)"
         notes: |
           Locks 'injuries' when onboarding collected a REAL selection (not
@@ -18451,7 +18532,7 @@ concepts:
       while the previous notice is still unshown.
     writers:
       - file: lib/core/services/streak_progress_service.dart
-        line_range: 116-207
+        line_range: 206-297
         method: freezeNoticeCountAfterConsume / takeFreezeNotice / commitConsume
         notes: |
           takeFreezeNotice hands the notice out ONCE (reads it through
@@ -18462,7 +18543,7 @@ concepts:
           streak_freezes_available. The three notice keys are local-only: every progress
           payload builder names its keys (sync_profile.dart _buildUserProgressRpcParams).
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1016-1032
+        line_range: 1036-1052
         method: clearStreakFreezeNotice
         notes: |
           The ONE clearer: the flag, the count and the snapshot in ONE updateProgress delta
@@ -19032,7 +19113,7 @@ concepts:
       Conflict rule: the last pushed change wins at every device's next restore.
     writers:
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1112-1129
+        line_range: 1117-1134
         method: setUnitsMetric (profile units_system through ProfileWriteService.patchProfileWith(stillOwner:); no owner or no profile -> no write)
       - file: lib/features/profile/providers/body_measurements_provider.dart
         line_range: 100-154
@@ -19048,7 +19129,7 @@ concepts:
         line_range: 1-56
         method: metricFromProfileValue + inchesFromProfileValue + unitPrefsPushEntries (the one rule)
       - file: lib/shared/repositories/user_repository.dart
-        line_range: 1087-1110
+        line_range: 1092-1115
         method: getUnitsMetric (profile first, legacy device key until adopted; TOTAL, a throw answers metric and logs units_pref_read_failed)
       - file: lib/features/profile/providers/body_measurements_provider.dart
         line_range: 162-193
@@ -20407,7 +20488,7 @@ concepts:
         method: DIGEST_KEYS create_order (subday, no cap)
         semantic: aggregate
       - file: supabase/functions/_shared/founder_digest_content.ts
-        line_range: 308-329
+        line_range: 389-410
         method: NON_ACTIVITY_KEYS + QUOTA_KILL_SWITCHES (create_order, promo_validate)
         semantic: aggregate
     hive:
@@ -20620,7 +20701,7 @@ concepts:
         semantic: count
         fields_read: [via countBeatenPrs]
       - file: lib/features/train/repositories/workout_repository.dart
-        line_range: 1834-1841
+        line_range: 1839-1846
         method: getAllExerciseLogKeysForLifetimeSum
         semantic: aggregated
         fields_read: [volume_kg]

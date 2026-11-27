@@ -69,7 +69,7 @@ class _SwapConfirmSheetState extends ConsumerState<SwapConfirmSheet> {
     if (!isPro && allowance.spent) return DaySwapSpentSheet.forContext(context);
     final preview = ref
         .read(daySwapControllerProvider)
-        .preview(widget.dayA.date, widget.dayB.date);
+        .preview(widget.dayA.date, widget.dayB.date, origin: widget.origin);
     final earlyFirst = widget.dayA.date.compareTo(widget.dayB.date) <= 0;
     final early = earlyFirst ? widget.dayA : widget.dayB;
     final late = earlyFirst ? widget.dayB : widget.dayA;
@@ -184,10 +184,13 @@ class _SwapConfirmSheetState extends ConsumerState<SwapConfirmSheet> {
       messenger.showSnackBar(buildDaySwapToast(
         title: DaySwapCopy.toastTitle(widget.dayA.date, widget.dayB.date),
         body: DaySwapCopy.toastBody(
-            subject: subject,
-            today: istTodayStr(),
-            after: result.allowanceAfter,
-            currentWeekStart: weekStart),
+                subject: subject,
+                today: istTodayStr(),
+                after: result.allowanceAfter,
+                currentWeekStart: weekStart) +
+            (result.freezeRefunded
+                ? ' ${DaySwapCopy.freezeRefundedLine}'
+                : ''),
       ));
       return;
     }

@@ -250,6 +250,11 @@ class WorkoutRepository {
     return earliest;
   }
 
+  /// OI-348 P3 (B-pass F2): [_earliestUserAnchorKey] for the day-swap
+  /// engine, so a rescue never treats a plan row from before the user had
+  /// the app as a missed day.
+  String? earliestUserAnchorKey() => _earliestUserAnchorKey();
+
   /// OI-390 U2 — the one walk behind [getDayOfWeekCompletionStats] and
   /// [getWorkoutAdherence]: IST days 1..[days] before today (today itself only
   /// when [includeTodayIfCompleted] and it is completed), oldest first, minus
