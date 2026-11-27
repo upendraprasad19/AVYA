@@ -6966,16 +6966,17 @@ Found while checking what a two-year user costs the Train past-phase strip (batc
 
 **Done when:** (1) bytes per push and pushes per day are measured for a synthetic two-year account (a test or a scripted run, not an estimate); (2) a decision is recorded with that evidence: keep as is, prune rows older than a stated horizon from the bundle (the per-day `scheduled_workouts` rows already hold status and date, and the exercise logs live in their own tables), or split history out of the bundle; (3) whatever is chosen keeps the restore of past phases working (a restore-completeness test over a two-year fixture). Pre-launch: testers only (CLAUDE.md section 1), so priority follows the measurement.
 
-## OI-532 — A stale per-row schedule restore undoes an unpushed day swap
+## OI-533 — An unpushed template removal is undone by the schedule restore, and a deleted schedule row is never pushed
 
 - **Status**: OPEN
 - **Blocked on**: none
 - **Verified**: never
-- **Identified**: 2026-11-26 · filed via mint_oi.sh from branch `oi348-landing3d`
+- **Identified**: 2026-11-27 · filed via mint_oi.sh from branch `oi532-sched-restore-swap`
 
-Found while planning OI-348 Landing 3d (P3, the missed-day rescue, `docs/plans/oi348-landing3d.md` section 3.5); verified in plan review rounds 1 and 2; split out under CLAUDE.md 4.12.1 because a correct fix is its own design. It is NOT new with the rescue: every day swap has it today.
+Found in OI-532's plan review round 2 (R2-7, `docs/plans/oi532-sched-restore-unpushed-swap.md` 5.7); split under CLAUDE.md 4.12.1: same class as OI-532 (a restore takes a stale cloud row over a local change not yet pushed), different writer and different semantics (a deletion). Verified by reading the code, not on a device.
 
-**Writer (local):** `SwapService.swapDays` -> `WorkoutWriteService.swapScheduledDays` writes both swapped `schedule_<date>` rows (status and type travel with the content, `DaySwapRules.landed`), then pushes in the background.
-**Reader that undoes it:** `lib/core/services/sync/sync_workout.dart` `_restoreScheduledWorkouts` (:2542; status merge from :2611: the cloud status wins unless the local row is `completed` or terminal; `type: 'rest'` forced when the cloud status is rest :2810; rest-content strip :2860). The cloud `scheduled_workouts` row has no timestamp column (`backups/live_schema_columns.json`), and this restore runs AFTER `_restoreWorkoutPlan` (`sync_service.dart:1936-1962`), so it is the last writer of `schedule_<date>`.
-**Failure:** swap Fri (workout) <-> Sat (rest) offline, relaunch before the push lands: the restore turns Sat's local workout row into `rest` and strips its exercises (the workout is lost), and gives Fri `type rest` + `status planned`.
-**Why the obvious guard is wrong (round 2):** keeping a local row that has `arranged_at_ms` (a) re-adds `template_id` on template days (the b6e1c8 hybrid), and (b) is permanent per row, because `upsertScheduled`'s `carriesArrangement` re-stamps `arranged_at_ms` on every later rewrite, so after a CONFIRMED push the two devices would diverge for good. A correct fix needs "is this row's change still unpushed?" from the sched `SyncSkipIndex` (or an equivalent last-pushed stamp), plus its own plan review x2.
+**Writer (local):** `TemplateService.unscheduleTemplateFromDate` (`lib/core/services/template_service.dart:242`): with a `displaced_<date>` backup it rewrites the row from the backup through `upsertScheduled` (no `template_id`); without one it DELETES `schedule_<date>`.
+**Push:** `_syncScheduledWorkouts` (`lib/core/services/sync/sync_workout.dart`, from :2263) walks EXISTING `schedule_` rows only, so a deleted row is never sent; the backup case sends `template_id: null` once the push runs.
+**Reader that undoes it:** `_restoreScheduledWorkouts` (same file): a cloud row still carrying the template resolves its embed (`templateResolved`), forces `type: custom_template`, re-adds `template_id` and hydrates the template's exercises; for a deleted local row the cloud row simply comes back.
+**Failure:** remove a template from a day offline (or before the push lands), relaunch: the template is back on that day. In the delete case it comes back even after the push, because nothing ever tells the cloud the row is gone.
+**Fix shape (needs its own plan + review x2):** the delete case needs a pushed tombstone or a cloud delete (like `PendingExlogDeletes`); the backup case can reuse the OI-532 marker (`sync/sched_unpushed_swaps.dart`) if `unscheduleTemplateFromDate` marks the date.

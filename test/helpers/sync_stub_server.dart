@@ -114,6 +114,11 @@ class SyncStubServer {
   final Map<String, Map<String, Object?>? Function(StubRequest)> writeFailers =
       {};
 
+  /// Per-table AWAITED hook run before any write to that table is answered
+  /// (OI-532): lets a test land real async app work (a day swap, a push)
+  /// while the app's write request is in flight, deterministically.
+  final Map<String, Future<void> Function(StubRequest)> beforeWrite = {};
+
   /// Per-function rpc answers, keyed by function name (`update_user_progress_snapshot`).
   /// An rpc without an entry keeps the historical default: 200 with body
   /// `null`. The closure sees the request, so a test can answer by body.
@@ -393,6 +398,8 @@ class SyncStubServer {
         req.uri.queryParametersAll);
     requests.add(r);
     final res = req.response..headers.contentType = ContentType.json;
+    final before = r.isWrite ? beforeWrite[r.table] : null;
+    if (before != null) await before(r);
     final conditionalFailure =
         r.isWrite ? writeFailers[r.table]?.call(r) : null;
     if (conditionalFailure != null) {

@@ -54,11 +54,11 @@ concepts:
       workout_log_id filter scopes a multi-session day.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1-276
+        line_range: 1-277
         method: logExercise
         notes: stamps workout_log_id on every exlog row (Test #12 / Task A-3)
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1149-1243
+        line_range: 1207-1301
         method: deleteLog (queues PendingExlogDeletes)
         notes: |
           OI-246 (2026-09-28). deleteLog queues the row's exact natural key
@@ -78,7 +78,7 @@ concepts:
           log resurrecting on the next full restore, and (151) a re-log after
           such a delete being silently dropped.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1745-1759
+        line_range: 1803-1817
         method: resolveSummarySetCount
         notes: |
           OI-246 (2026-09-28, round-2 review finding P3 — split from deleteLog's
@@ -358,7 +358,7 @@ concepts:
       Falls back to a once-built date-keyed map for legacy rows.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1-276
+        line_range: 1-277
         method: logExercise
         notes: |
           appends to exercise_log_index_YYYY-MM-DD on every write. Both coach
@@ -366,7 +366,7 @@ concepts:
           submitWorkoutDraft) refresh the readers through
           invalidateWorkoutSurfaces (concept workout_surface_invalidation).
       - file: lib/core/services/workout_write_service.dart
-        line_range: 914-1042
+        line_range: 1047-1279
         method: moveExerciseLogs
         notes: |
           C2 (e8f4a3) — re-keys partial exlog_<fromDate>_* rows onto the
@@ -436,7 +436,7 @@ concepts:
       key_formula: "'exercise_log_index_${istDateStr(date)}'"
     ist_sites:
       - { file: lib/core/utils/date_utils.dart, line: 27, fn: formatDateKey }
-      - { file: lib/core/services/workout_write_service.dart, line: 1742, fn: wlogKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1800, fn: wlogKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\\.keys.*manually.*date", reason: "O(n) scan — use the index key instead" }
       - { pattern: "DateTime\\.now\\(\\)\\.toIso8601String\\(\\)\\.substring\\(0,\\s*10\\)", reason: "UTC date, disagrees with IST-keyed reader; use istDateStr(DateTime.now())" }
@@ -506,15 +506,15 @@ concepts:
       drain checks ownerChangedSince at each write sink.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1531-1537
+        line_range: 1589-1595
         method: deleteLog
         notes: PendingExlogDeletes.add at local-delete time (count = resolveSummarySetCount)
       - file: lib/core/services/workout_write_service.dart
-        line_range: 995-1053
+        line_range: 1053-1111
         method: moveExerciseLogs
         notes: add for the SOURCE day (both branches), cancelFor the TARGET day
       - file: lib/core/services/workout_write_service.dart
-        line_range: 92-260
+        line_range: 93-261
         method: logExercise
         notes: cancelFor (time-less entries only) after the index append
       - file: lib/core/services/exlog_key_migrator.dart
@@ -673,7 +673,7 @@ concepts:
     restore_methods: [_restoreScheduledWorkouts, _restoreScheduleCompletions]
     provider_invalidation_set: [currentPlanProvider, calendarWeekProvider, todayWorkoutProvider]
     ist_sites:
-      - { file: lib/core/services/workout_write_service.dart, line: 1771, fn: scheduleKey }
+      - { file: lib/core/services/workout_write_service.dart, line: 1829, fn: scheduleKey }
     forbidden_legacy_patterns:
       - { pattern: "workoutBox\.put\('schedule_", reason: "Never write schedule keys directly from a widget — use WorkoutScheduleService" }
     class_constraints: |
@@ -1054,7 +1054,7 @@ concepts:
           Rebuilds the context via buildAiContext() between retry
           rounds so the snapshot reflects post-mutation Hive state.
       - file: lib/core/services/sync_service.dart
-        line_range: 1260-1385
+        line_range: 1263-1388
         method: pushSnapshot (coalesced) -> pushSnapshotNow (body)
         semantic: pass-through
         fields_read: [<full context map>]
@@ -1108,7 +1108,7 @@ concepts:
     writers:
       - { file: supabase/functions/_shared/snapshot_merge.ts, line_range: 16-28, method: mergeSnapshotJson, notes: "Pure merge — existing row spread first, incoming client payload layered on top so it wins on any shared key. Mutation-proven: reverting to `return incoming;` reddens 2 of 4 tests in snapshot_merge_test.ts." }
       - { file: supabase/functions/daily-snapshot/index.ts, line_range: 689-754, method: "serve handler", notes: "Reads the existing row via .maybeSingle() at :719 (never .single() — a first-ever snapshot of the day has no existing row, which is a legitimate empty merge base, not an error; a genuine query error is logged at :728 (the console.error call itself, not the surrounding comment — a pre-existing imprecision in this note, corrected while re-deriving the other citations here) rather than silently degrading), merges via mergeSnapshotJson at :734, upserts the MERGED result at :743. Gated behind DISABLE_SNAPSHOT_MERGE_SAFE_UPSERT (:708, code-review finding 2 — platform tier's feature_flag requirement) which falls back to the verbatim pre-fix blind-replace. Wiring pinned by index_test.ts (source-grep — importing this module boots a real server, no import.meta.main guard, so the test reads source text rather than importing). Line numbers shifted +1 by the observation-batch-and-digest-redesign merge (PR #32, 2026-09-22) inserting one unrelated line earlier in the same file — re-verify by grep, not by citation. Re-derived from anchors 2026-11-14 (diet plan Unit 2b) after its insertions earlier in the file, and again after its B-pass fixes (+24); the previous range had already drifted." }
-      - { file: lib/core/services/sync_service.dart, line: 1216, method: "compileDailySnapshot", notes: "Code-review finding 1 (2026-09-21): fitness_summary is ALSO cron-owned (rolling-context writes it), but unlike morning_alert the client DOES carry a local mirror of it in aiContext (buildAiContext() serves both this push and the live ai-proxy chat body, and the chat use case needs it). Sending it here would let the client's lagging/possibly-empty mirror win the merge on a key it does carry. Explicitly removed from the push payload only — buildAiContext()'s direct chat-context use is untouched. Behavioral: test/contracts/daily_snapshot_fitness_summary_omission_test.dart (mutation-proven — reverting the .remove() call reddens both tests)." }
+      - { file: lib/core/services/sync_service.dart, line: 1219, method: "compileDailySnapshot", notes: "Code-review finding 1 (2026-09-21): fitness_summary is ALSO cron-owned (rolling-context writes it), but unlike morning_alert the client DOES carry a local mirror of it in aiContext (buildAiContext() serves both this push and the live ai-proxy chat body, and the chat use case needs it). Sending it here would let the client's lagging/possibly-empty mirror win the merge on a key it does carry. Explicitly removed from the push payload only — buildAiContext()'s direct chat-context use is untouched. Behavioral: test/contracts/daily_snapshot_fitness_summary_omission_test.dart (mutation-proven — reverting the .remove() call reddens both tests)." }
     reader_manifest_complete: false
     readers:
       - { file: supabase/functions/morning-alert/index.ts, line: 413, method_or_widget: "deliver mode — snap.snapshot_json?.morning_alert", semantic: latest, notes: "The concrete consumer whose silent skip (if (!alertMsg) return; — no log, no error) motivated this fix." }
@@ -1832,7 +1832,7 @@ concepts:
         semantic: pass-through
         fields_read: [diet_preference]
       - file: lib/core/services/sync_service.dart
-        line_range: 1483-1546
+        line_range: 1486-1549
         method: _replayPendingOnboardingSync (value passed through)
         semantic: pass-through
         fields_read: [diet_preference]
@@ -2214,7 +2214,7 @@ concepts:
       Consumed only by WeeklyReportCard.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1-276
+        line_range: 1-277
         method: logExercise (workout series)
       - file: lib/core/services/nutrition_write_service.dart
         line_range: 85-204
@@ -2384,7 +2384,7 @@ concepts:
       chat_logged_exercises.dart isChatLoggedRow; Gate 19 emit set).
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1-276
+        line_range: 1-277
         method: logExercise
     reader_manifest_complete: true
     readers:
@@ -3282,7 +3282,7 @@ concepts:
         line_range: 1-9999
         method: _syncScheduledWorkouts (confirmed :1778; constructs a SyncSkipIndex(domain: SyncSkipDomain.sched) and drives the FK-resilient upsert through its pushIfChanged closure -- the helper stores index[scheduled_date]=fp ON CONFIRMED ONLY; commit(liveKeys:) prunes to live schedule_ dates + persists after the loop)
       - file: lib/core/services/sync_service.dart
-        line_range: 375-408
+        line_range: 378-411
         method: schedPayloadFingerprint (pure static, byte-identical) + _schedHashSkipDisabled kill-switch getter
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-185
@@ -3513,7 +3513,7 @@ concepts:
         line_range: 209-452
         method: _syncNutritionLogs -> _syncNutritionLogsLegacy (legacy mode only; constructs a SyncSkipIndex(domain: SyncSkipDomain.nlog) and drives the parent + item + vacuum writes through its pushIfChanged closure -- stores index[slotId]=nlogFp ON CONFIRMED FULL-BUNDLE SUCCESS ONLY; commit(liveKeys:) prunes to live slots + persists after the loop, or CLEARS the index entirely when disabled)
       - file: lib/core/services/sync_service.dart
-        line_range: 445-505
+        line_range: 448-508
         method: nlogPayloadFingerprint / nlogHashSkipDisabledFor (pure statics, byte-identical -- plan D4) + _hashSkipKillSwitchOn(SyncSkipDomain) (generic kill-switch reader shared with exlog, replaces the deleted _nlogHashSkipDisabled getter)
       - file: lib/features/dev/simulation_service.dart
         line_range: 103-185
@@ -3631,7 +3631,7 @@ concepts:
         line_range: 1070-1117
         method: _cleanupNutritionPullCopies (deleteAll of the matched keys; syncBox flag put)
       - file: lib/core/services/sync_service.dart
-        line_range: 2715-2763
+        line_range: 2723-2771
         method: pullRecentCrossChannelLogs / pullRecentCrossChannelLogsForUser / _pullRecentCrossChannelLogsFor (awaits the cleanup before the legs; the nutrition leg runs only under restore_nutrition_launch_pull)
     reader_manifest_complete: true
     readers:
@@ -3888,7 +3888,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2362-2598
+        line_range: 2365-2606
         method: _attemptSingleCallRestore
         semantic: aggregated
         fields_read: [schema_version, tables]
@@ -3908,7 +3908,7 @@ concepts:
           Pure. Behavioural test test/sync/restore_readiness_prefetch_test.dart (also
           pins the call site's order and the shared _fetchReadinessRows read).
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 2310-2640
+        line_range: 2310-2681
         method: _restoreScheduledWorkouts
         semantic: pass-through
         fields_read: [template]
@@ -3965,7 +3965,7 @@ concepts:
       assumption (it cannot detect a lowered production cap).
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3264-3335
+        line_range: 3272-3343
         method: _fetchAllRows
         notes: |
           The ONE paging loop: owner-scoped (.eq user_id) first, optional since filter,
@@ -4284,7 +4284,7 @@ concepts:
           step. Uses _safeRestoreOp wrapper to keep one surface's
           failure from aborting the rest.
       - file: lib/core/services/sync_service.dart
-        line_range: 1977-2192
+        line_range: 1980-2195
         method: _restoreFromCloudForUserCore
         semantic: aggregated
         fields_read: [<the body of restoreFromCloudForUser, moved verbatim by OI-284>]
@@ -4303,7 +4303,7 @@ concepts:
           routing to /home (15s timeout safety). Cancels in-flight
           restore when user_profile is null (brand-new user).
       - file: lib/core/services/sync_service.dart
-        line_range: 1919-1925
+        line_range: 1922-1928
         method: restoreFromCloud (legacy entry point)
         semantic: pass-through
         fields_read: []
@@ -4878,7 +4878,7 @@ concepts:
       pending a founder decision on removal — not fixed in this batch.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 518-619
+        line_range: 519-620
         method: markCompleted
         notes: |
           The canonical LIVE completion writer (there is no `completeWorkout`
@@ -4899,7 +4899,7 @@ concepts:
           — see SyncService._restoreScheduledWorkouts below, whose guard
           assumed that field would be present.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 2238-2568
+        line_range: 2238-2609
         method: _restoreScheduledWorkouts
         notes: |
           Timestamp-aware MERGE writer (deliberate design, not redundant with
@@ -5183,7 +5183,7 @@ concepts:
         line_range: 1-9999
         method: createCustomTemplate tool
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1335-1390
+        line_range: 1393-1448
         method: newTemplateKey / upsertTemplate
         notes: |
           Canonical writer scaffolded 2026-05-21 / audit A3. Routes
@@ -5195,7 +5195,7 @@ concepts:
           (train_provider.saveTemplate, template_builder_screen,
           workout_repository's AI multi-day loop) routes through it.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1597-1636
+        line_range: 1655-1694
         method: deleteTemplate
         notes: |
           OI-252 — the canonical delete writer. Hive-only (layering:
@@ -5287,7 +5287,7 @@ concepts:
           this concept's delete semantics leaking into a sibling concept's
           restore path.
       - file: lib/core/services/sync/sync_workout.dart
-        line_range: 2215-2579
+        line_range: 2215-2620
         method: _restoreScheduledWorkouts
         semantic: cross-concept ghost-day filter
         fields_read: [template_id, template.deleted_at (embed)]
@@ -5344,7 +5344,7 @@ concepts:
       allExercisePRsProvider is the single read path for UI display.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 467-488
+        line_range: 468-489
         method: _rescanPrFor
         notes: called inside logExercise after every set commit
       - file: lib/features/train/widgets/edit_workout_log_sheet.dart
@@ -6284,20 +6284,20 @@ concepts:
       before the legacy fan-out re-runs the ops.
     writers:
       - file: lib/core/services/sync_service.dart
-        line_range: 2072-2090
+        line_range: 2075-2093
         method: _settleRestoreMarker
         notes: |
           The ONE marker writer; the decision is the pure
           `shouldSettleRestoreMarker` (result.succeeded, no streak-critical
           failure, uid non-null, live uid == uid, Hive owner == uid).
       - file: lib/core/services/sync_service.dart
-        line_range: 2103-2121
+        line_range: 2106-2124
         method: restoreFromCloudForUser
         notes: |
           Wrapper shape pinned by completed_title_follows_log_test.dart: runs the
           core inside `RestoreFailureCollector.run`, heals titles, THEN settles.
       - file: lib/core/services/sync_service.dart
-        line_range: 204-337
+        line_range: 205-340
         method: _onUserChanged
         notes: clears `_restoreSettledUserId` and the withheld reason on an account swap, as its FIRST statement (every later step can throw; B-pass F3).
       - file: lib/core/services/sync/sync_restore_failure_collector.dart
@@ -6315,7 +6315,7 @@ concepts:
           a stale failure from the aborted attempt cannot hold the marker closed
           (B-pass reviewer B F4).
       - file: lib/core/services/sync_service.dart
-        line_range: 3093-3166
+        line_range: 3101-3174
         method: _reportSyncFailure
         notes: first statement calls `RestoreFailureCollector.note(opType)`; the single failure funnel.
       - file: lib/core/services/day_rollover_service.dart
@@ -7859,7 +7859,7 @@ concepts:
           then runs WorkoutCompletionBookkeeping.afterCompletion (count,
           streaks, badges, rank), the same step as every other door.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 591-715
+        line_range: 592-716
         method: markCompleted
         notes: |
           Canonical completion writer. Unit 1 added completedVia (default 'app';
@@ -8324,7 +8324,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/sync_service.dart
-        line_range: 3093-3166
+        line_range: 3101-3174
         method: _reportSyncFailure (funnel — all sync failures route through here)
         semantic: pass-through
         fields_read: []
@@ -8476,7 +8476,7 @@ concepts:
         method: deleteAllFilesForCurrentUser
         notes: hard-wipes all Hive boxes for current user on account deletion
       - file: lib/core/services/workout_write_service.dart
-        line_range: 628-719
+        line_range: 629-720
         method: upsertScheduled
         notes: |
           upserts a scheduled workout entry to workoutBox under schedule_
@@ -8485,7 +8485,7 @@ concepts:
           line count further; caught by check_sot_registry_parity.dart
           and fixed opportunistically while touching this file.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1421-1491
+        line_range: 1479-1549
         method: deleteLog
         notes: removes an exlog_* entry + updates exercise_log_index; fires cloud delete
       - file: lib/core/services/nutrition_write_service.dart
@@ -9453,7 +9453,7 @@ concepts:
           ("8-12" ranges). Judges the write by the stored row
           (customExerciseRowLanded), throwing write_failed only when absent.
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1629-1671
+        line_range: 1687-1729
         method: upsertCustomExercise
         notes: |
           Canonical writer (audit 2026-05-21 / A3). Locks per-key,
@@ -10371,7 +10371,7 @@ concepts:
       2026-05-20 A7 audit; PredictionService added 2026-09-26, B-pass
       round 2, single-owner-a — see its writers: entry above.)
     writers:
-      - { file: lib/core/services/sync_service.dart, line: 87, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
+      - { file: lib/core/services/sync_service.dart, line: 88, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
       - { file: lib/core/services/subscription_service.dart, line: 17, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
       - { file: lib/core/services/workout_schedule_service.dart, line: 177, method: "WorkoutScheduleService._() constructor → _registerLifecycle()", notes: "All state in workoutBox / userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/usage_counter_service.dart, line: 13, method: "UsageCounterService._() constructor → _registerLifecycle()", notes: "Counters live in per-user userBox; reset hook is a no-op placeholder." }
@@ -14248,7 +14248,7 @@ concepts:
           at :969 (the cloud progress row; both cites re-derived 2026-11-14 from
           the 'current_week': 1 literal, the old 473 / 786 had drifted). NOT routed through the projection (no need).
       - file: lib/core/services/sync_service.dart
-        line_range: 1476-1487
+        line_range: 1479-1490
         method: _replayPendingOnboardingSync (NO LONGER writes current_week)
         notes: |
           B-pass F1: this boot-replay used to pass the frozen Hive current_week
@@ -14317,7 +14317,7 @@ concepts:
       read gives no hold and today's text. Stated limits: a stale current_phase is read as it is; rows of a failed or
       crash-partial hold that already synced can name a hold the app does not show until the next generation's sweep.
     writers:
-      - { file: lib/core/services/sync/sync_workout.dart, line: 2350, method: "_syncScheduledWorkouts payload", notes: "week_number <- entry['week']; holdWeek() stamps week: 4 + n on hold rows (workout_schedule_write_service.dart)." }
+      - { file: lib/core/services/sync/sync_workout.dart, line: 2356, method: "_syncScheduledWorkouts payload", notes: "week_number <- entry['week']; holdWeek() stamps week: 4 + n on hold rows (workout_schedule_write_service.dart)." }
     reader_manifest_complete: true
     readers:
       - { file: supabase/functions/_shared/hold_week.ts, line_range: 1-151, method_or_widget: "fetchHoldOrdinals / holdOrdinalFromWeekNumbers / phaseOneUserIds / istWeekBounds / recapHoldsForBatch / reportWeekLineFor", semantic: latest, notes: "Never throws ({map, failed}); paged and chunked through fetchAllByIds (orderBy id). The two call-site helpers (B-pass F1/F2) are tested end to end against the stub client." }
@@ -14505,7 +14505,7 @@ concepts:
           Never throws: an escape here would kill the user's ENTIRE daily
           snapshot via compileDailySnapshot -> pushSnapshotNow, not just prefs.
       - file: lib/core/services/sync_service.dart
-        line_range: 1201-1258
+        line_range: 1204-1261
         method: compileDailySnapshot
         semantic: pass-through
         notes: >
@@ -14861,7 +14861,7 @@ concepts:
           (→913) despite the gate not flagging it, found by grepping the
           symbol directly rather than trusting the gate's silence on it.
       - file: lib/core/services/sync_service.dart
-        line_range: 2937-2937
+        line_range: 2945-2945
         method: restoreOpTimeout
         semantic: per-op-ceiling
         notes: day-swapper + sync-load Task 20 fix1 (diagnose a9d3f6) shifted
@@ -14872,7 +14872,7 @@ concepts:
           an N-M line_range — but left stale it would misdirect a future
           reader by the same +14).
       - file: lib/core/services/sync_service.dart
-        line_range: 2960-2964
+        line_range: 2968-2972
         method: applyRestoreCeiling
         semantic: apply-ceiling
         notes: day-swapper + sync-load Task 20 shifted this range (+148 lines,
@@ -14882,7 +14882,7 @@ concepts:
           blocks on a citation you shifted). Shifted again by task-20-fix1
           (diagnose a9d3f6, +14 lines, same method) for the same reason.
       - file: lib/core/services/sync_service.dart
-        line_range: 2976-2978
+        line_range: 2984-2986
         method: restoreFailureReason
         semantic: telemetry-reason-split
         notes: same shift as applyRestoreCeiling directly above, both times; all three re-derived +3 by the Hermes sync_epoch_seen doc comment (2026-09-28), then +1 (with _safeRestoreOp) by the plan_engine_flags import the merge-review F4 fix added (a3e7d9).
@@ -14897,7 +14897,7 @@ concepts:
         method: _authRedirect
         semantic: delegates-to-pure-fn
       - file: lib/core/services/sync_service.dart
-        line_range: 2959-3002
+        line_range: 2967-3010
         method: _safeRestoreOp
         semantic: bounded-await
         notes: all four ranges shifted +24 by OI-348 Landing 1a-i (diagnose b1d2a8, the cross-channel pull gained its cleanup call and test seam earlier in the file).
@@ -16916,7 +16916,7 @@ concepts:
       is ON (default OFF, ship-dark, OI-126).
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 531-541
+        line_range: 532-542
         method: markCompleted (no-prior-schedule branch)
         notes: stamps type:'logged' for AI-coach-only logging with no prior scheduled day
       - file: lib/core/services/sync/sync_workout.dart
@@ -17957,6 +17957,56 @@ concepts:
       `disable_rest_row_refill_guard` (L1) and `disable_plan_merge_skip_when_known`
       (L2, the sync_workout_plan_payload_hash_index concept's outgoing-push
       skip is a further-independent third flag).
+
+  - concept: sched_unpushed_swap_marker
+    domain: workout
+    description: |
+      OI-532 (diagnose f5a2c8, plan docs/plans/oi532-sched-restore-unpushed-swap.md).
+      A POSITIVE per-date marker that a local day swap rewrote this
+      `schedule_<date>` row and the cloud has not confirmed it yet, so the
+      schedule restore (whose cloud rows carry no timestamp) does not put the
+      pre-swap arrangement back. Persisted `{IST date: token}` + reserved
+      `_seq` in the user-scoped workoutBox; process-local in-flight dates and
+      a touched counter (`fetchMark` / `touchedSince`) for races inside one
+      process. Never inferred from arranged_at_ms or a missing skip-index
+      fingerprint.
+    writers:
+      - file: lib/core/services/workout_write_service.dart
+        line_range: 1-9999
+        method: "swapScheduledDays -- SchedUnpushedSwaps.beginSwap (in flight + mark) BEFORE the first row write, markAll again after the last, endSwap in a finally; never fails the swap"
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1-9999
+        method: "_syncScheduledWorkouts -- the CLEARER: tokenOf read with the row, clearIfUnchanged after pushIfChanged returned true (not while in flight, not on an older token); a marked Case 2 omitted-template-key confirm returns false; prune of rowless dates after commit"
+      - file: lib/features/dev/simulation_service.dart
+        line_range: 1-9999
+        method: "clearJourneyLocalState -- deletes the key with the rows it wipes"
+    reader_manifest_complete: true
+    readers:
+      - file: lib/core/services/sync/sync_workout.dart
+        line_range: 1-9999
+        method: _restoreScheduledWorkouts
+        semantic: flag-check
+        fields_read: [sched_swap_unpushed]
+        notes: "right before the put: pending OR touchedSince(fetchMark) AND local row exists AND cloud status != completed -> keep the local row byte-identical; kill switch disable_sched_unpushed_swap_guard"
+      - file: lib/core/services/sync_service.dart
+        line_range: 1-9999
+        method: _attemptSingleCallRestore
+        semantic: flag-check
+        fields_read: [process-local touched counter]
+        notes: "takes SchedUnpushedSwaps.fetchMark() before callFunction('restore-user-snapshot') and passes it to _restoreScheduledWorkouts"
+    regression_test: test/sync/sched_restore_unpushed_swap_test.dart
+    behavioral_test_path: test/sync/sched_restore_unpushed_swap_test.dart
+    hive:
+      box: workoutBox
+      key_prefix: sched_swap_unpushed
+      key_formula: "sched_swap_unpushed -> {<IST date>: int token, '_seq': int}"
+    class_constraints: |
+      Unpushed-ness is a fact the swap WRITES and the confirmed push REMOVES,
+      never an absence (a fresh device / cleared index has no fingerprints).
+      A clear compares the token read in the same synchronous run as the row;
+      a mark is never cleared while its swap is being written. The restore
+      guard is evaluated with no await before its put. Sibling class through
+      TemplateService.unscheduleTemplateFromDate is its own OI.
 
   - concept: sync_epoch
     domain: sync_infra
@@ -20262,7 +20312,7 @@ concepts:
       - file: supabase/functions/verify-payment/index.ts
         line_range: 435-469
         method: handler — the 400 / 403 ownership guards directly after the Razorpay GET
-        semantic: guard
+        semantic: flag-check
     readers:
       - file: supabase/functions/verify-payment/index.ts
         line_range: 471-523
@@ -20301,11 +20351,11 @@ concepts:
       - file: supabase/functions/verify-payment/index.ts
         line_range: 626-784
         method: handler — the insert branch with its three replay doors, each gated by the replay gate
-        semantic: guard
+        semantic: flag-check
       - file: supabase/functions/verify-payment/index.ts
         line_range: 849-882
         method: the replay decision and its two soft-failure responses (module level, after the handler)
-        semantic: guard
+        semantic: flag-check
     readers:
       - file: lib/core/services/razorpay_service.dart
         line_range: 916-1046
@@ -20399,7 +20449,7 @@ concepts:
       - file: supabase/functions/razorpay-webhook/index.ts
         line_range: 546-606
         method: handler — captureRefused branch (recover, or 502)
-        semantic: guard
+        semantic: flag-check
     hive:
       box: "n/a — server-side"
       key_prefix: "n/a"
@@ -20435,7 +20485,7 @@ concepts:
       - file: supabase/functions/create-razorpay-order/index.ts
         line_range: 154-193
         method: handler — usedCount === -1 / rateErr refusals
-        semantic: guard
+        semantic: flag-check
       - file: lib/core/services/razorpay_service.dart
         line_range: 168-295
         method: createOrder — non-409 non-2xx -> _extractServerError(details) shown verbatim
@@ -20514,11 +20564,11 @@ concepts:
       - file: supabase/functions/create-razorpay-order/index.ts
         line_range: 263-292
         method: handler — strict promo at order time
-        semantic: guard
+        semantic: flag-check
       - file: supabase/functions/validate-promo/index.ts
         line_range: 119-149
         method: handler — the four answers
-        semantic: guard
+        semantic: flag-check
     hive:
       box: "n/a — server-side rule"
       key_prefix: "n/a"
@@ -20628,7 +20678,7 @@ concepts:
       'exercise_log' in lib/ outside the restore writer's one map entry.
     writers:
       - file: lib/core/services/workout_write_service.dart
-        line_range: 135-430
+        line_range: 136-431
         method: logExercise (device writer; no type field)
         semantic: per-row
       - file: lib/core/services/sync/sync_workout.dart
@@ -20706,11 +20756,11 @@ concepts:
         method: loggedNameForPlannedExercise
         semantic: per-row
       - file: lib/core/services/workout_write_service.dart
-        line_range: 285-296
+        line_range: 286-297
         method: logExercise (coach_logged carry-forward)
         semantic: per-row
       - file: lib/core/services/workout_write_service.dart
-        line_range: 1162-1172
+        line_range: 1220-1230
         method: moveExerciseLogs collision (coach_logged OR)
         semantic: per-row
       - file: lib/core/services/exlog_key_migrator.dart
