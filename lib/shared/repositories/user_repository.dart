@@ -1484,6 +1484,9 @@ class UserRepository {
           'gender': gender,
           'age': age,
         },
+        // The function records the month's one assessment before it answers,
+        // so a re-send after a gateway error is refused and the result is lost.
+        spendsQuotaPerCall: true,
       );
       return Map<String, dynamic>.from(response.data as Map);
     } on FunctionException catch (e) {

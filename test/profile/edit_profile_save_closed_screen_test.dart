@@ -34,6 +34,7 @@ import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.
 import 'package:icanbefitter/features/auth/providers/auth_provider.dart';
 import 'package:icanbefitter/features/nutrition/services/diet_strategy_flags.dart';
 import 'package:icanbefitter/features/profile/screens/edit_profile_screen.dart';
+import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
@@ -371,7 +372,8 @@ void main() {
     final saved = await tester.runAsync(() => saveBodyFatAssessment(
         container: container,
         ownerAtStart: _user,
-        ownerNow: _user,
+        ownerNow: () => _user,
+        bodyFatAtStart: null,
         updates: Map<String, dynamic>.from(assessment)));
     await settle(tester);
 
@@ -387,7 +389,8 @@ void main() {
     final saved = await tester.runAsync(() => saveBodyFatAssessment(
         container: container,
         ownerAtStart: _user,
-        ownerNow: 'aaaa0000-0000-0000-0000-000000000000',
+        ownerNow: () => 'aaaa0000-0000-0000-0000-000000000000',
+        bodyFatAtStart: null,
         updates: Map<String, dynamic>.from(assessment)));
     await settle(tester);
 
@@ -447,7 +450,8 @@ void main() {
     await tester.runAsync(() => saveBodyFatAssessment(
         container: container,
         ownerAtStart: _user,
-        ownerNow: _user,
+        ownerNow: () => _user,
+        bodyFatAtStart: 22.0,
         updates: Map<String, dynamic>.from(assessment)));
     await settle(tester);
   }
@@ -635,6 +639,25 @@ void main() {
   });
 
   testWidgets(
+      'AI Assess: a value saved while the call ran is not replaced by its result',
+      (tester) async {
+    await boot(tester, withBodyFat(), pro: true);
+    final reply = await startAssessment(tester, 200, result);
+    await closeScreen(tester);
+    // The screen opened again, a new value typed and saved.
+    await tester.runAsync(() => ProfileWriteService.instance
+        .patchProfile(<String, dynamic>{'body_fat_percent': 15.0}));
+    await reply();
+
+    final stored = await storedProfile(tester);
+    expect(stored['body_fat_percent'], 15.0);
+    expect(stored['body_fat_assessed_at'], '2026-09-01T04:00:00.000Z');
+    expect(stored['body_fat_range'], isNull);
+    expect(events.any((e) => e.op == 'body_fat_assessment_superseded'), isTrue,
+        reason: '$events');
+  });
+
+  testWidgets(
       'AI Assess mirror: another account signed in during the call gets nothing',
       (tester) async {
     await boot(tester, withBodyFat(), pro: true);
@@ -664,11 +687,12 @@ void main() {
     final reply = await startAssessment(tester, 429, const {
       'error': 'Body composition can only be assessed once every 30 days.',
       'code': 'rate_limited',
-      'next_allowed_at': '2026-12-20T10:00:00.000Z',
+      // 01:30 on the 21st in India.
+      'next_allowed_at': '2026-12-20T20:00:00.000Z',
     });
     await reply();
 
-    expect(find.text('Next assessment available: 20 Dec 2026'), findsOneWidget,
+    expect(find.text('Next assessment available: 21 Dec 2026'), findsOneWidget,
         reason: 'events were $events, non-fatals were $nonFatals');
     expect(nonFatals.where((s) => s.startsWith('body_fat_assessment')), isEmpty,
         reason: 'an expected refusal is not an error report');

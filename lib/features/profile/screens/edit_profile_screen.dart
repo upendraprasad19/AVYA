@@ -12,6 +12,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
@@ -1844,8 +1845,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   String _formatDate(String iso) {
-    final dt = DateTime.tryParse(iso);
-    if (dt == null) return iso;
+    final parsed = DateTime.tryParse(iso);
+    if (parsed == null) return iso;
+    // The server sends UTC instants; the day shown is the IST one.
+    final dt = istDateOf(parsed);
     final months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
@@ -1956,7 +1959,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final saved = await saveBodyFatAssessment(
         container: container,
         ownerAtStart: ownerAtStart,
-        ownerNow: HiveUserSession.currentOwnerFullId,
+        ownerNow: () => HiveUserSession.currentOwnerFullId,
+        bodyFatAtStart: profile['body_fat_percent'],
         updates: {
           'body_fat_percent': bfMid,
           'body_fat_assessed_at': assessedAt,
@@ -2508,20 +2512,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 /// Stores an AI body-fat assessment, with or without the screen that asked for it.
 /// The server marks the month's one assessment as used and does not keep the
 /// result, so dropping it here (the screen closed while the AI call ran) lost it
-/// for 30 days. Refuses when the signed-in account changed meanwhile.
+/// for 30 days. Writes nothing when the signed-in account changed meanwhile, or
+/// when the stored body fat is no longer what it was when the assessment started:
+/// a value saved since then is the newer one. Both are checked under the profile
+/// write lock.
 @visibleForTesting
 Future<bool> saveBodyFatAssessment({
   required ProviderContainer container,
   required String? ownerAtStart,
-  required String? ownerNow,
+  required String? Function() ownerNow,
+  required Object? bodyFatAtStart,
   required Map<String, dynamic> updates,
 }) async {
-  if (ownerNow != ownerAtStart) {
-    unawaited(ErrorTelemetry.logEvent('body_fat_assessment_owner_changed'));
-    return false;
+  double? number(Object? v) =>
+      v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
+  var superseded = false;
+  final wrote =
+      await container.read(userProfileProvider.notifier).updateProfileIf((current) {
+    superseded =
+        number(current['body_fat_percent']) != number(bodyFatAtStart);
+    return superseded ? null : updates;
+  }, stillOwner: () => ownerNow() == ownerAtStart);
+  if (!wrote) {
+    unawaited(ErrorTelemetry.logEvent(superseded
+        ? 'body_fat_assessment_superseded'
+        : 'body_fat_assessment_owner_changed'));
   }
-  await container.read(userProfileProvider.notifier).updateProfile(updates);
-  return true;
+  return wrote;
 }
 
 /// Pure helper extracted from `_EditProfileScreenState._save` (a2b-2,

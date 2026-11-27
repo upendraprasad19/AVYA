@@ -4,19 +4,19 @@ date: 2026-11-26
 batch: oi348-walk-rest (found by plan review round 1 of the c4b8d2 closed-screen fix)
 status: fixed
 tier: m_fix
-blast_radius: feature
+blast_radius: platform
 symptom: |
   Edit Profile, AI body-fat assessment: leaving the screen while the AI call is running drops the result. The assess-body-composition function marks the month's one assessment as used (user_preferences.coaching_notes.last_bf_assessed_at, index.ts:221-225) and does not store the result, so the app's `if (!mounted) return;` after the call threw away the only copy, and the next attempt is refused for 30 days. A second, smaller path: leaving while the photo was being read made the screen's dead `ref` throw before the call; the catch only tried to show a message, so nothing was recorded. Found by reading the code (plan review round 1, finding on the `ref.read` after `file.readAsBytes()`; the dropped result was found while checking it). No user report.
 concept: body_fat_assessment_persist
 sot_registry_entry: not_applicable
 writers:
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_runBfAssessment, through the new saveBodyFatAssessment (UserProfileNotifier.updateProfile)", line: 1883 }
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: the body_fat_percent / body_fat_assessed_at entries of the update map", line: 2141 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_runBfAssessment, through the new saveBodyFatAssessment (UserProfileNotifier.updateProfileIf)", line: 1886 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: the body_fat_percent / body_fat_assessed_at entries of the update map", line: 2145 }
 readers:
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "initState body-fat seed and _followStoredBodyFat", line: 365 }
-  - { file: lib/features/profile/providers/profile_provider.dart, method_or_widget: "recalculateTargets (body fat into the targets)", line: 242 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "initState body-fat seed and _followStoredBodyFat", line: 366 }
+  - { file: lib/features/profile/providers/profile_provider.dart, method_or_widget: "recalculateTargets (body fat into the targets)", line: 255 }
 hive_key_prefix: profile
-hive_key_formula: "unchanged: userBox['profile'] body_fat_percent / body_fat_assessed_at / body_fat_range, written by the same updateProfile call as before"
+hive_key_formula: "unchanged: userBox['profile'] body_fat_percent / body_fat_assessed_at / body_fat_range, written through ProfileWriteService.patchProfileWith (updateProfileIf)"
 sync_methods: [syncProfileNow]
 restore_methods: []
 cloud_table: user_profile
@@ -26,8 +26,8 @@ ist_handling: []
 provider_invalidations: "none new: updateProfile updates userProfileProvider"
 telemetry_op_types:
   success: []
-  failure: [body_fat_assessment, body_fat_assessment_owner_changed]
-cross_account_guard: "saveBodyFatAssessment writes only when HiveUserSession.currentOwnerFullId equals the owner read before the call; otherwise it records body_fat_assessment_owner_changed and writes nothing."
+  failure: [body_fat_assessment, body_fat_assessment_owner_changed, body_fat_assessment_superseded]
+cross_account_guard: "saveBodyFatAssessment checks, under the profile write lock, that HiveUserSession.currentOwnerFullId still equals the owner read before the call; otherwise it records body_fat_assessment_owner_changed and writes nothing."
 forbidden_patterns_checked:
   - { pattern: "a return between the assess-body-composition result and its save in _runBfAssessment", absent: true }
 proposed_fix: |
@@ -91,3 +91,22 @@ the screen closed 1; the owner compared with itself 1; the form filled for anoth
 During the same run one unrelated test of this file ("the screen closed right after SAVE") also
 went red once. It passed in four unchanged runs afterwards; it waited a fixed time for the Save's
 disk writes, so it now waits until the new targets are stored (bounded) before judging.
+
+## Code review (B-pass, 2026-11-27): three more ways the first fix was wrong
+
+1. **A newer value was overwritten.** Leave during the call, open Edit Profile again, type a body
+   fat and SAVE, and the late AI result replaced it with no message. Before this batch the late
+   result was dropped, so this was introduced here. Now the result is written only while the
+   stored percent is still what it was when the assessment started; otherwise
+   `body_fat_assessment_superseded` is logged and the newer value stays. The month's assessment is
+   spent either way. This is a behaviour choice the founder can reverse.
+2. **The account was checked before the write queued.** The write waits for the profile lock, so
+   the check moved inside it (`patchProfileWith(stillOwner:)`).
+3. **A re-send could lose the result.** The function records the month's use before it answers;
+   `callFunction` re-sends after a gateway 502/503/504, and the second send is refused. The call
+   is now `spendsQuotaPerCall: true` (one send).
+
+Tests: `test/profile/body_fat_assessment_save_test.dart` (the lock held across the save), the
+"value saved while the call ran" screen test, and "a gateway error is not sent a second time".
+Mutation results (mutate/run/restore, restore verified by hash), 1 RED each: the newer-value
+guard removed; the owner check replaced with `true`; the one-send flag removed.

@@ -4,13 +4,13 @@ date: 2026-11-25
 batch: oi348-walk-rest (A16 device walk, AAB +50)
 status: fixed
 tier: m_fix
-blast_radius: feature
+blast_radius: account
 symptom: |
   Founder walk 2026-11-25 (A16, the custom-exercise duplicate message): creating a custom exercise whose name the exercise list already holds ("Barbell Bench Press") was ACCEPTED, the row was kept in the user's exercises, and only the step after it (adding the name to today's workout) was refused with "already in this workout". Founder: "why should we allow him to add the custom exercise with the same name? ... This is an incorrect thing." Founder decision: refuse ANY duplicate name, at creation, for every door. The create guard compared only the deterministic v5 id among the user's own customs (`<user>|exercise|<lower(name)>`), so it never looked at the exercise list, never looked at an older name of a list exercise, and missed a custom stored under an older id scheme. Logs are keyed by the exercise name (`exlogKey` hashes `exerciseNameKey`), so a second exercise with a taken name shares the first one's history, and the pickers show two rows that look the same.
 concept: custom_exercises_mutations
 sot_registry_entry: custom_exercises_mutations
 writers:
-  - { file: lib/features/train/repositories/workout_repository.dart, method_or_widget: "_createCustomExerciseLocked: the duplicate-name guard (now: the exercise list by name and older name, the id scan, the name scan over the user's exercise rows)", line: 1599 }
+  - { file: lib/features/train/repositories/workout_repository.dart, method_or_widget: "_createCustomExerciseLocked: the duplicate-name guard (now: the exercise list by name and older name, the id scan, the name scan over the user's exercise rows)", line: 1537 }
 readers:
   - { file: lib/features/train/widgets/create_custom_exercise_sheet.dart, method_or_widget: "_saveOnce shows CreateCustomExerciseException.message in a snackbar and keeps the sheet open", line: 322 }
   - { file: lib/features/ai_coach/services/tool_dispatcher.dart, method_or_widget: "_executeCreateCustomExercise returns CreateCustomExerciseException.message as the failure", line: 624 }
@@ -37,7 +37,7 @@ mutation_proof: |
   Rule 21, backup/mutate/run/restore (the file compared by hash after). Fixed code: new contract test 10 of 10 pass. Pre-fix shape (guard removed): 6 of the new tests failed before the fix was written. MA the list lookup removed: 5 RED in the contract test, and 5 RED in the screen tests (the three create-custom tests, the auto-swap test and the template-builder test). MB the user-exercise name scan removed: 1 RED (the older-id custom). MC the custom name compared case-sensitively: 1 RED. MD the list lookup widened to a substring search: 1 RED (the shorter-name mirror). A first screen run passed two paths as one string and failed at load; it was discarded and re-run with an argument list.
   Plan review round 1 (2026-11-26), each 1 RED: the builder's writer guard off; the swap's refused-change guard off; the add refusal's message off; the id scan off; the space folding removed; the curly-apostrophe folding removed; the user's own names not checked; the old coach words put back.
 impact_analysis: |
-  Feature blast radius: one create path, two doors (the sheet, the coach). Existing custom rows, their ids, sync and restore are untouched. A name that was creatable before and is now refused: any exact (case and space insensitive) list name or older list name. The exercise name tests that encoded "the custom row stays, the workout refuses it" were changed to the new rule.
+  Account blast radius (shared repository and coach paths): one create path, two doors (the sheet, the coach). Existing custom rows, their ids, sync and restore are untouched. A name that was creatable before and is now refused: any exact (case and space insensitive) list name or older list name. The exercise name tests that encoded "the custom row stays, the workout refuses it" were changed to the new rule.
 touched_layers_checked:
   - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "_createCustomExerciseLocked guard; WardroomCopy.customExerciseNameTakenTemplate; new contract test 10/10; 183 related tests pass; flutter analyze 0 errors 0 warnings." }
   - { tier: 2, name: "Hive (local state)", status: verified, evidence: "The contract test reads the custom box back after each refusal: nothing is written." }

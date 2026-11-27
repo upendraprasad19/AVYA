@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/widgets/swap_exercise_coach_sheet.dart';
+import 'package:icanbefitter/shared/widgets/wardroom/ward_button.dart';
 
 import '../features/train/log_exercise/card_harness.dart' show renderFontsFirst;
 import '../helpers/hive_test_setup.dart';
@@ -49,6 +50,7 @@ Future<void> _seed(String tier) async {
       'id': id,
       'name': name,
       'equipment_needed': equipment,
+      if (id == 'L2') 'name_aliases': ['Old DB Push Test'],
     });
   }
   // A row with no equipment field at all: the swap itself refuses it too.
@@ -126,6 +128,51 @@ void main() {
         'Own Move Test',
         'Own Barbell Test',
       }, reason: 'a built-in row with no readable equipment stays hidden');
+    });
+  });
+
+  // A full-gym user is offered hundreds of rows, so the list has a search.
+  testWidgets('the search narrows the list by name and older name',
+      (tester) async {
+    await openSubstitutes(tester, 'full_gym', (offered) async {
+      Future<void> type(String text) async {
+        await tester.enterText(find.byType(TextField), text);
+        await tester.pumpAndSettle();
+      }
+
+      int shown(String name) => find.textContaining(name).evaluate().length;
+      bool swapEnabled() =>
+          tester
+              .widget<WardButton>(find.widgetWithText(WardButton, 'SWAP'))
+              .onPressed !=
+          null;
+
+      await tester.tap(find.textContaining('Floor Press Test'));
+      await tester.pumpAndSettle();
+      expect(swapEnabled(), isTrue);
+
+      await type('  DUMBBELL   press ');
+      expect(shown('Dumbbell Press Test'), 1);
+      expect(shown('Floor Press Test'), 0);
+      expect(swapEnabled(), isFalse,
+          reason: 'a row the search hides must not stay selected');
+
+      await type('old db push');
+      expect(shown('Dumbbell Press Test'), 1, reason: 'found by an older name');
+
+      await type('zzz');
+      expect(find.text('No exercise matches that search.'), findsOneWidget);
+
+      // Equipment still filters what a search can reach.
+      await type('unlisted gear');
+      expect(shown('Unlisted Gear Test'), 0);
+
+      await tester.tap(find.text('BACK'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      await tester.tap(find.text(_planned));
+      await tester.pumpAndSettle();
+      expect(shown('Floor Press Test'), 1, reason: 'BACK clears the search');
     });
   });
 

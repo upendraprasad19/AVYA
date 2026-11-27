@@ -32,7 +32,14 @@ class _SwapOption {
   final String id;
   final String name;
   final bool isCustom;
-  const _SwapOption({required this.id, required this.name, required this.isCustom});
+
+  /// The name and its older names, folded the way every exercise search folds.
+  final List<String> searchKeys;
+  const _SwapOption(
+      {required this.id,
+      required this.name,
+      required this.isCustom,
+      required this.searchKeys});
 }
 
 Future<void> showCoachSwapSheet(BuildContext context, WidgetRef ref) {
@@ -62,6 +69,7 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
   String? _unavailableMessage;
   String? _selectedFrom;
   _SwapOption? _selectedTo;
+  String _searchQuery = '';
   // e8f4a3 B-pass P3c — double-tap latch (see log_workout_sheet.dart): the
   // SWAP button stays live until the route pops and intent ids embed
   // millisecondsSinceEpoch, so a fast second tap submits a duplicate
@@ -139,7 +147,16 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
               isCustom: isCustom)) {
         return;
       }
-      options.add(_SwapOption(id: id, name: name, isCustom: isCustom));
+      final aliases = m['name_aliases'];
+      options.add(_SwapOption(
+          id: id,
+          name: name,
+          isCustom: isCustom,
+          searchKeys: [
+            exerciseDuplicateKey(name),
+            if (aliases is List)
+              for (final a in aliases) exerciseDuplicateKey(a.toString()),
+          ]));
     }
 
     for (final row in ExerciseRepository.instance.getAll()) {
@@ -263,6 +280,11 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
             ? _header('SWAP WHICH EXERCISE?', 'Tap the one to replace.')
             : _header('REPLACE WITH…',
                 'Only exercises your equipment allows are listed.'),
+        // The list holds every exercise the equipment allows: hundreds of rows.
+        if (!pickingFrom) ...[
+          _searchField(),
+          const SizedBox(height: 8),
+        ],
         Flexible(
           child: pickingFrom
               ? ListView.separated(
@@ -276,13 +298,25 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
                   ),
                 )
               : Builder(builder: (ctx) {
-                  final options = _substitutesFor(_selectedFrom!);
+                  final all = _substitutesFor(_selectedFrom!);
+                  final typed = _searchQuery.trim();
+                  final query =
+                      typed.isEmpty ? '' : exerciseDuplicateKey(typed);
+                  final options = query.isEmpty
+                      ? all
+                      : all
+                          .where((o) =>
+                              o.searchKeys.any((k) => k.contains(query)))
+                          .toList();
                   // OI-358: the service refuses these; say so before the tap.
                   final taken = exerciseNameKeysOf(_today.map((t) => t.name));
                   if (options.isEmpty) {
                     return Text(
-                      'No substitutes available with your current equipment. '
-                      'Add equipment under Profile, or ask the coach instead.',
+                      all.isNotEmpty
+                          ? 'No exercise matches that search.'
+                          : 'No substitutes available with your current '
+                              'equipment. Add equipment under Profile, or ask '
+                              'the coach instead.',
                       style: AppTypography.bodyS
                           .copyWith(color: AppColors.textMute),
                     );
@@ -327,11 +361,38 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
               setState(() {
                 _selectedFrom = null;
                 _selectedTo = null;
+                _searchQuery = '';
               });
             }
           },
         ),
       ],
+    );
+  }
+
+  Widget _searchField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.input,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.line2),
+      ),
+      child: TextField(
+        onChanged: (v) => setState(() {
+          _searchQuery = v;
+          // A row the search hides must not stay selected behind SWAP.
+          _selectedTo = null;
+        }),
+        style: AppTypography.body,
+        decoration: InputDecoration(
+          hintText: 'Search exercises...',
+          hintStyle: AppTypography.body.copyWith(color: AppColors.textMute),
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          isDense: true,
+        ),
+      ),
     );
   }
 

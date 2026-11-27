@@ -284,6 +284,75 @@ void main() {
     });
   });
 
+  // The community pull stores an approved row under its cloud id, which for its
+  // author is the id of their own custom (diagnose e7c4a1).
+  group('swapExerciseInDay: an own custom beside its approved community copy',
+      () {
+    const date = '2099-01-07';
+    const sharedId = '0f0e0d0c-1111-4222-8333-444455556666';
+
+    setUp(() async {
+      await HiveService.instance.userBox
+          .put('profile', <String, dynamic>{'equipment_access': 'bodyweight'});
+      await putDay(date, [planned('Z9', 'Row'), planned('Z8', 'Curl')]);
+    });
+
+    Future<void> community() => HiveService.instance.exerciseBox.put(sharedId, {
+          'id': sharedId,
+          'name': 'My Move',
+          'source': 'community',
+          'equipment_needed': <String>[],
+        });
+
+    Future<void> ownCustom({List<String> equipment = const []}) =>
+        HiveService.instance.customBox.put('custom_exercise_77', {
+          'id': sharedId,
+          'type': 'exercise',
+          'name': 'My Move',
+          'equipment_needed': equipment,
+        });
+
+    Future<void> swap() => engine.swapExerciseInDay(
+        date: date, fromExerciseId: 'Z8', toExerciseId: sharedId);
+
+    test('the swap uses the own custom and is not refused', () async {
+      await community();
+      await ownCustom();
+      await swap();
+      expect(dayNames(date), ['Row', 'My Move']);
+    });
+
+    test('mirror: a community row with no own custom stays refused', () async {
+      await community();
+      await expectLater(
+          swap(),
+          throwsA(isA<SwapExerciseException>()
+              .having((e) => e.code, 'code', 'equipment_unavailable')));
+      expect(dayNames(date), ['Row', 'Curl']);
+    });
+
+    test('mirror: the own custom is still held to equipment it does name',
+        () async {
+      await community();
+      await ownCustom(equipment: ['barbell']);
+      await expectLater(
+          swap(),
+          throwsA(isA<SwapExerciseException>()
+              .having((e) => e.code, 'code', 'equipment_unavailable')));
+    });
+
+    test('mirror: a library row wins over a custom with the same id', () async {
+      await HiveService.instance.exerciseBox.put(sharedId, {
+        'id': sharedId,
+        'name': 'Library Move',
+        'equipment_needed': <String>['bodyweight'],
+      });
+      await ownCustom();
+      await swap();
+      expect(dayNames(date), ['Row', 'Library Move']);
+    });
+  });
+
   group('InjurySwapPlanner', () {
     final planner = InjurySwapPlanner.instance;
     final today = istDateStr(DateTime.now());

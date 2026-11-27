@@ -4,7 +4,7 @@ date: 2026-11-26
 batch: oi348-walk-rest (found while checking which pickers can show a community exercise)
 status: fixed
 tier: m_fix
-blast_radius: feature
+blast_radius: account
 symptom: |
   AI coach, Swap quick action: the "REPLACE WITH" list offers only the user's own custom
   exercises. Every built-in exercise is missing for every user who has a profile, whatever their
@@ -19,8 +19,8 @@ sot_registry_entry: equipment_capability_floor
 writers:
   - { file: assets/data/exercise_library.json, method_or_widget: "equipment_needed, a List<String> on all 870 rows (SeedService puts it into exerciseBox as it is)", line: 1 }
 readers:
-  - { file: lib/features/ai_coach/widgets/swap_exercise_coach_sheet.dart, method_or_widget: "_substitutesFor", line: 126 }
-  - { file: lib/core/services/swap_service.dart, method_or_widget: "swapExerciseInDay: the same rule on the raw value (the reader the sheet's comment says it mirrors)", line: 530 }
+  - { file: lib/features/ai_coach/widgets/swap_exercise_coach_sheet.dart, method_or_widget: "_substitutesFor", line: 134 }
+  - { file: lib/core/services/swap_service.dart, method_or_widget: "swapExerciseInDay: the same rule on the raw value (the reader the sheet's comment says it mirrors)", line: 738 }
 hive_key_prefix: none
 hive_key_formula: "not applicable: a read-side filter"
 sync_methods: []
@@ -83,3 +83,11 @@ Give the rule the list as the library stores it.
 Rule 21, mutate/run/restore from a saved byte copy (restore verified by bytes). Each of these
 turned both tests red: the value turned into text again; built-in rows treated as the user's own
 (`isCustom: true`); the old "skip a missing field" guard put back.
+
+## Code review (B-pass, 2026-11-27): the full list needs a search
+
+With the built-in rows back, a full-gym user is offered several hundred exercises, and the sheet
+had no search. It now has one, folding text like the other exercise searches (`exerciseDuplicateKey`,
+name and older names). Typing clears the selection, so SWAP never acts on a hidden row; BACK clears
+the search. Mutations, 1 RED each: the selection kept while typing; older names not searched; BACK
+keeping the search.

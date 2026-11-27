@@ -15,12 +15,15 @@ void main() {
   late HttpServer server;
   late int status;
   late Map<String, Object?> body;
+  var hits = 0;
 
   setUp(() async {
     HttpOverrides.global = null;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    hits = 0;
     server.listen((req) async {
       await req.drain<void>();
+      hits++;
       req.response.statusCode = status;
       req.response.headers.contentType = ContentType.json;
       req.response.write(jsonEncode(body));
@@ -115,6 +118,18 @@ void main() {
     status = 400;
     body = {'code': 'BOOT_ERROR', 'message': 'worker failed to boot'};
     await expectLater(assess(), throwsA(isA<FunctionException>()));
+  });
+
+  // The function records the month's one assessment before it answers, so a
+  // re-send after a gateway error comes back "already assessed".
+  test('a gateway error is not sent a second time', () async {
+    status = 503;
+    body = {'message': 'bad gateway'};
+    await expectLater(
+      assess(),
+      throwsA(isA<FunctionException>().having((e) => e.status, 'status', 503)),
+    );
+    expect(hits, 1);
   });
 
   test('a success returns the result', () async {

@@ -38,7 +38,7 @@ mutation_proof: |
 impact_analysis: |
   Display only, one card. The chart's data, ranges and tooltips are untouched. The home WeightTrendChart (shared/widgets) is a different widget with a date-proportional axis and is not changed. A series whose last point sits on a step still shows every label it showed before.
 touched_layers_checked:
-  - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "weightTrendTitlesData extracted and fixed; weight_trend_axis_labels_test 5/5 green; flutter analyze, the god-screen / hive-first / cqrs / date-key gates pass." }
+  - { tier: 1, name: "Client code", status: fixed_in_this_batch, evidence: "weightTrendTitlesData extracted and fixed; weight_trend_axis_labels_test green (all its tests); flutter analyze, the god-screen / hive-first / cqrs / date-key gates pass." }
   - { tier: 2, name: "Hive (local state)", status: not_applicable, evidence: "Nothing stored or read differently." }
   - { tier: 3, name: "Postgres schema", status: not_applicable, evidence: "Not involved." }
   - { tier: 4, name: "Postgres data", status: verified, evidence: "Upendra's 26 weight_logs rows plus the 2026-11-25 79.0 entry read from the cloud on 2026-11-25 are the test fixture (27 points)." }

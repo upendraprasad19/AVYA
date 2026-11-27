@@ -4,7 +4,7 @@ date: 2026-11-26
 batch: oi348-walk-rest (found by plan review round 2)
 status: fixed
 tier: m_fix
-blast_radius: feature
+blast_radius: platform
 symptom: |
   Edit Profile, AI body-fat assessment: every refusal from assess-body-composition reads
   "Assessment failed. Please try again." A second try within 30 days never says when the next one
@@ -18,9 +18,9 @@ symptom: |
 concept: body_fat_assessment_persist
 sot_registry_entry: not_applicable
 writers:
-  - { file: lib/shared/repositories/user_repository.dart, method_or_widget: "assessBodyComposition (catch of FunctionException) and bodyCompositionRefusalOf", line: 1461 }
+  - { file: lib/shared/repositories/user_repository.dart, method_or_widget: "assessBodyComposition (catch of FunctionException) and bodyCompositionRefusalOf", line: 1466 }
 readers:
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_runBfAssessment: on BodyCompositionAssessmentException (paywall, next allowed date, photo message)", line: 1926 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_runBfAssessment: on BodyCompositionAssessmentException (paywall, next allowed date, photo message)", line: 1929 }
 hive_key_prefix: none
 hive_key_formula: "not applicable: a refusal writes nothing"
 sync_methods: []
@@ -28,7 +28,8 @@ restore_methods: []
 cloud_table: none
 cloud_columns: []
 contract_test_path: test/contracts/body_composition_refusal_behavioral_test.dart
-ist_handling: []
+ist_handling:
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, line: 1847, fn: _formatDate }
 provider_invalidations: []
 telemetry_op_types:
   success: []
@@ -85,3 +86,11 @@ Rule 21, mutate/run/restore from a saved byte copy (restore verified by bytes). 
 refusal removed: 3 RED in the repository test; the same change run against the closed-screen file:
 the "monthly limit" screen test went red (one other test of that file also went red once in that
 run, see d7a2e4). Any code read as a refusal: 1 RED.
+
+## Code review (B-pass, 2026-11-27): the next-allowed date was shown in UTC
+
+Making the message reachable exposed an older helper: `_formatDate` read day and month from the
+parsed UTC instant, so any time from 18:30 to 23:59 UTC showed the day before the real India date,
+and a try on the shown day was refused. It now converts with `istDateOf`. The screen test's
+fixture moved from 10:00Z (same day in both zones) to 20:00Z and expects the next day. Mutation:
+the conversion removed, 1 RED.
