@@ -7567,3 +7567,53 @@ Found while planning OI-348 Landing 3d (P3, the missed-day rescue, `docs/plans/o
 **Failure:** swap Fri (workout) <-> Sat (rest) offline, relaunch before the push lands: the restore turns Sat's local workout row into `rest` and strips its exercises (the workout is lost), and gives Fri `type rest` + `status planned`.
 **Why the obvious guard is wrong (round 2):** keeping a local row that has `arranged_at_ms` (a) re-adds `template_id` on template days (the b6e1c8 hybrid), and (b) is permanent per row, because `upsertScheduled`'s `carriesArrangement` re-stamps `arranged_at_ms` on every later rewrite, so after a CONFIRMED push the two devices would diverge for good. A correct fix needs "is this row's change still unpushed?" from the sched `SyncSkipIndex` (or an equivalent last-pushed stamp), plus its own plan review x2.
 - **Outcome**: a positive per-date marker (`lib/core/services/sync/sched_unpushed_swaps.dart`, `workoutBox['sched_swap_unpushed']`): `swapScheduledDays` marks both dates in flight before its first row write and again after its last; `_syncScheduledWorkouts` clears a date only when the cloud confirmed that row and the mark still holds the token read with it; `_restoreScheduledWorkouts` keeps a pending date's local row byte-identical (also one marked or cleared since its cloud rows were fetched; the single-call restore takes its fetch mark before `restore-user-snapshot`). A cloud completion still lands; after the push lands the cloud wins again, so devices converge. Kill switch `disable_sched_unpushed_swap_guard`. Plan `docs/plans/oi532-sched-restore-unpushed-swap.md` (3 review rounds), diagnose `f5a2c8`, test `test/sync/sched_restore_unpushed_swap_test.dart`. Sibling through `unscheduleTemplateFromDate` filed as OI-533. Open: a device check (swap offline, relaunch, the swap stays).
+
+## OI-315 — ProgressPhotoRepository.cleanupOrphanedStorage has zero callers, and the 5/day progress-photo cap is client-side only: a PRO caller can upload unlimited 8 MiB objects
+
+- **Status**: CLOSED · 2026-11-26 · the commit carrying `closes-oi: OI-315`
+- **Blocked on**: none
+- **Verified**: 2026-10-06 - `git grep -n cleanupOrphanedStorage -- lib test supabase` finds no caller in `lib/` or `supabase/` (the definition is `progress_photo_repository.dart:240`; the only other hits are source-grep assertions in `test/sync/closeout_maintenance_test.dart`); `capture()` uploads first (`:128`) and inserts the row second (`:137`), so an object whose row insert fails is an orphan that nothing removes. The 5/day cap is a client-side count before the pick (`:85-99`); no trigger or policy enforces it.
+- **Identified**: 2026-10-06 · filed via mint_oi.sh from branch `progress-photos-b0`
+
+Residuals (i) and (iii) of the B1 plan's D1: a PRO caller can upload an unbounded number of objects of up to 8 MiB each, and failed captures leave orphan objects. Found by the B1 plan review round 1 (finding 12).
+- **Outcome**: OI-348 Landing 3c. (i) The cap: founder call 2026-11-26 replaced the client-only 5/day PRO cap: PRO has NO upload cap (storage cost accepted by the founder), free and lapsed users hold one photo per IST week, enforced SERVER-side at both doors (a BEFORE INSERT trigger on `storage.objects` for the bucket and the `progress_photos` row trigger; draft `test/sql/progress_photos_free_weekly_cap_draft.sql`, diagnose `f3c9a1`); the 5/day client code is deleted. (ii) Orphans: `capture` removes its own object when the row insert fails and a read shows no row (`removeIfNoRow`); `cleanupOrphanedStorage` is rescoped to this IST week's objects at least an hour old with no row (rows read by path, any read failure removes nothing; the old version compared ALL objects with ALL rows) and now runs on every Add (inside the free slot check, unawaited for PRO). Orphans from an EARLIER week are not swept: deliberately bounded, a free user's slot never depends on them, and the cost is one object of at most 8 MiB per killed capture. Tests `progress_photo_free_slot_test.dart`, `progress_photos_free_weekly_cap_rule_test.dart`.
+
+## OI-268 — contract_sweep sets TZ=Asia/Kolkata for its flutter child; on Windows the CRT reads that IANA name as UTC, so date contracts fail falsely
+
+- **Status**: CLOSED · 2026-11-28 · diagnose `d0b7e4` · the commit carrying `closes-oi: OI-268`
+- **Blocked on**: none
+- **Verified**: 2026-09-29 — same test, TZ unset PASS vs TZ=Asia/Kolkata FAIL
+- **Identified**: 2026-09-29 · filed via mint_oi.sh from branch `day-swapper-sync-load`
+
+Measured 2026-09-29 on the Windows dev machine (system timezone IST):
+`flutter test test/contracts/logout_login_round_trip_test.dart --plain-name "Local ISO string"`
+passes with `TZ` unset and FAILS with `$env:TZ='Asia/Kolkata'` (`Expected: '2026-05-09'
+Actual: '2026-05-10'` — the fixed local input `2026-05-09T21:00:00.000` was read as UTC and
+shifted into the next IST day). The Windows C runtime parses `TZ` as a POSIX `tzn[+|-]hh[:mm]`
+string; an IANA name like `Asia/Kolkata` is not one, and the process silently runs as UTC.
+
+- **Where it bites**: `scripts/contract_sweep.dart:30` passes `..['TZ'] = 'Asia/Kolkata'` in
+  the Dart `Process` environment for its `flutter test` child. In the day-swapper-sync-load
+  pre-push runs, the sweep reported failures in `logout_login_round_trip_test.dart` T1,
+  `ai_snapshot_building_behavioral_test.dart`, `coaching_notes_behavioral_test.dart` (2),
+  `coach_interaction_repository_only_test.dart` and `coach_memory_service_only_test.dart` —
+  all of which passed in the same hook's full suite minutes later.
+- **Why the full suite is unaffected here**: `scripts/pre-push.sh:151` sets
+  `TZ=Asia/Kolkata flutter test …` from Git's `sh`, and those same tests pass there; the
+  MSYS layer evidently does not hand the literal IANA string to the native process. Not proven
+  beyond that observation.
+- **Why it matters now**: the sweep is `--warn-only || true` today, so these are noise. OI-220's
+  planned flip to hard-fail would turn them into a push-blocker on every Windows push.
+- **CI is unaffected**: Linux glibc understands `Asia/Kolkata` (`test.yml:28`).
+- **Fix shape (not designed)**: on Windows, do not set `TZ` in `contract_sweep.dart`'s child
+  env (the system zone is already IST on the dev box), or set a POSIX form the CRT accepts
+  (`IST-5:30`), and add a test that runs one IST-sensitive contract through the sweep's own
+  spawn path on Windows. Check `pre-push.sh:151` with the same experiment before relying on it.
+- **Source**: day-swapper-sync-load pre-push run, 2026-09-29.
+- **Outcome**: one shared rule, `applySuiteZone` (`scripts/regression_catalog_lib.dart`), used by the sweep and by the
+  merge-commit regression walk (which had the same pin since `c44dfc`): India time off Windows, no `TZ` on Windows.
+  The `pre-push.sh` question above is answered: measured 2026-11-28, Git's `sh` drops a `TZ` value that contains a
+  slash before a native Windows program starts, so its pin never arrives there and it runs in the machine's zone
+  (unchanged). The test asked for above is met in two halves: `contract_sweep_e2e_test.dart` records the `TZ` the
+  sweep's real spawn hands `flutter` (none on Windows), and `regression_catalog_lib_test.dart` shows a real Dart
+  child under that rule reading the machine's offset. No named IST contract is run through the sweep.

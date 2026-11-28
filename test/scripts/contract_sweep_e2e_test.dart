@@ -18,7 +18,7 @@
 // includeParentEnvironment: false, and reports each child's exit code, stdout and
 // stderr under a failing test. Run inside a git hook, a leaked GIT_DIR overrides
 // `workingDirectory:` and would point the fixture's `git branch -D` at the REAL repo
-// (feedback_mistake_git_hook_env_leak). The sweep (scripts/contract_sweep.dart:31)
+// (feedback_mistake_git_hook_env_leak). The sweep (scripts/contract_sweep.dart)
 // sets CONTRACT_SWEEP_NESTED=1 on the `flutter test` it spawns and selects THIS file
 // whenever a push changes docs/sot_registry.yaml, so an unscrubbed child inherited the
 // recursion guard and the runner under test skipped: 5 of 7 tests failed (class 2.56,
@@ -47,6 +47,16 @@ ProcessResult _git(List<String> args, String cwd) => runSpawn('git', args,
     runInShell: true,
     why: 'sweep fixture: git ${args.join(' ')}');
 
+/// The parent a scenario injects through runSpawn's `parentEnvironment:` seam: this
+/// process's environment with [overrides] winning under any spelling of the key. The
+/// ONE place this file reads the whole environment (spawn_sites_guard G2 allows one).
+Map<String, String> _parentWith(Map<String, String> overrides) {
+  final replaced = overrides.keys.map((k) => k.toUpperCase()).toSet();
+  return Map<String, String>.from(Platform.environment)
+    ..removeWhere((k, _) => replaced.contains(k.toUpperCase()))
+    ..addAll(overrides);
+}
+
 class _Repo {
   late String tmp;    // the temp root holding origin.git + work/ + the stub
   late String dir;    // the clone (HEAD has one unpushed commit = the "push range")
@@ -54,7 +64,8 @@ class _Repo {
   late String record; // where the stub writes its argv
 }
 
-/// Stub `flutter`: records its argv and exits with SWEEP_STUB_EXIT.
+/// Stub `flutter`: records its argv (and, in `<record>.tz`, the `TZ` it was handed, as
+/// `[value]`, empty brackets when unset) and exits with SWEEP_STUB_EXIT.
 /// Windows -> flutter.bat (cmd.exe cannot run an extensionless POSIX stub);
 /// elsewhere -> a chmod +x sh script.
 String _writeStub(String dir) {
@@ -62,12 +73,14 @@ String _writeStub(String dir) {
     final f = File('$dir/flutter.bat')
       ..writeAsStringSync('@echo off\r\n'
           'echo %* > "%SWEEP_RECORD%"\r\n'
+          'echo [%TZ%]> "%SWEEP_RECORD%.tz"\r\n'
           'exit /b %SWEEP_STUB_EXIT%\r\n');
     return f.path;
   }
   final f = File('$dir/flutter')
     ..writeAsStringSync('#!/bin/sh\n'
         'echo "\$@" > "\$SWEEP_RECORD"\n'
+        'echo "[\$TZ]" > "\$SWEEP_RECORD.tz"\n'
         'exit "\$SWEEP_STUB_EXIT"\n');
   runSpawn('chmod', ['+x', f.path], why: 'sweep fixture: chmod +x the stub flutter');
   return f.path;
@@ -167,6 +180,19 @@ concepts:
     expect(argv, contains('--exclude-tags golden'));
     expect(res.stdout, contains('unmapped lib/lonely.dart'));
   });
+  // The zone the sweep hands its `flutter test` child, observed through the real spawn
+  // (d0b7e4, OI-268). On Windows a TZ naming Asia/Kolkata reads as UTC in Dart, so the
+  // child must get none; elsewhere it is pinned. What a Dart child with no TZ reads is
+  // covered in regression_catalog_lib_test.dart.
+  test('the flutter child gets India time off Windows and no TZ on Windows, whatever the parent had', () {
+    for (final parentTz in <String>['UTC', 'Asia/Kolkata']) {
+      final res = run([], parent: _parentWith({'TZ': parentTz}));
+      expect(res.exitCode, 0, reason: '${res.stdout}${res.stderr}');
+      expect(File('${r.record}.tz').readAsStringSync().trim(),
+          Platform.isWindows ? '[]' : '[Asia/Kolkata]',
+          reason: 'parent TZ: $parentTz');
+    }
+  });
   test('RED PATH: a failing flutter run fails the sweep', () {
     final res = run([], stubExit: '1');
     expect(res.exitCode, 1, reason: '${res.stdout}${res.stderr}');
@@ -213,7 +239,7 @@ concepts:
   test('a parent environment carrying CONTRACT_SWEEP_NESTED / CONTRACT_SWEEP_SKIP does NOT reach the runner under test', () {
     for (final poison in const ['CONTRACT_SWEEP_NESTED', 'CONTRACT_SWEEP_SKIP']) {
       if (File(r.record).existsSync()) File(r.record).deleteSync();
-      final parent = {...Platform.environment, poison: '1'};
+      final parent = _parentWith({poison: '1'});
       // PRECONDITIONS, so this test cannot pass vacuously: the poison is in the parent, it
       // SURVIVES the filter this file used to carry (GIT_*, GITHUB_*, PUSH_BEFORE only), and
       // the helper's environment for that same parent does not contain it.

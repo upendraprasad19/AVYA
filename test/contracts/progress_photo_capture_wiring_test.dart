@@ -1,11 +1,15 @@
-// PRESENCE-ONLY pins on `ProgressPhotoRepository.capture`'s wiring (OI-314, OI-322).
-// `capture` needs ImagePicker and Supabase and is not executed by a unit test; the
-// behaviour of everything it CALLS is proven in progress_photo_client_rules_test.dart
-// (the classifier, the UTC wire value, the IST cap window) and the screen's reaction
-// in progress_photos_lapsed_flow_test.dart. These pins only stop the wiring from
-// drifting back (the old free branch, a device-local window, an offset-less
-// `taken_at`, a refusal swallowed into `null`: class 2.49). They run on
-// COMMENT-STRIPPED source and are mutation-proven in the diagnose-doc.
+// PRESENCE-ONLY pins on `ProgressPhotoRepository.capture`'s wiring (OI-314, OI-322,
+// OI-348 Landing 3c). `capture` needs ImagePicker and Supabase and is not executed
+// by a unit test; the behaviour of everything it CALLS is proven in
+// progress_photo_client_rules_test.dart (the classifier, the UTC wire value, the
+// IST week start, the content type), progress_photo_free_slot_test.dart (the free
+// slot check, the sweep and removeIfNoRow through the repository seams) and the
+// screen's reaction in progress_photos_free_flow_test.dart. These pins only stop
+// the wiring from drifting back (a tier decision inside capture, the 5/day cap, a
+// dart:io File upload that fails on web, an offset-less `taken_at`, a refusal
+// swallowed into `null`: class 2.49, an uploaded object left behind by a failed
+// row insert). They run on COMMENT-STRIPPED source and are mutation-proven in the
+// diagnose-doc.
 @Timeout(Duration(minutes: 2))
 library;
 
@@ -22,57 +26,114 @@ void main() {
         'lib/features/profile/repositories/progress_photo_repository.dart');
     final start = src.indexOf('Future<String?> capture(');
     expect(start, greaterThanOrEqualTo(0));
-    final end = src.indexOf('Future<List<Map<String, dynamic>>> listStrict(');
+    final end = src.indexOf('Future<void> cleanupAfterFailedInsert(');
     expect(end, greaterThan(start));
     capture = src.substring(start, end);
   });
 
-  test('the free tier is gone: no isPro read, no second cap, no quality tiers', () {
-    expect(src.contains('_freeDailyCap'), isFalse);
+  test('capture makes no tier decision and the 5/day cap is gone', () {
     expect(capture.contains('isPro('), isFalse,
-        reason: 'capture makes no PRO decision; the screen gates the call and '
-            'the server refuses the rest');
-    expect(capture.contains('2048'), isFalse);
-    expect(RegExp(r'imageQuality:\s*95').hasMatch(capture), isTrue);
-    expect(RegExp(r'maxWidth:\s*3000').hasMatch(capture), isTrue);
-    expect(src.contains('static const int _dailyCap = progressPhotoDailyCap;'), isTrue);
+        reason: 'the screen decides the tier; the server enforces the cap');
+    expect(capture.contains('freeTier'), isFalse);
+    expect(src.contains('progressPhotoDailyCap'), isFalse);
+    expect(src.contains('_dailyCap'), isFalse);
+    expect(capture.contains("gte('taken_at'"), isFalse,
+        reason: 'the old client-only daily count');
   });
 
-  test('the cap window is the IST day and taken_at is sent as UTC (OI-322)', () {
-    expect(
-        capture.contains('progressPhotoCapWindowStartUtc(nowWall())'), isTrue);
-    expect(capture.contains("gte('taken_at', startOfDay)"), isTrue);
+  test('the pick is 2048 px on the long side at JPEG quality 85 (founder call)',
+      () {
+    expect(RegExp(r'maxWidth:\s*2048').hasMatch(capture), isTrue);
+    expect(RegExp(r'maxHeight:\s*2048').hasMatch(capture), isTrue);
+    expect(RegExp(r'imageQuality:\s*85').hasMatch(capture), isTrue);
+    expect(capture.contains('3000'), isFalse);
+  });
+
+  test('the upload sends BYTES (web and Android), never a dart:io File', () {
+    expect(src.contains("import 'dart:io'"), isFalse);
+    expect(capture.contains('File('), isFalse);
+    expect(capture.contains('await xfile.readAsBytes()'), isTrue);
+    expect(capture.contains('.uploadBinary('), isTrue);
+    expect(capture.contains('.upload('), isFalse);
+    expect(RegExp(r'contentType:\s*type\.mime').hasMatch(capture), isTrue);
+    expect(RegExp(r'upsert:\s*false').hasMatch(capture), isTrue);
+    expect(capture.contains('progressPhotoContentType(xfile.name, xfile.mimeType)'),
+        isTrue);
+  });
+
+  test('taken_at is sent as UTC (OI-322) from the app clock', () {
     expect(capture.contains("'taken_at': progressPhotoTakenAtWire(takenAt)"),
         isTrue);
-    expect(capture.contains('final takenAt = nowWall();'), isTrue,
-        reason: 'the stored instant and the cap window read the same clock');
+    expect(capture.contains('final takenAt = nowWall();'), isTrue);
     expect(capture.contains('takenAt.toIso8601String(),'), isFalse,
         reason: 'an offset-less local time is the OI-322 bug');
-    expect(capture.contains('DateTime(now.year'), isFalse,
-        reason: 'the device-local midnight window is the OI-322 bug');
   });
 
-  test('the cap query is the user\'s own rows since IST midnight, and the cap '
-      'decision is the pure boundary function', () {
-    final eq = capture.indexOf(".eq('user_id', userId)");
-    final gte = capture.indexOf(".gte('taken_at', startOfDay)");
-    expect(eq, greaterThan(-1), reason: 'the cap must count THIS user\'s rows');
-    expect(gte, greaterThan(eq));
-    expect(capture.contains('progressPhotoCapReached(todays.length)'), isTrue);
-    expect(capture.contains('todays.length >='), isFalse);
-    expect(RegExp(r'const int progressPhotoDailyCap = 5;').hasMatch(src), isTrue);
+  test('a failed row insert after a successful upload removes THAT object '
+      '(only after a row read), before the refusal is classified', () {
+    final uploaded = capture.indexOf('uploadedPath = storagePath;');
+    final insert = capture.indexOf(".from('progress_photos').insert(");
+    expect(uploaded, greaterThan(capture.indexOf('.uploadBinary(')));
+    expect(insert, greaterThan(uploaded),
+        reason: 'the path is remembered only once the upload succeeded');
+    final catchAt = capture.lastIndexOf('} catch (e) {');
+    final tail = capture.substring(catchAt);
+    final cleanup =
+        tail.indexOf('await cleanupAfterFailedInsert(userId, uploadedPath, e)');
+    expect(cleanup, greaterThan(-1));
+    expect(tail.indexOf('isProgressPhotoProRefusal('), greaterThan(cleanup));
+    // Its branch (a PostgREST answer cleans up now, a transport failure goes
+    // to the 2-minute sweep) is BEHAVIOURAL in progress_photo_free_slot_test.
+    final rin = src.indexOf('Future<void> removeIfNoRow(');
+    final rbody = src.substring(rin, src.indexOf('ownFailedCleanups =', rin));
+    final read = rbody.indexOf('await _rowPaths(userId, [path])');
+    final guard = rbody.indexOf('if (withRow.contains(path)) return;');
+    final remove = rbody.indexOf('await _removeObjects([path])');
+    expect(read, greaterThan(-1));
+    expect(guard, greaterThan(read));
+    expect(remove, greaterThan(guard),
+        reason: 'an insert that committed and lost its response keeps its object');
   });
 
-  test('the window function is IST midnight and never a device-local DateTime', () {
-    final a = src.indexOf('String progressPhotoCapWindowStartUtc(DateTime now)');
-    expect(a, greaterThan(-1));
-    final body = src.substring(a, src.indexOf(';', a) + 1);
-    expect(body.contains('istMidnightUtc(now)'), isTrue);
-    expect(body.contains('DateTime('), isFalse,
-        reason: 'a device-local midnight is the OI-322 bug and passes the pure '
-            'test under the CI zone (Asia/Kolkata)');
-    expect(body.contains('toLocal'), isFalse);
+  test('an upload that failed without an answer hands its path to the sweep '
+      '(Hermes C1): the path is noted BEFORE the upload, used only when no '
+      'object was confirmed', () {
+    final attempt = capture.indexOf('attemptedPath = storagePath;');
+    expect(attempt, greaterThan(-1));
+    expect(capture.indexOf('.uploadBinary('), greaterThan(attempt));
+    final tail = capture.substring(capture.lastIndexOf('} catch (e) {'));
+    expect(
+        tail.contains('} else if (attemptedPath != null) {\n'
+            '        noteFailedUpload(attemptedPath, e);'),
+        isTrue);
   });
+
+  test('delete hands a failed object removal to removeDeletedPhotoObject '
+      '(Hermes C2/D1), whose behaviour is in progress_photo_free_slot_test', () {
+    final at = src.indexOf('Future<bool> delete(String id)');
+    final body = src.substring(at, src.indexOf('Future<void> removeDeletedPhotoObject(', at));
+    expect(body.contains('await removeDeletedPhotoObject(path);'), isTrue);
+    expect(body.contains('.remove([path])'), isFalse);
+  });
+
+  test('every log line in the repository is debug-only (rule 17; Hermes D2): '
+      'paths start with the user id', () {
+    expect(RegExp(r'debugPrint\(').allMatches(src).length, 1);
+    expect(src.contains('if (kDebugMode) debugPrint(message);'), isTrue);
+  });
+
+  test('the free-slot pre-check is bounded: a hung listing lets the server '
+      'decide instead of holding the Add spinner (PRESENCE only: '
+      'ensureFreeSlotOpen needs a signed-in user)', () {
+    final at = src.indexOf('Future<void> ensureFreeSlotOpen()');
+    final body = src.substring(at, src.indexOf('Future<String?> capture(', at));
+    expect(
+        body.contains('await freeSlotOpen(userId)\n'
+            '        .timeout(progressPhotoStorageCallTimeout, onTimeout: () => null);'),
+        isTrue);
+    expect(body.contains('if (open == false) {'), isTrue);
+  });
+
 
   test('the catch hands the failure to the classifier and THROWS on a refusal; '
       'it never swallows it into null', () {
@@ -95,22 +156,23 @@ void main() {
             'false here would silently disable it');
   });
 
+
   test('uploadStage is true only between the picker and the end of the upload',
       () {
     final pick = capture.indexOf('if (xfile == null) return null;');
     final on = capture.indexOf('uploadStage = true;');
-    final upload = capture.indexOf('.upload(');
+    final upload = capture.indexOf('.uploadBinary(');
     final off = capture.lastIndexOf('uploadStage = false;');
     final insert = capture.indexOf(".from('progress_photos').insert(");
     final all = 'pick=$pick on=$on upload=$upload off=$off insert=$insert';
     expect(pick, greaterThan(-1), reason: all);
-    expect(on, greaterThan(pick), reason: all);
     expect(on, greaterThan(pick), reason: 'a cancelled pick is never a refusal');
     expect(upload, greaterThan(on));
     expect(off, greaterThan(upload));
     expect(insert, greaterThan(off));
     expect(RegExp(r'var uploadStage = false;').hasMatch(capture), isTrue);
   });
+
 
   test('no server call, no verify and no timeout lives in the repository', () {
     expect(src.contains('verifyFromServer'), isFalse,

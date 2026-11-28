@@ -33,4 +33,18 @@ void main() {
     expect(suite, greaterThan(sweep), reason: 'the sweep runs for every tier, above the full-suite block');
     expect(lines[sweep], contains(r'"$DART_BIN" run'), reason: 'resolved via _dart_bin.sh, not bare dart');
   });
+
+  // The sweep's `flutter test` child takes its zone from the one shared rule (diagnose
+  // d0b7e4). PRESENCE only: the rule is tested in
+  // test/scripts/regression_catalog_lib_test.dart, and what the child actually receives in
+  // test/scripts/contract_sweep_e2e_test.dart.
+  test('contract_sweep.dart takes its child zone from the shared applySuiteZone', () {
+    final code = File('scripts/contract_sweep.dart')
+        .readAsLinesSync()
+        .where((l) => !l.trim().startsWith('//'))
+        .join('\n');
+    expect(code, contains('applySuiteZone(env, isWindows: Platform.isWindows)'));
+    expect(code, isNot(matches(RegExp('[\'"]TZ[\'"]'))),
+        reason: 'no second, hand-written zone rule, in either quote style');
+  });
 }

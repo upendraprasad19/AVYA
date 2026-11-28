@@ -120,9 +120,9 @@ The phase variant sheet (`showPaywallSheetPhaseVariant`) gets the same treatment
 | 6 | `profile/screens/settings_screen.dart:26` | locked notification row (settings) | per row | row lock glyph | none |
 | 7 | `profile/screens/reports_screen.dart:230` | server refusal after the one free report | report title | Generate button | none |
 | 8 | `profile/screens/reports_screen.dart:1029` | generate again, not PRO | report title | Generate button | none |
-| 9 | `profile/screens/progress_photos_screen.dart:263` | refusal path, not PRO | `Progress Photos` | none (action) | none |
-| 10 | `profile/screens/progress_photos_screen.dart:420` | Add photo, lapsed | `Progress Photos` | Add button | none |
-| 11 | `profile/screens/progress_photos_screen.dart:470` | `ProLockedOverlay` | `Progress Photos` | `Upgrade to PRO` (default `ctaText`) | copy neutral (5.2) |
+| 9 | `profile/screens/progress_photos_screen.dart` `_onProRefused` | refusal, not PRO (OI-348 Landing 3c: no paywall any more; the weekly-used snackbar) | none | none | none |
+| 10 | `profile/screens/progress_photos_screen.dart` `_showWeeklyUsed` | free weekly photo used (Landing 3c) | `Unlimited Progress Photos` | snackbar `GO PRO` action | action hidden unless `showsUpgradeAffordance()` (5.2) |
+| 11 | (removed by OI-348 Landing 3c) | the screen's `ProLockedOverlay` locked card is gone; the widget has no user | - | - | - |
 | 12 | `profile/screens/edit_profile_screen.dart:1489` | strategy chip, free | `Diet Strategy` | chip | none |
 | 13 | `profile/screens/edit_profile_screen.dart:1845` | body-fat assessment | `AI Body Composition Assessment` | button | none |
 | 14 | `profile/screens/edit_profile_screen.dart:1890` | server `pro_required` | same | none (action) | none |

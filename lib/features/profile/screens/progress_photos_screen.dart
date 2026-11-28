@@ -5,8 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:icanbefitter/core/constants/app_constants.dart';
+import 'package:icanbefitter/core/constants/purchase_mode.dart';
+import 'package:icanbefitter/core/copy/progress_photo_copy.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
-import 'package:icanbefitter/shared/widgets/pro_locked_overlay.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -18,22 +19,20 @@ import '../repositories/progress_photo_repository.dart';
 
 /// Full-screen progress photos gallery (F19).
 ///
-/// Who sees what (founder decisions 5 and 6 of 2026-10-06, OI-314):
-///  - PRO (server-verified, `gateAndVerify(featureProgressPhotos)`): the gallery
-///    and the Add button (`granted`).
-///  - A LAPSED user who still holds photos: the gallery, long-press delete, and an
-///    Add button that only leads to the paywall (`readOnly`). The database refuses
-///    a new photo without an active subscription (migration 154) but never a read
-///    or a delete.
-///  - Nobody-has-photos and not PRO (a never-PRO user, or a lapsed one who has
-///    deleted everything): the locked card with an Upgrade button (`denied`), and
-///    NO write control.
-/// The hub row no longer gates; it pushes here for everyone, so the screen owns
-/// the decision (also for the web address `#/profile/progress-photos`, edited into
-/// an app that is already open; a fresh load goes through `/restoring` and lands
-/// on Home). The write action (`_onAddPhoto`) runs the gate again, because a
-/// subscription can lapse while the screen stays open and a Storage write is the
-/// reason `progress_photos` is server-verified (rule 19).
+/// Who sees what (OI-348 Landing 3c, founder calls of 2026-11-26):
+///  - Everyone: the gallery (or the empty state), long-press delete and the Add
+///    button. Viewing is free.
+///  - PRO (server-verified, `gateAndVerify(featureProgressPhotos)`, `pro`):
+///    uploads with no cap.
+///  - Not PRO, a lapsed PRO included (`free`): one photo per IST week. The Add
+///    button asks `ensureFreeSlotOpen` BEFORE the body area and the picker; a
+///    used slot shows [ProgressPhotoCopy.weeklyUsed] (with GO PRO only when the
+///    build can sell PRO, ADR-0022). The database enforces the same cap at both
+///    doors (the progress-photos free weekly cap migration), so the client
+///    check is a courtesy.
+/// The hub row pushes here for everyone and makes no PRO decision. The write
+/// action (`_onAddPhoto`) runs the gate again, because a subscription can lapse
+/// or start while the screen stays open (rule 19).
 ///
 /// ONE WRITER. `_reload` is the only code that assigns `_access`, `_photos` and
 /// `_error` (apart from the optimistic tile removal in `_delete`). Every trigger
@@ -42,7 +41,7 @@ import '../repositories/progress_photo_repository.dart';
 /// newer call has started or the screen is gone, so two async paths cannot write
 /// out of order. A failed read never reads as "no photos": it keeps the photos on
 /// screen (snackbar) or shows the error state; only a SUCCESSFUL empty read
-/// reaches `denied` or the empty state (class 2.49).
+/// reaches the empty state (class 2.49).
 ///
 /// Reads/writes via `ProgressPhotoRepository` which in turn handles:
 ///   - Supabase Storage upload + signed-URL read (`progress-photos` bucket)
@@ -58,10 +57,9 @@ class ProgressPhotosScreen extends ConsumerStatefulWidget {
       _ProgressPhotosScreenState();
 }
 
-/// Where the screen stands. `checking`: a reload is deciding. `granted`: PRO.
-/// `readOnly`: not PRO, photos held (or the read failed): view and delete.
-/// `denied`: not PRO and a successful read found none: the locked card.
-enum _Access { checking, granted, readOnly, denied }
+/// Where the screen stands. `checking`: a reload is deciding. `pro`: uploads
+/// uncapped. `free`: not PRO (a lapsed PRO included): one photo per IST week.
+enum _Access { checking, pro, free }
 
 class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
   final _repo = ProgressPhotoRepository.instance;
@@ -151,15 +149,12 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
       _lastVerdictPro = verdict;
       final held = _photos != null && _photos!.isNotEmpty;
       setState(() {
+        _access = verdict ? _Access.pro : _Access.free;
         if (photos != null) {
           _photos = photos;
           _error = null;
-          _access = verdict
-              ? _Access.granted
-              : (photos.isEmpty ? _Access.denied : _Access.readOnly);
         } else {
           // A failed read is not "no photos": keep what is on screen.
-          _access = verdict ? _Access.granted : _Access.readOnly;
           _error = held ? null : 'Couldn\'t load photos';
         }
       });
@@ -173,7 +168,7 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
       if (!mounted || gen != _seq) return;
       final held = _photos != null && _photos!.isNotEmpty;
       setState(() {
-        _access = _lastVerdictPro ? _Access.granted : _Access.readOnly;
+        _access = _lastVerdictPro ? _Access.pro : _Access.free;
         _error = held ? null : 'Couldn\'t load photos';
       });
     } finally {
@@ -199,14 +194,6 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
       final String? id;
       try {
         id = await _repo.capture(source: source, bodyArea: area);
-      } on PhotoQuotaException {
-        // Daily cap hit (5/day, IST). Only PRO users reach `capture`.
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Daily photo limit reached — back tomorrow.')),
-        );
-        return;
       } on ProgressPhotoProRequiredException {
         await _onProRefused();
         return;
@@ -230,14 +217,15 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
     }
   }
 
-  /// The server refused a new photo (migration 154). Three outcomes, none of
-  /// which sends a payer to the paywall:
+  /// The server refused a new photo (not PRO and this IST week's free photo is
+  /// already held). Three outcomes, none of which opens the paywall by itself:
   ///  1. a payment is in flight (the subscription row is not written yet): say so,
   ///     change nothing;
   ///  2. otherwise ask the server (forced, 10 s, a timeout counts as still-PRO,
-  ///     as in `gateAndVerify`): it says NOT PRO -> the paywall and a reload;
+  ///     as in `gateAndVerify`): it says NOT PRO -> the weekly-cap snackbar and
+  ///     a reload as free;
   ///  3. it says PRO (or could not be reached: `verifyFromServer` trusts the local
-  ///     state offline): "couldn't confirm", no paywall, no state change.
+  ///     state offline): "couldn't confirm", no state change.
   Future<void> _onProRefused() async {
     if (!mounted) return;
     if (SubscriptionService.instance.isPaymentInFlight) {
@@ -260,8 +248,26 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
       );
       return;
     }
-    showPaywallSheet(context, feature: 'Progress Photos');
+    _showWeeklyUsed();
     await _reload(keepGallery: true, knownPro: false);
+  }
+
+  /// The free weekly cap is reached. The GO PRO action exists only in a build
+  /// that can sell PRO (ADR-0022, `showsUpgradeAffordance`).
+  void _showWeeklyUsed() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(ProgressPhotoCopy.weeklyUsed),
+        action: showsUpgradeAffordance()
+            ? SnackBarAction(
+                label: ProgressPhotoCopy.goPro,
+                onPressed: () => showPaywallSheet(context,
+                    feature: ProgressPhotoCopy.paywallFeature),
+              )
+            : null,
+      ),
+    );
   }
 
   Future<String?> _pickBodyArea() async {
@@ -328,13 +334,13 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // The locked card's Upgrade button opens the paywall, which cannot be awaited
+    // The weekly-cap snackbar's GO PRO opens the paywall, which cannot be awaited
     // (`showPaywallSheet` returns void). A completed purchase flips this provider
-    // (`onStateChanged`, app.dart), so a user who is not PRO and has just become
-    // PRO gets the screen re-decided: server-verified, same as on entry.
+    // (`onStateChanged`, app.dart), so a free user who has just become PRO gets
+    // the screen re-decided: server-verified, same as on entry.
     // Fires only for a flip TO PRO. While a reload is already running the flip is
     // remembered (`_dirty`) instead of starting a second one, and at most ONE
-    // re-run follows if that reload ended not-PRO; `granted` and `checking` are
+    // re-run follows if that reload ended not-PRO; `pro` and `checking` are
     // never listener sources.
     ref.listen<SubscriptionInfoData>(subscriptionInfoProvider, (previous, next) {
       if (!next.isPro) return;
@@ -342,8 +348,8 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
         _dirty = true;
         return;
       }
-      if (_access == _Access.denied || _access == _Access.readOnly) {
-        unawaited(_reload(keepGallery: _access == _Access.readOnly));
+      if (_access == _Access.free) {
+        unawaited(_reload(keepGallery: true));
       }
     });
     return Scaffold(
@@ -368,12 +374,10 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
           ],
         ),
       ),
-      // No button for a user the gate refused who holds no photos: a free user
-      // must not be offered a Storage write (rule 19). A lapsed user who holds
-      // photos gets one; its tap goes through the gate to the paywall, never to a
-      // picker.
-      floatingActionButton: !(_access == _Access.granted ||
-              (_access == _Access.readOnly && (_photos?.isNotEmpty ?? false)))
+      // Everyone gets the button once the screen has decided; a tap runs the
+      // gate again and, for a free user, the weekly slot check before anything
+      // is picked.
+      floatingActionButton: _access == _Access.checking
           ? null
           : (_uploading || _gating)
               ? const FloatingActionButton(
@@ -398,34 +402,48 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
     );
   }
 
-  /// The write action runs the gate again: a subscription that lapses while this
-  /// screen stays open must not reach `capture`. The verify is cached for 5
-  /// minutes AFTER a 200 answer only (`verifyFromServer` stamps the cache nowhere
-  /// else), so a tap can wait on the server for up to 10 s: the button shows the
-  /// busy spinner meanwhile and a second tap does nothing (`_gating`). A user the
-  /// gate refuses gets the paywall and a reload with the known verdict (their
-  /// photos, if any, stay on screen).
+  /// The write action runs the gate again: a subscription can lapse (or start)
+  /// while this screen stays open. The verify is cached for 5 minutes AFTER a
+  /// 200 answer only (`verifyFromServer` stamps the cache nowhere else), so a tap
+  /// can wait on the server for up to 10 s: the button shows the busy spinner
+  /// meanwhile and a second tap does nothing (`_gating`). A free verdict runs the
+  /// weekly slot check (also under `_gating`) BEFORE the source sheet and the
+  /// body area; a used slot shows the weekly-cap snackbar and picks nothing. A
+  /// verdict that differs from the screen's re-decides it through `_reload`.
   Future<void> _onAddPhoto() async {
     if (_gating) return;
     setState(() => _gating = true);
+    var proceed = false;
     try {
+      bool? pro;
       await SubscriptionService.instance.gateAndVerify(
         AppConstants.featureProgressPhotos,
-        onPro: () {
-          if (!mounted) return;
-          _pickAndCapture();
-        },
-        onFree: () {
-          if (!mounted) return;
-          showPaywallSheet(context, feature: 'Progress Photos');
-          // Re-decide through the one writer (the verdict is known: not PRO), so a
-          // lapsed user's photos stay on screen.
-          unawaited(_reload(keepGallery: true, knownPro: false));
-        },
+        onPro: () => pro = true,
+        onFree: () => pro = false,
       );
+      final verdict = pro;
+      if (!mounted || verdict == null) return;
+      if (verdict != _lastVerdictPro) {
+        unawaited(_reload(keepGallery: true, knownPro: verdict));
+      }
+      if (!verdict) {
+        try {
+          await _repo.ensureFreeSlotOpen();
+        } on PhotoQuotaException {
+          _showWeeklyUsed();
+          return;
+        }
+        if (!mounted) return;
+      } else {
+        // PRO has no slot to free, but its orphans still cost storage: the
+        // same bounded sweep (this IST week, an hour old, no row), unawaited.
+        unawaited(_repo.cleanupOrphanedStorage());
+      }
+      proceed = true;
     } finally {
       if (mounted) setState(() => _gating = false);
     }
+    if (proceed && mounted) await _pickAndCapture();
   }
 
   Future<void> _pickAndCapture() async {
@@ -455,34 +473,37 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
     if (src != null) await _capture(src);
   }
 
-  /// What a user the gate refused sees (only the typed web address or a mid-
-  /// session lapse gets here: the hub row shows a free user the paywall without
-  /// opening this screen). The design system's PRO locked card, with nothing
-  /// real behind it: no photo is read or shown.
-  Widget _buildLocked() {
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.screenPadding),
-      child: ProLockedOverlay(
-        featureLabel: 'Progress Photos',
-        description: 'Track your transformation visually',
-        minHeight: 240,
-        onUpgradeTap: () =>
-            showPaywallSheet(context, feature: 'Progress Photos'),
-        child: const ColoredBox(color: AppColors.card),
-      ),
+  /// The free user's one-line rule, above the grid and in the empty state.
+  Widget _freeCaption() => Text(
+        ProgressPhotoCopy.freeCaption,
+        key: const ValueKey('progress_photos_free_caption'),
+        textAlign: TextAlign.center,
+        style: AppTypography.monoXs
+            .copyWith(color: AppColors.textDim, letterSpacing: 1.5),
+      );
+
+  Widget _buildBody() {
+    final grid = _buildGallery();
+    if (_access != _Access.free || _error != null || _photos == null) {
+      return grid;
+    }
+    if (_photos!.isEmpty) return grid; // the empty state carries the caption
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.screenPadding,
+              AppSpacing.screenPadding, AppSpacing.screenPadding, 0),
+          child: _freeCaption(),
+        ),
+        Expanded(child: grid),
+      ],
     );
   }
 
-  Widget _buildBody() {
-    switch (_access) {
-      case _Access.checking:
-        return const Center(
-            child: CircularProgressIndicator(color: AppColors.accent));
-      case _Access.denied:
-        return _buildLocked();
-      case _Access.granted:
-      case _Access.readOnly:
-        break;
+  Widget _buildGallery() {
+    if (_access == _Access.checking) {
+      return const Center(
+          child: CircularProgressIndicator(color: AppColors.accent));
     }
     if (_error != null) {
       return ErrorState(
@@ -513,6 +534,10 @@ class _ProgressPhotosScreenState extends ConsumerState<ProgressPhotosScreen> {
                 textAlign: TextAlign.center,
                 style: AppTypography.body.copyWith(fontSize: 13, color: AppColors.textDim),
               ),
+              if (_access == _Access.free) ...[
+                const SizedBox(height: 12),
+                _freeCaption(),
+              ],
             ],
           ),
         ),

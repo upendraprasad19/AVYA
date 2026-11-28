@@ -103,10 +103,18 @@ void main() {
     test('orphaned storage path logged on delete failure', () {
       final src = _src(
           'lib/features/profile/repositories/progress_photo_repository.dart');
+      // OI-348 Landing 3c: delete() hands the removal to
+      // removeDeletedPhotoObject, which logs the kept path and remembers it for
+      // the sweep. Behaviour: contracts/progress_photo_free_slot_test.dart.
+      expect(src, contains('await removeDeletedPhotoObject(path);'),
+          reason: 'delete() must remove the object through the logging helper');
+      final at = src.indexOf('Future<void> removeDeletedPhotoObject(');
+      expect(at, greaterThan(-1));
+      final body = src.substring(at, src.indexOf('Future<void> cleanupOrphanedStorage()', at));
       expect(
-          src,
-          contains('orphaned storage object'),
-          reason: 'delete() must log orphan path when storage remove fails');
+          body,
+          contains(r"[ProgressPhotoRepository.delete] object kept for the sweep: $path: $e"),
+          reason: 'a failed storage remove must log the orphan path');
     });
   });
 

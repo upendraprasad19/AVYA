@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icanbefitter/core/constants/app_constants.dart';
 import 'package:icanbefitter/core/constants/purchase_mode.dart';
 import 'package:icanbefitter/core/copy/payment_copy.dart';
+import 'package:icanbefitter/core/copy/progress_photo_copy.dart';
 import 'package:icanbefitter/core/copy/purchase_copy.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
@@ -149,7 +150,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     'AI food analysis & meal scanning (camera)',
     'Generate new plans after Week 4 (all phases, no end point)',
     'Weekly AI nutrition report',
-    'Progress photos & body composition tracking',
+    'Progress photos with no weekly limit & body composition tracking',
     'Reasoning tab for advanced coaching',
     'PRO tips on every exercise',
     'Diet plan PDF download',
@@ -181,8 +182,8 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
         return 'Get an updated AI prediction of your fitness progress every month.';
       case 'Weekly AI Report':
         return 'Receive detailed weekly nutrition insights powered by AI.';
-      case 'Progress Photos':
-        return 'Track your body transformation with a visual photo timeline.';
+      case ProgressPhotoCopy.paywallFeature:
+        return ProgressPhotoCopy.paywallSubtitle;
       case 'Morning Alert':
         return 'Wake up to AI-personalised motivation and daily plan reminders.';
       case 'Photo Analysis':

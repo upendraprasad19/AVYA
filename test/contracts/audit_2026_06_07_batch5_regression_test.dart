@@ -131,11 +131,10 @@ void main() {
       final s = _read('lib/features/profile/screens/progress_photos_screen.dart');
       expect(s.contains('on PhotoQuotaException'), isTrue,
           reason: 'F40: an uncaught quota throw stuck the _uploading spinner forever');
-      expect(s.contains('Daily photo limit reached'), isTrue,
-          reason: 'F40: the user must be told to come back tomorrow');
-      // Since OI-314 only PRO users reach capture (the screen gates the call), so
-      // the cap branch has no upgrade paywall; behaviour is proven in
-      // test/contracts/progress_photos_lapsed_flow_test.dart ('the daily cap').
+      expect(s.contains('_showWeeklyUsed();'), isTrue,
+          reason: 'F40 (OI-348 Landing 3c: the cap is now 1 free photo per IST week, '
+              'checked before the picker): the user must be told when the next one is');
+      // Behaviour: test/contracts/progress_photos_free_flow_test.dart.
       expect(
           RegExp(r'finally \{\s*if \(mounted\) setState\(\(\) => _uploading = false\);')
               .hasMatch(s),

@@ -290,7 +290,7 @@ void main() {
     });
   });
 
-  group('catalogChildEnvironment pins the zone (OI-459)', () {
+  group('catalogChildEnvironment pins the zone off Windows (OI-459)', () {
     test('TZ is Asia/Kolkata whether the parent had none, UTC, or a zone whose date differs', () {
       for (final parent in <Map<String, String>>[
         {'PATH': '/p'},
@@ -298,7 +298,8 @@ void main() {
         {'PATH': '/p', 'TZ': 'Etc/GMT+12'},
         {'PATH': '/p', 'TZ': 'Asia/Kolkata'},
       ]) {
-        expect(catalogChildEnvironment(parent)['TZ'], 'Asia/Kolkata', reason: 'parent: $parent');
+        expect(catalogChildEnvironment(parent, isWindows: false)['TZ'], 'Asia/Kolkata',
+            reason: 'parent: $parent');
       }
       expect(catalogTestTimeZone, 'Asia/Kolkata');
     });
@@ -307,7 +308,7 @@ void main() {
       final out = catalogChildEnvironment({
         'PATH': '/usr/bin', 'GIT_DIR': '/r/.git', 'GIT_INDEX_FILE': '/r/idx',
         'CONTRACT_SWEEP_NESTED': '1', 'TZ': 'UTC',
-      });
+      }, isWindows: false);
       expect(out, {'PATH': '/usr/bin', 'TZ': 'Asia/Kolkata'});
     });
 
@@ -327,12 +328,76 @@ void main() {
           '/bin/sh',
           ['-c', 'date +%z'],
           why: 'date +%z under the catalog child env (OI-459)',
-          parentEnvironment: catalogChildEnvironment(parent),
+          parentEnvironment: catalogChildEnvironment(parent, isWindows: false),
         );
         expect(result.exitCode, 0, reason: '${result.stderr}');
         expect((result.stdout as String).trim(), '+0530', reason: 'parent TZ: $parentTz');
       }
     }, skip: Platform.isWindows ? 'no POSIX date/TZ on Windows' : false);
+  });
+
+  // Windows (diagnose d0b7e4): the C runtime Dart uses cannot read an IANA name, so
+  // TZ=Asia/Kolkata gave the child a ZERO offset on an India machine. The child there
+  // must get no TZ at all and run in the machine's own zone.
+  group('catalogChildEnvironment leaves the zone to the machine on Windows', () {
+    test('no TZ key survives, whatever the parent had or however it spelled it', () {
+      for (final parent in <Map<String, String>>[
+        {'PATH': '/p'},
+        {'PATH': '/p', 'TZ': 'Asia/Kolkata'},
+        {'PATH': '/p', 'TZ': 'UTC'},
+        {'PATH': '/p', 'tz': 'UTC'},
+        {'PATH': '/p', 'Tz': 'Asia/Kolkata'},
+      ]) {
+        expect(catalogChildEnvironment(parent, isWindows: true), {'PATH': '/p'},
+            reason: 'parent: $parent');
+      }
+    });
+
+    test('it still applies the whole scrub', () {
+      expect(
+        catalogChildEnvironment({
+          'PATH': '/p', 'GIT_DIR': '/r/.git', 'CONTRACT_SWEEP_NESTED': '1', 'TZ': 'UTC',
+        }, isWindows: true),
+        {'PATH': '/p'},
+      );
+    });
+
+    test('with no platform named it follows the machine it runs on', () {
+      final parent = {'PATH': '/p', 'TZ': 'UTC'};
+      expect(catalogChildEnvironment(parent),
+          catalogChildEnvironment(parent, isWindows: Platform.isWindows));
+    });
+
+    // PRESENCE only. On Linux a default of `false` behaves exactly like the real one, so
+    // the test above cannot see it there; this keeps CI (Linux) able to.
+    test('the default is read from the platform', () {
+      expect(File('scripts/regression_catalog_lib.dart').readAsStringSync(),
+          contains('isWindows: isWindows ?? Platform.isWindows'));
+    });
+
+    // BEHAVIOURAL, Windows only: a real Dart child under the catalog env reads the same
+    // offset as a child with no TZ at all. On a Windows machine set to UTC the two agree
+    // either way, so there it proves nothing; the pure tests above run everywhere.
+    test('a real Dart child under the catalog env reads the machine zone', () async {
+      final dir = Directory.systemTemp.createTempSync('catalog_tz');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final probe = File('${dir.path}/offset.dart')
+        ..writeAsStringSync('void main() => print(DateTime(2026, 6, 15).timeZoneOffset.inMinutes);');
+      Future<String> offsetUnder(Map<String, String> env, String why) async {
+        final r = await runSpawnAsync(dartBin(), [probe.path], why: why, parentEnvironment: env);
+        expect(r.exitCode, 0, reason: '${r.stderr}');
+        return (r.stdout as String).trim();
+      }
+
+      // The helper builds both environments, so this file never copies the whole parent
+      // itself (spawn_sites_guard G2).
+      final machine = await offsetUnder(
+          hermeticEnvironment(remove: {'TZ'}), 'offset with no TZ (machine zone)');
+      final gate = await offsetUnder(
+          catalogChildEnvironment(hermeticEnvironment(extra: {'TZ': 'Asia/Kolkata'})),
+          'offset under the catalog child env');
+      expect(gate, machine);
+    }, skip: Platform.isWindows ? false : 'Windows only; POSIX is covered by date +%z above');
   });
 
   group('the gate actually USES the scrub', () {

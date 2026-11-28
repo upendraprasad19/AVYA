@@ -66,7 +66,7 @@ node .claude/deploy_via_api.js dedsavbjuwgarrhphgnl <fn> .claude/_payload_<fn>.j
 | Local Storage | Hive (offline-first, primary for all reads/writes) |
 | Auth | Supabase Auth (Email + Google OAuth). Phone OTP is NOT live: phone auth is off on the project and the sign-in UI is behind `_kEnablePhoneEnlist = false` (AUTH-04) |
 | Database | Supabase Postgres (47 tables — backup + AI + community) |
-| Storage | Supabase Storage (exercise images, progress photos PRO) |
+| Storage | Supabase Storage (exercise images, progress photos: free 1 per IST week, PRO unlimited, server-enforced) |
 | AI Coach (all tiers) | Edge Function `ai-proxy` → Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`; fallback `gemini-3.5-flash-lite`). Free: 7 msg/day FOREVER (OQ-1). PRO: 20 msg/day (dedicated coaching, higher limits; NOT unlimited). Server-side gate. Caps: `_shared/ai_limits.ts`. |
 | Food AI / Weekly report | Gemini 3.1 Flash Lite for text, scan meal and cart auditor; the PRO-only weekly report runs the same model with thinking on. One constant per tier in `supabase/functions/_shared/gemini.ts` (revert = one line) |
 | Plan Generator | Dart (local, queries Hive exercise_library, zero API cost) |

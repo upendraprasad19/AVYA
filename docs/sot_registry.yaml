@@ -1168,10 +1168,10 @@ concepts:
           deletes them. Gating never reads them. Behavioral:
           test/contracts/play_subscription_display_state_behavioral_test.dart.
       - file: lib/core/services/subscription_service.dart
-        line_range: 1099-1143
+        line_range: 1256-1318
         method: _downgradeLocally (the SINGLE downgrade sink — every path funnels here)
       - file: lib/core/services/subscription_service.dart
-        line_range: 460-526
+        line_range: 470-526
         method: _enforceEntitlementInvariants (cross-account guard + genuine-expiry downgrade)
         notes: |
           OI-44 Unit 6 (diagnose a9c4e1) — the MUTATING half extracted out of
@@ -1180,7 +1180,7 @@ concepts:
           never on the cross-account wipe; it survives the expiresAt wipe so the
           Home expiry banner can surface "PRO expired".
       - file: lib/core/services/subscription_service.dart
-        line_range: 527-535
+        line_range: 528-570
         method: evaluateEntitlement (explicit public enforcement entry point)
         notes: |
           Called at the two moments local state can BECOME cross-account:
@@ -1189,15 +1189,15 @@ concepts:
           refreshFromSupabase does NOT cover it (it decides from the SERVER
           response and never compares Hive profile.id against the session).
       - file: lib/core/services/subscription_service.dart
-        line_range: 296-383
+        line_range: 308-387
         method: writeSubscriptionState (atomic putAll; clears pro_lapsed_at on renewal)
       - file: lib/core/services/subscription_service.dart
-        line_range: 924-1028
+        line_range: 1054-1164
         method: verifyFromServer (server-confirmed upgrade / anti-spoof downgrade)
     reader_manifest_complete: true
     readers:
       - file: lib/core/services/subscription_service.dart
-        line_range: 384-412
+        line_range: 391-420
         method: isPro — the DECISION entry point
         semantic: flag-check
         fields_read: [isPro, expiresAt, plan]
@@ -1206,7 +1206,7 @@ concepts:
           byte-identical to the pre-split version, so all 32 decision callsites
           keep their defense-in-depth. Use this for an entitlement DECISION.
       - file: lib/core/services/subscription_service.dart
-        line_range: 413-437
+        line_range: 422-448
         method: proStateSnapshot — the PURE read
         semantic: flag-check
         fields_read: [isPro, expiresAt]
@@ -1217,8 +1217,8 @@ concepts:
           (build -> isPro -> _downgradeLocally -> onStateChanged -> app.dart:47
           ref.invalidate). Diagnose a9c4e1.
       - file: lib/core/services/subscription_service.dart
-        line_range: 656-746
-        method: gateAndVerify (gate() retained as a @Deprecated shim at :578)
+        line_range: 741-864
+        method: gateAndVerify (gate() retained as a @Deprecated shim at :732)
         semantic: flag-check
         fields_read: [isPro, expiresAt, plan]
         notes: |
@@ -1302,12 +1302,13 @@ concepts:
         fields_read: [isPro]
       - file: lib/features/profile/repositories/progress_photo_repository.dart
         line_range: 1-9999
-        method: "ProgressPhotoRepository.capture / isProgressPhotoProRefusal (OI-314, unit B2): NO isPro read any more (the free tier -- 2/day, 2048/85 -- is deleted; one cap of 5 per IST day, one quality 3000/95). capture reads SubscriptionService.instance.isPaymentInFlight only, to classify a server refusal (the just-paid window) in a pure function."
+        method: "ProgressPhotoRepository.capture / ensureFreeSlotOpen / isProgressPhotoProRefusal (OI-314 unit B2; OI-348 Landing 3c): NO isPro read and NO tier decision in capture (2048/2048/85, uploadBinary); the free weekly slot check ensureFreeSlotOpen is called by the screen for a free verdict only; the server enforces 1 photo per IST week for a non-PRO user at both doors"
         semantic: flag-check
         fields_read: [isPro]
         notes: |
-          Service-layer non-reactive read, now of the payment-in-flight flag, not of isPro: the screen gates the call
-          (gateAndVerify) and the server refuses a free caller (migration 154); the repository makes no PRO decision.
+          Service-layer non-reactive read, now of the payment-in-flight flag, not of isPro: the screen picks the tier
+          (gateAndVerify) and the server caps a free caller at one photo per IST week (the free weekly cap migration);
+          the repository makes no PRO decision.
       - file: lib/features/auth/screens/splash_screen.dart
         line_range: 231-291
         method: _autoGenerateNextPhaseForPro
@@ -1338,17 +1339,28 @@ concepts:
         fields_read: [isPro]
       - file: lib/features/profile/screens/progress_photos_screen.dart
         line_range: 1-9999
-        method: "ProgressPhotosScreen _reload / _onAddPhoto / _onProRefused (OI-314 unit B2 over progress-screen-pro-gate 2026-10-05): the screen's PRO decision, SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos), server-verified branch for a high-value feature, run by the single writer _reload (entry, Retry, the upgrade listener) and again on the Add button; PRO -> gallery + Add; not PRO and photos held -> read-only gallery (view + delete; Add leads to the paywall); not PRO and none -> ProLockedOverlay; behavioural proof against the real SubscriptionService in test/contracts/progress_photos_screen_gate_test.dart and test/contracts/progress_photos_lapsed_flow_test.dart)"
+        method: "ProgressPhotosScreen _reload / _onAddPhoto / _onProRefused (OI-314 unit B2; OI-348 Landing 3c): the screen asks SubscriptionService.instance.gateAndVerify(AppConstants.featureProgressPhotos) (server-verified, a high-value feature) in the single writer _reload and on Add; the verdict picks pro (uploads uncapped) or free (a lapsed PRO included: the weekly slot check before the picker, the weekly-used snackbar, GO PRO only behind showsUpgradeAffordance()); everyone gets the gallery and Add; behavioural proof in test/contracts/progress_photos_screen_gate_test.dart, progress_photos_lapsed_flow_test.dart, progress_photos_free_flow_test.dart"
         semantic: flag-check
         fields_read: [isPro]
+      - file: test/sql/progress_photos_free_weekly_cap_draft.sql
+        line_range: 1-9999
+        method: "progress-photos free weekly cap (OI-348 Landing 3c, diagnose f3c9a1; DRAFT until the founder go, then supabase/migrations/NNN_progress_photos_free_weekly_cap.sql) -- enforce_progress_photo_object_cap (BEFORE INSERT trigger on storage.objects WHEN bucket progress-photos) and enforce_progress_photo_pro (the row door) read public.subscriptions: status = active AND end_date > now()"
+        semantic: flag-check
+        fields_read: [status, end_date]
+        notes: |
+          Replaces migration 154 rule (PRO-only) with PRO-or-under-the-free-cap: a non-PRO owner may hold one object and one
+          row per IST week. Pinned by test/contracts/progress_photos_free_weekly_cap_rule_test.dart; behavioural proof
+          test/sql/progress_photos_free_weekly_cap_live_verify.sql (founder go).
       - file: supabase/migrations/154_progress_photos_pro_insert_rls_rule.sql
         line_range: 1-9999
         method: "progress-photos server rule (progress-photos-pro-server-rule B1, applied live 2026-10-07, diagnose d8f2a6 -- the Storage INSERT policy progress_photos_insert_own and the BEFORE INSERT trigger trg_progress_photo_pro / enforce_progress_photo_pro read public.subscriptions: status = 'active' AND end_date > now())"
         semantic: flag-check
         fields_read: [status, end_date]
         notes: |
-          The DATABASE's own reader of the subscription predicate, enforced at both doors of a NEW progress photo
-          (the Storage object and the row). INSERT only: a lapsed user keeps SELECT and DELETE. Same predicate as
+          HISTORICAL once the free weekly cap migration (entry above) is applied: its policy conjunct and its
+          INVOKER function body are replaced there. The DATABASE's own reader of the subscription predicate, enforced
+          at both doors of a NEW progress photo (the Storage object and the row). INSERT only: a lapsed user keeps
+          SELECT and DELETE. Same predicate as
           verify-subscription, _shared/subscription.ts and the cap triggers (111/113/114/127/129/132/153); the contract test
           test/contracts/progress_photos_pro_insert_rule_test.dart pins the copies and a tripwire over later migrations.
     regression_test: test/subscription/payment_grace_window_test.dart
@@ -4784,8 +4796,8 @@ concepts:
           ceiling as fallback safety cap). Legacy paymentInFlightUntil read
           once per device after upgrade until first event-based write.
       - file: lib/core/services/subscription_service.dart
-        line_range: 1072-1197
-        method: verifyFromServer (isPaymentInFlight guard; gateAndVerify at 729 and refreshFromSupabase at 834 also read it)
+        line_range: 1054-1164
+        method: verifyFromServer (isPaymentInFlight guard; gateAndVerify at 779 and refreshFromSupabase at 907 also read it)
         semantic: flag-check
         fields_read: [paymentInFlightOrder]
         notes: |
@@ -8342,7 +8354,7 @@ concepts:
           Fires hive_session_opened / hive_session_closed /
           hive_session_reopen_noop events for every owner transition.
       - file: lib/core/services/subscription_service.dart
-        line_range: 235-1317
+        line_range: 235-1318
         method: subscription refresh + verify events
         semantic: pass-through
         fields_read: []
@@ -10407,8 +10419,8 @@ concepts:
       2026-05-20 A7 audit; PredictionService added 2026-09-26, B-pass
       round 2, single-owner-a — see its writers: entry above.)
     writers:
-      - { file: lib/core/services/sync_service.dart, line: 88, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
-      - { file: lib/core/services/subscription_service.dart, line: 17, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
+      - { file: lib/core/services/sync_service.dart, line: 159, method: "SyncService._() constructor → _registerLifecycle()", notes: "Resets _healthSyncCompleter / restoreProgressLabel / _restoreCancelled." }
+      - { file: lib/core/services/subscription_service.dart, line: 50, method: "SubscriptionService._() constructor → _registerLifecycle()", notes: "Re-fires onStateChanged so Riverpod consumers re-read the new user's PRO state." }
       - { file: lib/core/services/workout_schedule_service.dart, line: 177, method: "WorkoutScheduleService._() constructor → _registerLifecycle()", notes: "All state in workoutBox / userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/usage_counter_service.dart, line: 13, method: "UsageCounterService._() constructor → _registerLifecycle()", notes: "Counters live in per-user userBox; reset hook is a no-op placeholder." }
       - { file: lib/core/services/ai_service.dart, line: 76, method: "AiService._() constructor → _registerLifecycle()", notes: "Reset closes + drops the cached http.Client via dispose()." }
@@ -20575,7 +20587,7 @@ concepts:
         semantic: cloud-write
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 255-306
+        line_range: 256-307
         method: _validatePromoCode — valid == true, else shows data['reason']; the call passes spendsQuotaPerCall (OI-414), so a thrown gateway error reaches the catch after one attempt
         semantic: cloud-read
       - file: supabase/functions/_shared/founder_digest_content.ts
@@ -21000,7 +21012,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/widgets/paywall_sheet.dart
-        line_range: 446-475
+        line_range: 466-476
         method: _PaywallSheetState.build (none-mode branch)
         semantic: flag-check
         fields_read: [showsPurchaseUi]

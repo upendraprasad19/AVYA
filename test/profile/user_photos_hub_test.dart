@@ -54,7 +54,7 @@ class _Sub extends SubscriptionInfoNotifier {
   void upgrade() => state = SubscriptionInfoData(isPro: true);
 }
 
-const _proHint = 'PRO — visual progress timeline';
+const _proHint = '1 free photo a week · no limit with PRO'; // ProgressPhotoCopy.hubSubtitleFree
 const _proSubtitle = 'Track your transformation visually';
 const _savedSubtitle = 'Photos you saved from AI Coach chat';
 const _eyebrow = 'DOSSIER · ARCHIVE';
