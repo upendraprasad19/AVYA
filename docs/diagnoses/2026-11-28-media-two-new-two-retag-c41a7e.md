@@ -62,7 +62,7 @@ impact_analysis: |
   under lib/ reads the cloud exercise_library table.
 touched_layers_checked:
   - { layer: client_code, status: fixed_in_this_batch, evidence: "SeedService._exerciseLibraryVersion 29 -> 30; importer --check byte-identical to the shipped library." }
-  - { layer: hive_local_state, status: fixed_in_this_batch, evidence: "library_seed_v30_upgrade_behavioral_test.dart: a v29 box ends at v30 with the four rows as bundled and every other row unchanged; a v30 box is not rewritten." }
+  - { layer: hive_local_state, status: fixed_in_this_batch, evidence: "library_seed_v30_upgrade_behavioral_test.dart: a v29 box ends at v30 with the five rows as bundled (E027, E120, G0592, G0979, G0574) and every other row unchanged; a v30 box is not rewritten." }
   - { layer: postgres_schema, status: verified, evidence: "equipment_needed and coaching_cues are existing columns; equipment_tier and gym_availability are not cloud columns (COLUMN_SQL in the seed generator); no schema change." }
   - { layer: postgres_data, status: fixed_in_this_batch, evidence: "the generated draft differs from migration 183 by exactly two changed tuples (E027, E120) and two new ones; the live apply and its per-row read-back are recorded in the apply commit and happen only on the founder's go." }
   - { layer: storage_buckets_objects, status: fixed_in_this_batch, evidence: "four objects (1,487,888 bytes): dry run 4 local files ok, 0 sha mismatch; the upload runs only on the founder's go and is verified with --verify." }
@@ -77,10 +77,24 @@ gets `core_levels: [intermediate, advanced]`; it also carries `same_movement_as:
 T-bar rows on one day. Both keys change in `scripts/data/library_batch_c_source.json`; neither is a cloud column, and the
 regenerated cloud draft is identical to the one before the change.
 
+**What else the link does.** `SameMovement` is symmetric for the same-day rule, so a previous-phase or swapped-away T-Bar
+Row also soft-avoids the Landmine row for as long as the swap history window holds it, and a demoted T-Bar Row demotes it
+(one direction, original to linked row). A basic_gym user who swapped away from T-Bar Row because the gym has no station
+therefore sees the Landmine row ranked lower. Read from the code, not run.
+
+**What the pairing gate can and cannot show.** Across the 998 golden personas (weeks 1 and 2) Landmine T-Bar Row sits on
+8 days and T-Bar Row on 64, and no day holds both EVEN WITH THE LINK REMOVED, so those runs do not exercise the link. It
+is a guarantee, pinned directly by the pairing test in `library_v30_two_new_two_retag_contract_test.dart`.
+
+**A pre-v30 saved plan.** A repeat phase that pins T-Bar Row for a basic_gym user drops it without a substitute (OI-534,
+parked until the store launch).
+
 ## Plan snapshots and pins re-recorded for library v30
 
-Attribution: main's CI at the base `d2d92832` is green with the old library. Since then `lib/` changed only the seed
-version and comments (plus the plan-engine guide), so every moved value comes from library data: E027 out of basic_gym,
+Attribution: main's CI at the base `d2d92832` is green with the old library. Up to `f87869cd`, the run these values were
+taken from, `lib/` changed only the seed version and comments (plus the plan-engine guide), so every moved value comes
+from library data (the later merge of main brought PR 349's own `lib/` changes; CI on the merged head passed every plan
+sweep with these values): E027 out of basic_gym,
 E120 into home_dumbbells, G0592 and G0979 added, G0574 on the core list and linked to E027. Values were taken from the CI
 run of `f87869cd` (every gate prints its counters), except the allocator's `over` map, its floor counts and the weekly
 ON digest, which are cut off or unreached there and were printed locally.
@@ -128,3 +142,10 @@ two of them are the tests that stay red until the migration is applied.
 | G0592's `media_slug` key renamed in the library | 2 (v30 contract) |
 | `_exerciseLibraryVersion` left at 29 | 1 (v30 upgrade) |
 | one v30 record's tier glob removed from `blast_radius.yaml` | 1 |
+
+Run on 2026-11-28 after G0574 joined, one at a time, restored byte for byte:
+
+| Mutation | Tests red |
+|---|---|
+| G0574's `same_movement_as` removed | 1 of the same-day gate, on its pair-count pin only (no shared day appears, see above); 2 of the v30 contract (G0574's values and the pairing test) |
+| G0574's `core_levels` emptied | 1 (`cross_day_variety_behavioral_test.dart`, the repeat-phase case) |

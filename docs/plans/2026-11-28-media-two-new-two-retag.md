@@ -210,7 +210,8 @@ floor or a sweep to pass. No `lib/shared/repositories/plan_engine/**` edit.
 - The apply changes the live coach at once: a partial `getFormCues` search for "pallof" will return Band Pallof Press
   ahead of Band Vertical Pallof Press, and E027's machine cues reach installed apps that still say barbell.
 - A workout generated for a basic gym no longer offers T-Bar Row (intended: the station is a machine).
-- Rollback of the app change is whole-batch (the media table test refuses an orphaned `unmapped` file).
+- Rollback of the app change is whole-batch (the media table test refuses an orphaned `unmapped` file) AND forward-only
+  on the seed: a box at 30 is reseeded only by a HIGHER version, so a revert ships as seed 31 and retires G0592 and G0979.
 - Uploaded objects are additive; unused objects are harmless and are not deleted by a rollback.
 
 ## Addendum (2026-11-28, after the first CI run)

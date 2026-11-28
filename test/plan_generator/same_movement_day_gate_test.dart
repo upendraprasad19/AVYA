@@ -71,6 +71,9 @@ void main() {
   test('no day holds a loaded version and its original', () async {
     final bad = <String>[];
     var daysWithMember = 0, daysWithLoaded = 0;
+    // Seed v30: the T-Bar pair is TYPED here, not read from the library, so a build that loses the link goes red on a
+    // shared day and not only on the data pins. Each side is counted, so "0 shared days" cannot be vacuous for it.
+    var landmineDays = 0, tBarDays = 0;
     for (final p in generatorGoldenPersonas()) {
       final Phase phase = p.run();
       for (var w = 0; w < phase.weekPlans.length && w < 2; w++) {
@@ -78,6 +81,11 @@ void main() {
         for (var d = 0; d < days.length; d++) {
           final names = {for (final e in days[d].exercises) e.exerciseName};
           var member = false;
+          final landmine = names.contains('Landmine T-Bar Row');
+          final tBar = names.contains('T-Bar Row');
+          if (landmine) landmineDays++;
+          if (tBar) tBarDays++;
+          if (landmine && tBar) bad.add('${p.key} week ${w + 1} day ${d + 1}: both T-bar rows');
           for (final n in names) {
             final orig = originalOf[n];
             if (orig != null) {
@@ -93,8 +101,6 @@ void main() {
         }
       }
     }
-    expect(originalOf.length, 10, reason: 'the nine loaded versions (N14 to N22) and G0574 (seed v30)');
-    expect(originalOf['Landmine T-Bar Row'], 'T-Bar Row');
     expect(daysWithMember, greaterThan(0), reason: 'non-vacuity: no day held a member of a pair');
     // Measured floors (2026-11-09, 998 personas): OFF 5 placements, ON 977. `> 0` alone let OFF collapse to one day
     // unnoticed (B-pass seat A); a change that moves these on purpose re-measures them here. Unit 1B-Q (2026-11-10):
@@ -110,7 +116,13 @@ void main() {
     // short leg days (plan section 4: Glutes -1,768 sets; weekly minimums are unit 2C's). Shared days stay 0.
     expect(daysWithLoaded, greaterThanOrEqualTo(719),
         reason: 'non-vacuity: fewer days held a loaded version than measured ($daysWithLoaded)');
+    // ignore: avoid_print
+    print('same-movement gate T-bar pair: Landmine on $landmineDays day(s), T-Bar Row on $tBarDays day(s)');
+    expect(landmineDays, greaterThan(0), reason: 'non-vacuity: no golden persona got the Landmine T-Bar Row');
+    expect(tBarDays, greaterThan(0), reason: 'non-vacuity: no golden persona got the T-Bar Row');
     expect(bad, isEmpty, reason: '${bad.length} day(s) hold a loaded version and its original');
+    expect(originalOf.length, 10, reason: 'the nine loaded versions (N14 to N22) and G0574 (seed v30)');
+    expect(originalOf['Landmine T-Bar Row'], 'T-Bar Row');
     // ignore: avoid_print
     print('same-movement gate: $daysWithMember day(s) with a member, '
         '$daysWithLoaded loaded-version placement(s), 0 shared days');

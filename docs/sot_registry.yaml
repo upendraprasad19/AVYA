@@ -13772,7 +13772,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 327-377
+        line_range: 331-381
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -15548,7 +15548,7 @@ concepts:
       constant is bumped again. WARNING: the bucket is private; a row's keys are not a public URL.
     writers:
       - file: scripts/add_library_batch_c_v15.js
-        line_range: 198-219
+        line_range: 199-220
         method: applyMedia
       - file: lib/core/services/seed_service.dart
         line_range: 200-200

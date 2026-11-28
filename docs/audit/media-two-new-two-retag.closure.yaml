@@ -1,0 +1,90 @@
+# Closure ledger - library v30 (media-two-new-two-retag, PR 363). Gate 40. One terminal_state per item; no `deferred:` key.
+# `media-two-new-two-retag@branch` is the in-branch commit form.
+
+batch: media-two-new-two-retag
+plan_review_record: docs/plan-reviews/media-two-new-two-retag.md
+bpass_review: docs/reviews/media-two-new-two-retag-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-28-media-two-new-two-retag-c41a7e.md
+total_findings: 16
+closed_count: 16
+
+findings:
+  - id: U1-NEW-ROWS
+    title: "G0592 Machine Preacher Curl and G0979 Band Pallof Press added with animations"
+    terminal_state: closed_in_commit
+    commit: "4dd76242"
+    verification: "test/contracts/library_v30_two_new_two_retag_contract_test.dart"
+  - id: U2-RETAGS
+    title: "E027 to machines with new instructions, E120 to dumbbells; importer retag list; cloud generator groups records by id"
+    terminal_state: closed_in_commit
+    commit: "4dd76242"
+    verification: "test/scripts/library_media_importer_test.dart retag group; exercise_library_cloud_seeded_test.dart v30 cases"
+  - id: U3-SEED
+    title: "seed version 29 to 30"
+    terminal_state: closed_in_commit
+    commit: "4dd76242"
+    verification: "test/contracts/library_seed_v30_upgrade_behavioral_test.dart"
+  - id: U4-ROTATION
+    title: "founder decision: G0574 on the core list and linked to E027, so a basic-gym repeat week no longer repeats a back row"
+    terminal_state: closed_in_commit
+    commit: "f87869cd"
+    verification: "test/contracts/cross_day_variety_behavioral_test.dart; mutation recorded in diagnose c41a7e"
+  - id: U5-SNAPSHOTS
+    title: "plan snapshots and pinned counts re-recorded for library v30"
+    terminal_state: closed_in_commit
+    commit: "d788831b"
+    verification: "CI on d788831b and ed00f2da: all five sweep shards passed"
+  - id: B1-REPEAT-PIN
+    title: "B-pass 1: a repeat phase drops a pinned exercise the equipment can no longer do (OI-534)"
+    terminal_state: upstream_blocked
+    blocker: "only plans saved before a library retag are affected, and every account today is a testing account; the fix is a plan-engine change"
+    reopen_when: "store launch"
+  - id: B2-PAIR-GATE
+    title: "B-pass 2: the T-Bar pair had no mutation and no non-vacuity check"
+    terminal_state: closed_in_commit
+    commit: "media-two-new-two-retag@branch"
+    verification: "same_movement_day_gate_test.dart counts both sides; pairing test in the v30 contract; mutations in diagnose c41a7e"
+  - id: B3-DEMOTION
+    title: "B-pass 3: the link also soft-avoids and demotes"
+    terminal_state: closed_in_commit
+    commit: "media-two-new-two-retag@branch"
+    verification: "diagnose c41a7e, section on G0574"
+  - id: B4-OFF-WORDING
+    title: "B-pass 4: switch-off recordings claimed equality with older trees"
+    terminal_state: closed_in_commit
+    commit: "media-two-new-two-retag@branch"
+    verification: "the three kill-switch golden tests, balanced_week_gate_test.dart and day_floor_kill_switch_test.dart pass after the rewording"
+  - id: B5-COUNT
+    title: "B-pass 5: 107 to 108 in plate_flags.dart"
+    terminal_state: closed_in_commit
+    commit: "media-two-new-two-retag@branch"
+    verification: "counted from the library"
+  - id: B6-SOT
+    title: "B-pass 6: two stale SoT line ranges"
+    terminal_state: closed_in_commit
+    commit: "media-two-new-two-retag@branch"
+    verification: "dart run scripts/check_sot_registry_parity.dart PASS"
+  - id: B7-DOCS
+    title: "B-pass 7: four stale statements in docs"
+    terminal_state: closed_in_commit
+    commit: "media-two-new-two-retag@branch"
+    verification: "validate_diagnose_doc.dart OK"
+  - id: B8-RECORDS
+    title: "B-pass 8: closure ledger and plan-review record absent"
+    terminal_state: closed_in_commit
+    commit: "media-two-new-two-retag@branch"
+    verification: "this file and the plan-review record"
+  - id: B9-ROLLBACK
+    title: "B-pass 9: app rollback must be forward-only on the seed"
+    terminal_state: closed_in_commit
+    commit: "media-two-new-two-retag@branch"
+    verification: "plan, rollback section"
+  - id: L1-UPLOAD
+    title: "upload the four animation objects to live storage"
+    terminal_state: blocked_on_user
+    reason: "needs the founder's go; dry run done, nothing uploaded"
+  - id: L2-RESEED-AND-MERGE
+    title: "apply the cloud reseed, commit the numbered migration, then merge PR 363"
+    terminal_state: blocked_on_user
+    reason: "needs the founder's go for the live database apply and, separately, for the merge"

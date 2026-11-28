@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "recorded_on": "generator-killswitch-3a3c: the base tree 421cd2d2 with disable_loaded_wins set and the 3A / 3C keys unset (the world the deletion must reproduce). Delete with the flag. Re-recorded for library v30 (OI-443, founder 2026-11-28): library data changed, no plan-engine code changed.",
+    "recorded_on": "generator-killswitch-3a3c: the base tree 421cd2d2 with disable_loaded_wins set and the 3A / 3C keys unset (the world the deletion must reproduce). Delete with the flag. Re-recorded for library v30 (OI-443, founder 2026-11-28): library data changed, no plan-engine code changed. Equality with the older tree named above was last proven at seed 29.",
     "personas": 1010
   },
   "cross|full_gym|build_muscle|4d|beginner|p2": "41ca7b76af17dc33492555f6818e8c3d609b45fc497a038c8e71c76ee8eb0068",

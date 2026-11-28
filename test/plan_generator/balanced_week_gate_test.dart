@@ -174,7 +174,10 @@ void main() {
     }
   });
 
-  test('OFF: the switch set reproduces the pre-2C tree byte for byte', () async {
+  // Since library v30 (OI-443) these values are recorded from the current tree with the switch set;
+  // equality with the older tree they name was last proven at seed 29,
+  // and now rests on the plan-engine code being unchanged.
+  test('OFF: the switch set reproduces the recorded switch-off grid byte for byte', () async {
     await HiveService.instance.configBox.put('disable_balanced_week', true);
     try {
       final lines = <String>[];

@@ -33,7 +33,7 @@
 // keep working, so the faces are exactly what they were before this batch: the
 // plate where the row has a drawing, else the monogram. A row with an animation and
 // no drawing (the 623 new rows that have one and 34 old rows) shows the monogram and its sheet says NO DRAWING YET
-// with only this switch set; a row with both (107 old rows today; the first came with the OI-443
+// with only this switch set; a row with both (108 old rows today; the first came with the OI-443
 // release) goes back to its plate. `animationsEnabled` also follows
 // the plates switch, because an animation replaces a plate and has nothing to
 // replace when plates are off. It is read at the SINK (the repository checks it

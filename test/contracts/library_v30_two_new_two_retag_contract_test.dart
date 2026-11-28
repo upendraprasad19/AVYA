@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/same_movement.dart';
 
 Map<String, Map<String, dynamic>> _library() => {
       for (final r in jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List)
@@ -129,6 +130,13 @@ void main() {
       expect(File('assets/exercise_stills/${row['media_slug']}.webp').existsSync(), isTrue, reason: 'the bundled still');
     });
   }
+
+  test('on the shipped library, picking either T-bar row excludes the other from the same day', () {
+    final sm = SameMovement.fromRows(lib.values);
+    expect(sm.expand({'T-Bar Row'}), contains('Landmine T-Bar Row'));
+    expect(sm.expand({'Landmine T-Bar Row'}), contains('T-Bar Row'));
+    expect(sm.expandLower({'t-bar row'}), contains('landmine t-bar row'));
+  });
 
   test('the held old-row pictures 0592 and 0979 are shown by the new rows only', () {
     for (final entry in {'0592-preacher-curl': 'G0592', '0979-band-horizontal-pallof-press': 'G0979'}.entries) {
