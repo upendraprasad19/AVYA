@@ -82,7 +82,7 @@ void _showSwapSheet(BuildContext context, WidgetRef ref, int exerciseIndex,
       category: currentExercise.category,
       equipment: currentExercise.equipmentNeeded,
       // ⑦ OI-89 seam 6: the user's capability — NOT `equipment` above, which
-      // is the OUTGOING exercise's requirement and would invert the filter.
+      // is the OUTGOING exercise's requirement. It orders the sheet's rows.
       capability: TrainingHistoryAnalyzer.resolveCapabilityFromProfile(),
       takenNames: _sessionNameKeys(ref),
       onSelect: (swapEx) {

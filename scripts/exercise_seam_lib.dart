@@ -87,11 +87,11 @@ const seamAllowlist = <String, SeamEntry>{
       'removed), 15 -> 16 (B1, the core-list getAll), 16 -> 17 (OI-401, the '
       'top-up queryV4), 17 -> 18 (step 1A, hasCoreFields), 18 -> 22 (S1b-2, '
       'four SameMovement maps).'),
-  'lib/features/train/screens/template_builder_screen.dart': SeamEntry(3,
-      'Seam 7. customs via doableCustom (canOfferInPicker — unverifiable-'
-      'equipment customs stay visible), the default empty-query '
-      'getAll().take(30), and search — all filtered BEFORE .take(30) or a '
-      'bodyweight user sees a near-empty list.'),
+  'lib/features/train/screens/template_builder_screen.dart': SeamEntry(2,
+      'Seam 7. Hand-pick list: the whole getAll() and getCustomExercises() go '
+      'through PickerRows.arrange (equipment orders, never hides; founder '
+      '2026-11-28), then the search filters the arranged rows. Untyped: 30 '
+      'library rows plus all own; a search is not capped.'),
   'lib/features/nutrition/services/diet_plan_generator.dart': SeamEntry(2,
       'NOT an exercise seam - nutrition. Listed rather than excluded by a '
       'narrower regex, because a narrower regex is a blind spot nobody reviews.'),
@@ -111,26 +111,18 @@ const seamAllowlist = <String, SeamEntry>{
       'The PlannedExercise type itself plus its fromMap - definition, not '
       'emission.'),
   'lib/features/ai_coach/widgets/swap_exercise_coach_sheet.dart': SeamEntry(2,
-      'B2 Compass swap picker (spec 2026-09-18). Library getAll() + custom '
-      'getCustomExercises() feed the substitute list; BOTH are filtered by '
-      'EquipmentCapability.canOfferInPicker with '
-      'TrainingHistoryAnalyzer.resolveCapabilityFromProfile() BEFORE '
-      'rendering — the same predicate swap_service.dart enforces at '
-      'execute, so every option shown is one the swap path accepts.'),
+      'B2 Compass swap picker (spec 2026-09-18). Hand-pick list: getAll() and '
+      'getCustomExercises() go through PickerRows.arrange, so every exercise '
+      'is offered, the ones the equipment covers first (founder 2026-11-28).'),
   'lib/features/train/widgets/exercise_swap_sheet.dart': SeamEntry(2,
-      'Seam 6. Takes an explicit capability set. Library rows use '
-      'canPerform (fail-closed); the custom list uses canOfferInPicker — '
-      'a user-authored custom with an unverifiable (empty) requirement '
-      'stays visible. NOTE its `equipment` field holds the OUTGOING '
-      'exercise requirement, not the user capability - filtering by it '
-      'inverts the check.'),
+      'Seam 6. Hand-pick list: both reads go through PickerRows.arrange with '
+      'the capability the caller passes, which orders and never hides. NOTE '
+      'its `equipment` field holds the OUTGOING exercise requirement, not the '
+      'user capability - ordering by it inverts the check.'),
   'lib/features/train/screens/active_workout/exercise_picker_sheet.dart':
       SeamEntry(2,
-          'Seam 8. getAll() + customs, filtered on category and name only '
-          'until the OI-89 batch; since custom-picker-fix the two lists '
-          'filter SEPARATELY (library: canPerform; customs: '
-          'canOfferInPicker) then merge — no per-row is_custom check, '
-          'restored rows carry no such field.'),
+          'Seam 8. Hand-pick list: getAll() and getCustomExercises() through '
+          'PickerRows.arrange, then the category and name filter.'),
   'lib/shared/repositories/plan_engine/plan_generator.dart': SeamEntry(1,
       'B2 (session set budget, 2026-10-25; always on since the 2026-11-02 flip). generateV4 reads '
       'ExerciseRepository.instance.getAll() ONCE per generation to build the '

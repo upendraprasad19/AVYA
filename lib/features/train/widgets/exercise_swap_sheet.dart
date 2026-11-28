@@ -4,7 +4,7 @@ import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
 import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
+import 'package:icanbefitter/shared/repositories/picker_rows.dart';
 import 'package:icanbefitter/shared/widgets/wardroom/wardroom.dart';
 import '../providers/train_provider.dart';
 
@@ -15,15 +15,15 @@ class ExerciseSwapSheet extends StatefulWidget {
   final String? category;
 
   /// The OUTGOING exercise's requirement — NOT the user's capability.
-  /// ⑦ OI-89: this field was declared, accepted, and read NOWHERE. Filtering
-  /// by it would invert the check: swapping away from Chin Up would offer only
-  /// pull-up-bar exercises. Use [capability] for the user; this stays for the
-  /// caller's context.
+  /// ⑦ OI-89: this field was declared, accepted, and read NOWHERE. Using it
+  /// for the user would invert the check: swapping away from Chin Up would put
+  /// pull-up-bar exercises first. [capability] is the user's; this stays for
+  /// the caller's context.
   final List<String>? equipment;
 
-  /// ⑦ OI-89 seam 6: what the user can actually perform, or null for
-  /// "do not enforce". Without this a bodyweight user tapping swap was offered
-  /// all 259 library rows including Barbell Back Squat.
+  /// What the user's equipment covers, or null for "everything". It ORDERS
+  /// the rows and never hides one: a swap picked by hand can be any exercise
+  /// (founder 2026-11-28, [PickerRows]).
   final Set<String>? capability;
 
   /// `exerciseNameKey`s already in the session (OI-358): those rows stay
@@ -55,7 +55,8 @@ class ExerciseSwapSheet extends StatefulWidget {
 class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
   String _searchQuery = '';
   String _selectedCategory = '';
-  late List<Map<String, dynamic>> _allLibraryExercises;
+  late List<Map<String, dynamic>> _matchingLibrary;
+  late List<Map<String, dynamic>> _otherLibrary;
   late List<Map<String, dynamic>> _customExercises;
 
   static const _categoryChips = [
@@ -87,67 +88,55 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
 
   void _loadExercises() {
     final repo = ExerciseRepository.instance;
-    _allLibraryExercises = repo.getAll();
-    _allLibraryExercises.removeWhere((e) =>
-        (e['name'] as String?)?.toLowerCase() ==
-        widget.currentExerciseName.toLowerCase());
-    _customExercises = ExerciseRepository.instance.getCustomExercises();
-    // ⑦ OI-89 seam 6: drop what the user cannot perform. BOTH lists — a
-    // user's own custom exercise is just as unusable if it needs a barbell
-    // they do not have. ONE exception (custom-picker-fix, 2026-09-17): a
-    // custom row with an UNVERIFIABLE requirement (empty `equipment_needed`
-    // — the creation sheet stores `[]` by design) is always offered; the
-    // fail-closed rule was hiding every user-authored custom from the
-    // picker. Customs WITH parseable equipment still fail closed below.
-    final cap = widget.capability;
-    if (cap != null) {
-      _allLibraryExercises = _allLibraryExercises
-          .where((e) => EquipmentCapability.canPerform(e['equipment_needed'], cap))
-          .toList();
-      _customExercises = _customExercises
-          .where((e) => EquipmentCapability.canOfferInPicker(
-              e['equipment_needed'], cap,
-              isCustom: true))
-          .toList();
-    }
+    // The whole list is arranged first, so a row that stands for another keeps
+    // that row's names, the outgoing exercise's included.
+    final rows = PickerRows.arrange(
+      library: repo.getAll(),
+      custom: repo.getCustomExercises(),
+      capability: widget.capability,
+    );
+    final current = exerciseDuplicateKey(widget.currentExerciseName);
+    bool notCurrent(Map<String, dynamic> e) =>
+        exerciseDuplicateKey(e['name'] as String? ?? '') != current;
+    _matchingLibrary = rows.matchingLibrary.where(notCurrent).toList();
+    _otherLibrary = rows.otherLibrary.where(notCurrent).toList();
+    _customExercises = rows.custom;
   }
 
-  bool _isTaken(Map<String, dynamic> ex) => widget.takenNames
-      .contains(exerciseNameKey(ex['name'] as String? ?? ''));
+  bool _isTaken(Map<String, dynamic> ex) =>
+      PickerRows.isTaken(ex['name'] as String? ?? '', widget.takenNames);
 
-  List<Map<String, dynamic>> get _filteredLibrary {
-    if (_searchQuery.isNotEmpty) {
-      final q = exerciseDuplicateKey(_searchQuery);
-      return _allLibraryExercises.where((e) {
-        final name = exerciseDuplicateKey(e['name'] as String? ?? '');
-        if (name.contains(q)) return true;
-        final aliases = e['name_aliases'];
-        if (aliases is List) {
-          return aliases
-              .any((a) => exerciseDuplicateKey(a.toString()).contains(q));
-        }
-        return false;
-      }).toList();
-    }
-    if (_selectedCategory == 'All') return _allLibraryExercises;
-    return _allLibraryExercises.where((e) {
-      final cat = (e['category'] as String?)?.toLowerCase() ?? '';
-      return cat == _selectedCategory.toLowerCase();
-    }).toList();
+  /// A search reads every category. With no search the chip narrows the
+  /// library rows.
+  List<Map<String, dynamic>> _filtered(List<Map<String, dynamic>> rows) {
+    if (_searchQuery.isNotEmpty) return _searched(rows);
+    if (_selectedCategory == 'All') return rows;
+    return rows
+        .where((e) => PickerRows.inCategory(e, _selectedCategory))
+        .toList();
   }
 
-  List<Map<String, dynamic>> get _filteredCustom {
-    if (_searchQuery.isEmpty) return _customExercises;
+  /// The user's own exercises ignore the chip: many are filed under another
+  /// category, or under one that has no chip.
+  List<Map<String, dynamic>> get _filteredCustom => _searchQuery.isEmpty
+      ? _customExercises
+      : _searched(_customExercises);
+
+  List<Map<String, dynamic>> _searched(List<Map<String, dynamic>> rows) {
     final q = exerciseDuplicateKey(_searchQuery);
-    return _customExercises.where((e) {
-      final name = exerciseDuplicateKey(e['name'] as String? ?? '');
-      return name.contains(q);
+    bool hit(Object? name) =>
+        exerciseDuplicateKey(name?.toString() ?? '').contains(q);
+    return rows.where((e) {
+      final aliases = e['name_aliases'];
+      return hit(e['name']) || (aliases is List && aliases.any(hit));
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filteredLibrary;
+    final matching = _filtered(_matchingLibrary);
+    final other = _filtered(_otherLibrary);
+    final filtered = [...matching, ...other];
     final filteredCustom = _filteredCustom;
 
     return Container(
@@ -335,18 +324,7 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                 // misleading "No matching exercises found" above the custom
                 // results below, confusing the founder into reporting
                 // "Single Leg Front Lever" as missing).
-                ...filtered.map((ex) => _SwapItem(
-                      name: ex['name'] as String? ?? 'Unknown',
-                      detail: _buildDetail(ex),
-                      taken: _isTaken(ex),
-                      onSelect: () => widget.onSelect(SwapExerciseData(
-                        name: ex['name'] as String? ?? 'Unknown',
-                        detail: _buildDetail(ex),
-                        id: ex['id'] as String?, // W3.3: carry the library id
-                        // Obs 6: the swapped-IN exercise's own logging type.
-                        loggingType: ex['logging_type'] as String?,
-                      )),
-                    )),
+                ...matching.map(_libraryItem),
 
                 if (filteredCustom.isNotEmpty) ...[
                   Padding(
@@ -375,6 +353,22 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
                       )),
                 ],
 
+                // Rows outside the user's equipment: listed last, still
+                // theirs to pick.
+                if (other.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 6),
+                    child: Text(
+                      'MORE FROM THE LIBRARY',
+                      style: AppTypography.mono.copyWith(
+                        color: AppColors.textMute,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                  ...other.map(_libraryItem),
+                ],
+
                 if (filtered.isEmpty && filteredCustom.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(22),
@@ -395,6 +389,19 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
       ),
     );
   }
+
+  Widget _libraryItem(Map<String, dynamic> ex) => _SwapItem(
+        name: ex['name'] as String? ?? 'Unknown',
+        detail: _buildDetail(ex),
+        taken: _isTaken(ex),
+        onSelect: () => widget.onSelect(SwapExerciseData(
+          name: ex['name'] as String? ?? 'Unknown',
+          detail: _buildDetail(ex),
+          id: ex['id'] as String?, // W3.3: carry the library id
+          // Obs 6: the swapped-IN exercise's own logging type.
+          loggingType: ex['logging_type'] as String?,
+        )),
+      );
 
   String _buildDetail(Map<String, dynamic> ex) {
     final category = ex['category'] as String? ?? '';

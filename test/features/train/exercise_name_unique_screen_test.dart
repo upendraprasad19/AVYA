@@ -302,6 +302,65 @@ void main() {
     });
   });
 
+  // Founder 2026-11-28: a user adding mid-workout can pick ANY exercise. Their equipment
+  // only orders the list, through PickerRows.
+  group('Add picker offers every exercise', () {
+    // The harness keeps one Hive dir per file: the bodyweight profile must not leak.
+    tearDown(() => HiveService.instance.userBox.delete('profile'));
+
+    testWidgets('theirs first, one name once, and a barbell row adds',
+        (tester) async {
+      await ensureHive(tester);
+      await tester.runAsync(() => HiveService.instance.customBox.clear());
+      Map<String, dynamic> gear(String id, String name, List<String> equipment,
+              {String category = 'Push'}) =>
+          {..._lib(id, name), 'category': category, 'equipment_needed': equipment};
+      // The barbell row is keyed FIRST in Hive.
+      final h = await pumpScreen(tester, exercises: [
+        exercise(name: _bench)
+      ], libraryRows: [
+        gear('A0', 'Barbell Row Test', ['barbell']),
+        gear('L1', 'Floor Press Test', ['bodyweight']),
+        gear('Z1', 'Twin Test', ['barbell'], category: 'Core'),
+      ]);
+      await tester.runAsync(() async {
+        await HiveService.instance.userBox
+            .put('profile', <String, dynamic>{'equipment_access': 'bodyweight'});
+        await HiveService.instance.customBox.put(
+            'custom_exercise_twin', <String, dynamic>{
+          'id': 'custom_exercise_twin',
+          'name': 'Twin Test',
+          'type': 'exercise',
+          'category': 'Flexibility',
+          'primary_muscles': <String>['Own Muscle'],
+          'logging_type': 'weight_reps',
+          'equipment_needed': <String>[],
+        });
+      });
+      await _openAddPicker(tester);
+      double top(String name) => tester.getTopLeft(_inSheet(find.text(name))).dy;
+      expect(top('Floor Press Test'), lessThan(top('Barbell Row Test')));
+      expect(top('Twin Test'), lessThan(top('Barbell Row Test')));
+      expect(_inSheet(find.text('Twin Test')), findsOneWidget);
+
+      // Filed Flexibility, replacing a Core built-in: the Core chip still finds it.
+      await tester.tap(_inSheet(find.text('CORE')).first);
+      await _settle(tester);
+      await tester.enterText(_inSheet(find.byType(TextField)).first, 'twin');
+      await _settle(tester);
+      expect(_inSheet(find.text('Own Muscle')), findsOneWidget);
+      expect(_inSheet(find.text('Floor Press Test')), findsNothing,
+          reason: 'mirror: the chip and search still narrow');
+
+      await tester.tap(_inSheet(find.text('ALL')).first);
+      await tester.enterText(_inSheet(find.byType(TextField)).first, '');
+      await _settle(tester);
+      await tester.tap(_inSheet(find.text('Barbell Row Test')));
+      await _settle(tester);
+      expect(_names(h), [_bench, 'Barbell Row Test']);
+    });
+  });
+
   group('Swap sheet', () {
     testWidgets('another slot name is dead on the row body and has no SELECT',
         (tester) async {

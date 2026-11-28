@@ -3,13 +3,12 @@
 // that sent placeholder text to the model and got back "I need the specific
 // exercise IDs".
 //
-// Picker 1: today's scheduled exercises. Picker 2: library + custom
-// substitutes filtered by the SAME equipment-capability predicate the swap
-// service enforces (EquipmentCapability.canOfferInPicker) — so every option
-// offered here is one swapExerciseInDay will accept. Confirm submits ONE
-// `swap_exercise` ToolIntent with confirmationClass reviewable — the
-// existing reviewable preview card renders the diff and runs the canonical
-// dispatcher path. Zero Gemini tokens.
+// Picker 1: today's scheduled exercises. Picker 2: EVERY library and own
+// exercise, those the user's equipment covers first (PickerRows): a swap
+// picked by hand is not limited by equipment (founder 2026-11-28). Confirm
+// submits ONE `swap_exercise` ToolIntent with confirmationClass reviewable —
+// the existing reviewable preview card renders the diff and runs the
+// canonical dispatcher path. Zero Gemini tokens.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,7 +19,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../core/utils/exercise_name_identity.dart';
 import '../../../core/utils/ist_date.dart';
-import '../../../shared/repositories/plan_engine/equipment_capability.dart';
+import '../../../shared/repositories/picker_rows.dart';
 import '../../../shared/repositories/plan_engine/training_history_analyzer.dart';
 import '../../../shared/repositories/exercise_repository.dart';
 import '../../../shared/widgets/wardroom/ward_button.dart';
@@ -132,52 +131,41 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
     });
   }
 
-  /// Library + custom exercises the swap service would ACCEPT for this user
-  /// (same predicate swap_service.dart enforces on execute).
+  /// Every exercise that can be swapped in, in [PickerRows.merged] order, each
+  /// keeping whether it is the user's own.
   List<_SwapOption> _substitutesFor(String fromId) {
-    final capability = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
+    final rows = PickerRows.arrange(
+      library: ExerciseRepository.instance.getAll(),
+      custom: ExerciseRepository.instance.getCustomExercises(),
+      capability: TrainingHistoryAnalyzer.resolveCapabilityFromProfile(),
+    );
     final options = <_SwapOption>[];
-    void addRow(Map<String, dynamic> m, bool isCustom, String fallbackId) {
-      final name = (m['name'] as String?) ?? '';
-      if (name.isEmpty) return;
-      final id = (m['id'] as String?) ?? fallbackId;
-      if (id == fromId || name == fromId) return;
-      // The RAW value: the library stores a list, and the rule cannot read a
-      // list turned into text, so it refused every built-in exercise (a6f3d9).
-      if (capability != null &&
-          !EquipmentCapability.canOfferInPicker(
-              m['equipment_needed'], capability,
-              isCustom: isCustom)) {
-        return;
+    void addRows(List<Map<String, dynamic>> list, {required bool isCustom}) {
+      for (final m in list) {
+        final name = (m['name'] as String?) ?? '';
+        if (name.isEmpty) continue;
+        final id = (m['id'] as String?) ??
+            (isCustom ? null : m['exercise_id'] as String?) ??
+            '';
+        if (id == fromId || name == fromId) continue;
+        final aliases = m['name_aliases'];
+        options.add(_SwapOption(
+            id: id,
+            name: name,
+            isCustom: isCustom,
+            searchKeys: [
+              exerciseDuplicateKey(name),
+              if (aliases is List)
+                for (final a in aliases) exerciseDuplicateKey(a.toString()),
+            ]));
       }
-      final aliases = m['name_aliases'];
-      options.add(_SwapOption(
-          id: id,
-          name: name,
-          isCustom: isCustom,
-          searchKeys: [
-            exerciseDuplicateKey(name),
-            if (aliases is List)
-              for (final a in aliases) exerciseDuplicateKey(a.toString()),
-          ]));
     }
 
-    for (final row in ExerciseRepository.instance.getAll()) {
-      addRow(Map<String, dynamic>.from(row), false,
-          (row['id'] as String?) ?? (row['exercise_id'] as String?) ?? '');
-    }
-    final community = options.length;
-    for (final row in ExerciseRepository.instance.getCustomExercises()) {
-      addRow(Map<String, dynamic>.from(row), true,
-          (row['id'] as String?) ?? '');
-    }
-    // One id, one row: the author's own custom stands for its community copy,
-    // or picking either one would tick both.
-    final ownIds = {for (final o in options.skip(community)) o.id};
-    return [
-      for (var i = 0; i < options.length; i++)
-        if (i >= community || !ownIds.contains(options[i].id)) options[i],
-    ];
+    addRows(rows.matchingLibrary, isCustom: false);
+    addRows(rows.matchingCustom, isCustom: true);
+    addRows(rows.otherLibrary, isCustom: false);
+    addRows(rows.otherCustom, isCustom: true);
+    return options;
   }
 
   void _confirm() {
@@ -289,8 +277,8 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
         pickingFrom
             ? _header('SWAP WHICH EXERCISE?', 'Tap the one to replace.')
             : _header('REPLACE WITH…',
-                'Only exercises your equipment allows are listed.'),
-        // The list holds every exercise the equipment allows: hundreds of rows.
+                'Exercises that match your equipment are listed first.'),
+        // The list holds every exercise: hundreds of rows.
         if (!pickingFrom) ...[
           _searchField(),
           const SizedBox(height: 8),
@@ -327,9 +315,7 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
                     return Text(
                       all.isNotEmpty
                           ? 'No exercise matches that search.'
-                          : 'No substitutes available with your current '
-                              'equipment. Add equipment under Profile, or ask '
-                              'the coach instead.',
+                          : 'No other exercises found.',
                       style: AppTypography.bodyS
                           .copyWith(color: AppColors.textMute),
                     );
@@ -340,14 +326,14 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
                     separatorBuilder: (ctx2, i2) => const SizedBox(height: 6),
                     itemBuilder: (ctx, i) {
                       final isTaken =
-                          taken.contains(exerciseNameKey(options[i].name));
+                          PickerRows.isTaken(options[i].name, taken);
                       return _tile(
                         label: options[i].name +
                             (options[i].isCustom ? '  ·CUSTOM' : '') +
                             (isTaken
                                 ? '  ·${WardroomCopy.activeAlreadyInWorkoutTag}'
                                 : ''),
-                        selected: _selectedTo?.id == options[i].id,
+                        selected: identical(_selectedTo, options[i]),
                         onTap: isTaken
                             ? null
                             : () => setState(() => _selectedTo = options[i]),

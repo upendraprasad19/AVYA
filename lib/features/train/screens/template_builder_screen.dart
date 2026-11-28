@@ -1,4 +1,4 @@
-import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
+import 'package:icanbefitter/shared/repositories/picker_rows.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 import 'dart:async';
 
@@ -554,59 +554,50 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
     super.dispose();
   }
 
-  /// Merges bundled library with user-created custom exercises.
-  ///
-  /// Custom exercises are shown first so users can find their own
-  /// additions quickly. When no query, caps at 30 bundled + all custom.
+  /// Lists EVERY exercise (founder 2026-11-28): the ones the user's equipment
+  /// covers first, their own ahead of the library rows beside them, one row per
+  /// name. The whole list is arranged BEFORE the search, so which row stands for
+  /// a name never depends on what was typed. Untyped, the view is 30 library
+  /// rows plus all own ones; a search is not capped, so a typed name is always
+  /// reachable.
   void _refresh(String query) {
     final repo = ExerciseRepository.instance;
-    // ⑦ OI-89 seam 7: filter BEFORE .take(30). Filtering the first 30 rows
-    // instead would leave a bodyweight user staring at a near-empty list — the
-    // cap is applied to the wrong set. All three reads are covered: the custom
-    // list, the empty-query default view, and the search results.
-    //
-    // custom-picker-fix (2026-09-17): the library lists keep the fail-closed
-    // `canPerform`; the CUSTOM list uses `canOfferInPicker(isCustom: true)` —
-    // a user-authored custom with an UNVERIFIABLE requirement (empty
-    // `equipment_needed`, the creation sheet's hardcoded shape) is always
-    // offered. Provenance is list membership, not a per-row `is_custom` check:
-    // restored custom rows carry no such field.
-    final cap = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
-    List<Map<String, dynamic>> doable(List<Map<String, dynamic>> rows) =>
-        cap == null
-            ? rows
-            : rows
-                .where((e) =>
-                    EquipmentCapability.canPerform(e['equipment_needed'], cap))
-                .toList();
-    List<Map<String, dynamic>> doableCustom(List<Map<String, dynamic>> rows) =>
-        cap == null
-            ? rows
-            : rows
-                .where((e) => EquipmentCapability.canOfferInPicker(
-                    e['equipment_needed'], cap,
-                    isCustom: true))
-                .toList();
+    final rows = PickerRows.arrange(
+      library: repo.getAll(),
+      custom: repo.getCustomExercises(),
+      capability: TrainingHistoryAnalyzer.resolveCapabilityFromProfile(),
+    );
 
-    final custom = doableCustom(repo.getCustomExercises());
-
-    List<Map<String, dynamic>> bundled;
-    List<Map<String, dynamic>> matchedCustom;
+    var matchingLibrary = rows.matchingLibrary;
+    var otherLibrary = rows.otherLibrary;
+    var matchingCustom = rows.matchingCustom;
+    var otherCustom = rows.otherCustom;
 
     if (query.isEmpty) {
-      bundled = doable(repo.getAll()).take(30).toList();
-      matchedCustom = custom;
+      matchingLibrary = matchingLibrary.take(30).toList();
+      otherLibrary = otherLibrary.take(30 - matchingLibrary.length).toList();
     } else {
       final q = exerciseDuplicateKey(query);
-      bundled = doable(repo.search(query)).take(30).toList();
-      matchedCustom = custom.where((e) {
-        final name = exerciseDuplicateKey(e['name'] as String? ?? '');
-        return name.contains(q);
-      }).toList();
+      bool hit(Object? name) =>
+          exerciseDuplicateKey(name?.toString() ?? '').contains(q);
+      List<Map<String, dynamic>> found(List<Map<String, dynamic>> list) =>
+          list.where((e) {
+            final aliases = e['name_aliases'];
+            return hit(e['name']) || (aliases is List && aliases.any(hit));
+          }).toList();
+      matchingLibrary = found(matchingLibrary);
+      otherLibrary = found(otherLibrary);
+      matchingCustom = found(matchingCustom);
+      otherCustom = found(otherCustom);
     }
 
     setState(() {
-      _results = [...matchedCustom, ...bundled];
+      _results = [
+        ...matchingCustom,
+        ...matchingLibrary,
+        ...otherCustom,
+        ...otherLibrary,
+      ];
     });
   }
 
@@ -736,8 +727,8 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
                     itemCount: _results.length,
                     itemBuilder: (context, index) {
                       final ex = _results[index];
-                      final taken = widget.takenNames.contains(
-                          exerciseNameKey(ex['name'] as String? ?? ''));
+                      final taken = PickerRows.isTaken(
+                          ex['name'] as String? ?? '', widget.takenNames);
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
                         enabled: !taken,
