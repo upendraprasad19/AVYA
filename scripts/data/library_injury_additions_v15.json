@@ -12,6 +12,7 @@
   },
   "safe_pool_additions": [
     "Band Hip Lift",
+    "Band Pallof Press",
     "Band Reverse Fly",
     "Band Standing Rear Delt Row",
     "Barbell Incline Row",
@@ -2166,6 +2167,14 @@
       "reason": "floor elbow+shoulder (all 2 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
       "variant_family": "dip"
     },
+    "G0592": {
+      "tokens": [
+        "elbow"
+      ],
+      "class": "family",
+      "reason": "floor elbow (all 1 same-family originals); family elbow (elbow_flexion / elbow_extension pattern)",
+      "variant_family": "preacher_curl"
+    },
     "G0595": {
       "tokens": [
         "lower_back",
@@ -2809,6 +2818,12 @@
       "class": "floor",
       "reason": "floor shoulder (all 2 same-family originals)",
       "variant_family": "front_raise"
+    },
+    "G0979": {
+      "tokens": [],
+      "class": "judgement",
+      "reason": "judgement none (founder 2026-11-28 approved Band Pallof Press with no injury restriction; the same-family originals Pallof Press and Bird Dog are untagged, and the shoulder tag on G1015 is for its overhead path)",
+      "variant_family": "anti_rotation"
     },
     "G0980": {
       "tokens": [

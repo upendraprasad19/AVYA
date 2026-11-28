@@ -62,7 +62,10 @@ void main() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
-  test('the switch set: every golden persona equals the OFF world recorded on 421cd2d2', () {
+  // Since library v30 (OI-443) these values are recorded from the current tree with the switch set;
+  // equality with the older tree they name was last proven at seed 29,
+  // and now rests on the plan-engine code being unchanged.
+  test('the switch set: every golden persona equals the recorded switch-off world', () {
     final fixture = jsonDecode(File(_fixturePath).readAsStringSync()) as Map<String, dynamic>;
     final personas = generatorGoldenPersonas();
     expect(fixture.keys.where((k) => k != '_meta').toSet(), {for (final p in personas) p.key});

@@ -27,9 +27,11 @@ import '../helpers/injury_floor_sweep_lib.dart';
 /// still main's); knock-on rises with them.
 /// Attribution (review round 1): with the goal training off and d65 KEPT, this file's pre-3A counts pass unchanged, so
 /// d65 alone moves nothing here and every moved count is the goal training's (and with d65 reverted too, likewise).
+/// Library v30 (OI-443, 2026-11-28; library data only, no plan-engine code change):
+/// home_dumbbells thin OFF / gained 188 -> 168 (fewer days start thin).
 const _expected = <String, (int, int, int, int, int, int, int)>{
   'bodyweight': (720, 12960, 28, 28, 6, 0, 4),
-  'home_dumbbells': (720, 12960, 188, 188, 27, 0, 6),
+  'home_dumbbells': (720, 12960, 168, 168, 27, 0, 6),
   'basic_gym': (720, 12960, 164, 164, 24, 0, 0),
   'full_gym': (720, 12960, 128, 128, 30, 0, 0),
 };

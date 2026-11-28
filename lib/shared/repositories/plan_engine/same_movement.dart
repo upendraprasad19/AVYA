@@ -1,5 +1,6 @@
 // Library Batch S1b-2 (plan docs/plans/2026-11-09-library-batch-s1b2-loaded-versions.md, Decision 2): the same-movement
-// rule. A loaded version (N14 to N22) carries `same_movement_as: <original id>`; the founder's condition (2026-11-08) is
+// rule. A loaded version (N14 to N22) carries `same_movement_as: <original id>` (since seed v30 so does G0574 Landmine
+// T-Bar Row -> E027 T-Bar Row, the same lift on other kit); the founder's condition (2026-11-08) is
 // that a version and its original never share a day. Generation dedups a day by NAME, so the rule is: wherever a name
 // is checked, its partner's name is checked too. `expand` adds the partners to a name set; callers pass the result to
 // the check they already run (queryV4 excludeNames, the core-list `passes`, the soft-avoid sets). Plateau names are

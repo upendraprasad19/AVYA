@@ -20,6 +20,7 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 
 import '../helpers/hive_test_setup.dart';
 import '../helpers/library_media_three_v29.dart';
+import '../helpers/library_v30_rows.dart';
 import '../helpers/library_lunge_alias_v28.dart';
 
 List<Map<String, dynamic>> _bundled() =>
@@ -69,11 +70,11 @@ void main() {
   // assets/data/exercise_library.json at the branch base (main 70add5cf), computed independently with Python's compact
   // json.dumps (ensure_ascii off), the method of library_seed_v27_upgrade_behavioral_test.dart.
   test('the v28 bundle is the v27 bundle with G3470 alias removed, and nothing else', () {
-    expect(sha256.convert(utf8.encode(jsonEncode(_v27Bundle().map(withoutMediaV29).toList()))).toString(),
+    expect(sha256.convert(utf8.encode(jsonEncode(beforeV30(_v27Bundle()).map(withoutMediaV29).toList()))).toString(),
         'ef1cea152b3824cfae6e9508cbf8d214e46a87a1225b0f91676c8fb8d7682f18');
   });
 
-  test('a v27 box ends at the current version (v29): G3470 is written as bundled without the alias, every other row is unchanged', () async {
+  test('a v27 box ends at the current version (v30): G3470 is written as bundled without the alias, every other row is unchanged', () async {
     final hive = HiveService.instance;
     await _putV27Box(hive);
     await _markSeeded(hive, 27);
@@ -92,7 +93,7 @@ void main() {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 29);
+    expect(hive.configBox.get('exercise_library_version') as int, 30);
   });
 
   test('a custom row named "Reverse Lunge" survives the upgrade (the prune deletes ids, never a name)', () async {
@@ -108,12 +109,12 @@ void main() {
     expect(_asJson(hive.exerciseBox.get(lungeAliasRowIdV28)).containsKey('name_aliases'), isFalse);
   });
 
-  test('MIRROR: a box already at the current version (v29) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v30) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV27Box(hive);
-    await _markSeeded(hive, 29);
+    await _markSeeded(hive, 30);
     await SeedService.instance.seedIfNeeded();
     expect(_asJson(hive.exerciseBox.get(lungeAliasRowIdV28))['name_aliases'], [lungeAliasV28], reason: 'keeps its v27 form');
-    expect(hive.configBox.get('exercise_library_version') as int, 29);
+    expect(hive.configBox.get('exercise_library_version') as int, 30);
   });
 }

@@ -14,10 +14,11 @@
 // Rules:
 //  - It DROPS every row whose id is ANY source id (held or not), then appends the NON-held source rows in source order,
 //    so a row held after a first import leaves the file on the next run and a release adds it. Kept rows are untouched,
-//    with TWO exceptions: E274's target_focus Upper Back -> Mid Back, and E230's nine retag keys (Batch C2c, below).
-//  - RETAG STAGE (Batch C2c, OI-474): scripts/data/library_e230_retag.json holds E230's `before` and `after` for nine keys.
-//    A row whose nine values all equal `before` takes `{...row, ...after}` (key positions kept); all equal `after` is a
-//    no-op; anything else stops the run naming the key. A later hand edit of those nine E230 keys therefore throws until
+//    with these exceptions: E274's target_focus Upper Back -> Mid Back, and the retag records' keys (RETAG STAGE, below).
+//  - RETAG STAGE (Batch C2c, OI-474; library v30): each file in RETAG_FILES holds one kept row's `before` and `after`
+//    (E230: nine keys; E027 and E120: equipment keys, and E027 its cues). Two records may not name one row.
+//    A row whose recorded values all equal `before` takes `{...row, ...after}` (key positions kept); all equal `after` is a
+//    no-op; anything else stops the run naming the key. A later hand edit of a recorded key therefore throws until
 //    the record's `after` is updated. An absent record is a printed no-op (tests copy this script into temp dirs, as for
 //    --removals); a record whose id is not a kept row stops the run.
 //  - CORE-LEVELS STAGE (Library Batch S1a, plan docs/plans/2026-11-08-library-batch-s1-core-data.md):
@@ -218,25 +219,32 @@ function applyMedia(allRows, media) {
   });
 }
 
-// Batch C2c (OI-474): the E230 retag record. Absent = printed no-op. The record must name the same keys in `before`
-// and `after` (a typo key would be appended last and --check would still pass bytewise).
-const RETAG = path.join(__dirname, 'data', 'library_e230_retag.json');
+// The retag records: one named edit to one KEPT row each (Batch C2c E230; library v30 E027 and E120). An absent record is
+// a printed no-op. A record must name the same keys in `before` and `after` (a typo key would be appended last and
+// --check would still pass bytewise), and two records may not name one row.
+const RETAG_FILES = ['library_e230_retag.json', 'library_e027_retag.json', 'library_e120_retag.json'];
 
-function readRetag() {
-  if (!fs.existsSync(RETAG)) {
-    console.log(`retag stage skipped: ${RETAG} not found`);
-    return null;
+function readRetags() {
+  const byId = new Map();
+  for (const name of RETAG_FILES) {
+    const file = path.join(__dirname, 'data', name);
+    if (!fs.existsSync(file)) {
+      console.log(`retag stage skipped: ${file} not found`);
+      continue;
+    }
+    const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!rec || typeof rec.id !== 'string' || !rec.before || !rec.after) {
+      throw new Error(`retag record ${file} needs id, before and after`);
+    }
+    const bk = Object.keys(rec.before);
+    const ak = Object.keys(rec.after);
+    if (bk.length === 0 || bk.join(',') !== ak.join(',')) {
+      throw new Error(`retag record ${file}: before and after must name the same keys in the same order (${bk} vs ${ak})`);
+    }
+    if (byId.has(rec.id)) throw new Error(`retag record ${file} names ${rec.id}, which another retag record names too`);
+    byId.set(rec.id, rec);
   }
-  const rec = JSON.parse(fs.readFileSync(RETAG, 'utf8'));
-  if (!rec || typeof rec.id !== 'string' || !rec.before || !rec.after) {
-    throw new Error(`retag record ${RETAG} needs id, before and after`);
-  }
-  const bk = Object.keys(rec.before);
-  const ak = Object.keys(rec.after);
-  if (bk.length === 0 || bk.join(',') !== ak.join(',')) {
-    throw new Error(`retag record ${RETAG}: before and after must name the same keys in the same order (${bk} vs ${ak})`);
-  }
-  return rec;
+  return byId;
 }
 
 function retagRow(row, rec) {
@@ -521,16 +529,18 @@ function main() {
   const removeIds = new Set(removals.map((e) => e.id));
   const inSource = [...removeIds].filter((i) => sourceIds.has(i));
   if (inSource.length) throw new Error(`removals name source ids: ${inSource.join(' ')}`);
-  const retag = readRetag();
+  const retags = readRetags();
   const kept = base.filter((r) => !sourceIds.has(r.id) && !removeIds.has(r.id)).map((r) => {
-    if (retag && r.id === retag.id) return retagRow(r, retag);
+    if (retags.has(r.id)) return retagRow(r, retags.get(r.id));
     if (r.id !== 'E274') return r;
     // E274 Prone T Raise: target_focus Upper Back -> Mid Back (the core-list label also carried Mid Back; since seed v27 the
     // overlay-copy stage writes E274's whole target_focus, and this map is a no-op on its after).
     return { ...r, target_focus: r.target_focus.map((f) => (f === 'Upper Back' ? 'Mid Back' : f)) };
   });
   if (!kept.some((r) => r.id === 'E274')) throw new Error('E274 is not in the library');
-  if (retag && !kept.some((r) => r.id === retag.id)) throw new Error(`${retag.id} is not a kept row of the library (the retag record names it)`);
+  for (const id of retags.keys()) {
+    if (!kept.some((r) => r.id === id)) throw new Error(`${id} is not a kept row of the library (the retag record names it)`);
+  }
   const coreLevels = readCoreLevels();
   if (coreLevels) {
     const keptIds = new Set(kept.map((r) => r.id));
