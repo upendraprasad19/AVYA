@@ -9458,9 +9458,8 @@ concepts:
           exerciseDuplicateKey: case, repeated / non-breaking spaces and curly
           apostrophes ignored) or the v5 id of an earlier custom refuses with
           duplicate_name and WardroomCopy.customExerciseNameTakenTemplate; the
-          coach tool passes that message through unchanged. ONE exception
-          (founder 2026-11-26): a community row no picker can show does not
-          take its name (see the isNameTaken reader below). Test
+          coach tool passes that message through unchanged. No row is exempt:
+          every hand-pick list shows every row (81a2dd). Test
           test/contracts/custom_exercise_name_unique_behavioral_test.dart.
       - file: lib/core/services/workout_write_service.dart
         line_range: 1718-1760
@@ -13542,6 +13541,13 @@ concepts:
       `EquipmentCapability.canPerform(equipment_needed, effective)` — keyed on
       `equipment_needed`, NEVER on `equipment_tier`.
 
+      WHAT IT LIMITS (81a2dd, founder 2026-11-28): only what the APP picks (the
+      generator, repeat pins, warm-up, finisher, the injury planner) and what the
+      coach is told. What the USER picks by hand (swap sheet, mid-workout picker,
+      template builder, the coach's swap list, and a coach swap once applied) is
+      never limited: the lists are ORDERED by it (PickerRows) and the swap write
+      has no equipment check.
+
       Two producers, deliberately NOT merged:
         resolveCapability / resolveCapabilityFromProfile  — the HARD FLOOR.
         effectiveEquipmentForSnapshot                     — the AI coach's view.
@@ -13564,7 +13570,7 @@ concepts:
       every warm-up at every tier. The producers fail OPEN (Hive error, unknown
       tier, flag off → null) so a storage fault never empties a plan.
 
-      Flag: `enable_equipment_capability_floor`.
+      Kill switch: `disable_equipment_capability_floor` (default ON).
     writers:
       - file: lib/core/utils/equipment_vocab.dart
         method: effectiveItems / tierItems / floorSanitizedExclusions

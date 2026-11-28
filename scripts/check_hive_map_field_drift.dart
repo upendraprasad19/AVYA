@@ -400,9 +400,9 @@ const _alwaysOk = <String>{
   // shape directly above.
   'equipment_owned',
   // ⑦ OI-89 — a canonical userBox['profile'] field read by
-  // TrainingHistoryAnalyzer.resolveCapabilityFromProfile(), which the four UI
-  // seams (swap sheet, exercise picker, template builder, SwapService) call
-  // because they have no generateV4 caller to pass tier down from. NOT an
+  // TrainingHistoryAnalyzer.resolveCapabilityFromProfile(), which the
+  // hand-pick lists and InjurySwapPlanner call because they have no
+  // generateV4 caller to pass tier down from. NOT an
   // exlog_*/schedule_* field; same heuristic mis-attribution as the two above.
   'equipment_access',
   // plan_json cloud-bundle fields — read by _restoreWorkoutPlan +

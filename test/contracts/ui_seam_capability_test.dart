@@ -11,8 +11,12 @@
 //                                 swap_exercise tool drives it WITHOUT opening any
 //                                 sheet, so filtering the UI does not cover it
 //
-// All four read the same helper, so that helper is what these tests pin. The
-// widget lists themselves are exercised by the filter it returns.
+// All four read the same helper, so that helper is what these tests pin.
+//
+// Since 81a2dd (founder 2026-11-28) seams 6-8 no longer filter by it and seam 9
+// has no equipment check: a user picking by hand can pick any exercise. The lists
+// ORDER by this helper's answer (PickerRows), and InjurySwapPlanner, where the
+// app picks, filters by it. Each list's behaviour is pinned by its own test.
 import 'dart:io';
 
 import 'package:flutter/services.dart';
