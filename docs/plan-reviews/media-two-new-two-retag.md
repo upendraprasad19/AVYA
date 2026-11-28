@@ -32,7 +32,10 @@ Not catastrophic, so no Hermes. Plan: `docs/plans/2026-11-28-media-two-new-two-r
 No full suite ran locally (a local library run was too slow on the Windows laptop and was stopped). The base is main's
 green CI at `d2d92832`; the after state is PR CI.
 
-## Live steps, each needing the founder's go
-Storage upload of four objects; the cloud reseed (`Destructive?: yes`, draft in `test/sql/`; no Supabase-branch or
-local-docker dry run is available, a departure from `supabase/migrations/CLAUDE.md`; applying it before the merge is a
-second departure); the merge.
+## Live steps
+- **Storage upload** (founder go, 2026-11-28): four objects, verified, bucket still refuses requests without a login.
+- **Cloud reseed** (founder go, 2026-11-28, "Go ship it now"): applied as migration 191; evidence in
+  `backups/applied_migrations.json`. Two departures from `supabase/migrations/CLAUDE.md`, both told to the founder
+  before the apply: no Supabase-branch or local-docker dry run (rehearsed on live in a transaction that ends in an
+  error, so it cannot commit), and applied before the merge.
+- **Merge:** under the same go, after full CI is green.

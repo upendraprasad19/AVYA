@@ -149,3 +149,15 @@ Run on 2026-11-28 after G0574 joined, one at a time, restored byte for byte:
 |---|---|
 | G0574's `same_movement_as` removed | 1 of the same-day gate, on its pair-count pin only (no shared day appears, see above); 2 of the v30 contract (G0574's values and the pairing test) |
 | G0574's `core_levels` emptied | 1 (`cross_day_variety_behavioral_test.dart`, the repeat-phase case) |
+
+## After the apply (migration 191, 2026-11-28)
+
+Applied to the live project after the founder's go; evidence is in `backups/applied_migrations.json` entry 191.
+
+The draft was generated with `--split` (two INSERT statements), which no earlier seed used and which the apply script did
+not need (183 went up whole). `exercise_library_cloud_tuples_match_test.dart` always generated one statement, so its
+line-for-line test and its media-key test stayed red after the apply (554 positions differed). The plan, both plan
+reviews and the B-pass read those reds as "red until the apply"; nobody compared the layouts. An applied migration is
+immutable, so the test now generates with `--split` when the newest seed holds two INSERT statements, and refuses any
+other count. Every non-comment line is still compared. Without the change: 2 tests red; with it: the two cloud test files
+and the ledger parity test pass, 53 of 53, including the group that changes or removes a row and expects a difference.

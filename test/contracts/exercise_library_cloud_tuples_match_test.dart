@@ -43,6 +43,15 @@ File _newestSeedMigration() {
 List<String> _sqlLines(String text) =>
     const LineSplitter().convert(text).where((l) => !l.startsWith('--')).toList();
 
+/// The generator's layout flags for the newest migration: a seed generated with `--split` (191 was) holds two INSERT
+/// statements, and the comparison is line for line, so the sandbox run has to use the same layout. Any other count
+/// is not a layout the generator writes.
+List<String> _layoutFlags(List<String> migrationLines) {
+  final inserts = migrationLines.where((l) => l.startsWith('INSERT INTO ')).length;
+  expect(inserts, anyOf(1, 2), reason: 'a seed migration holds one INSERT, or two when generated with --split');
+  return [if (inserts == 2) '--split'];
+}
+
 /// The number of positions at which the two line lists differ (a length difference counts too).
 int _diffCount(List<String> a, List<String> b) {
   final n = a.length > b.length ? a.length : b.length;
@@ -105,9 +114,10 @@ class _Sandbox {
 
   /// Runs the sandbox generator and returns its non-comment lines.
   Future<List<String>> generate() async {
+    final layout = _layoutFlags(_sqlLines(_newestSeedMigration().readAsStringSync()));
     final r = await runSpawnAsync(
       'node',
-      [script, _outName, '--out', '${dir.path}/out'],
+      [script, _outName, ...layout, '--out', '${dir.path}/out'],
       why: 'seed_exercise_library.js on a sandbox copy',
       report: (_) {},
     ).timeout(const Duration(seconds: 60), onTimeout: () => throw TimeoutException('generator run timed out'));

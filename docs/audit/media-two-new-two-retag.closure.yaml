@@ -82,9 +82,10 @@ findings:
     verification: "plan, rollback section"
   - id: L1-UPLOAD
     title: "upload the four animation objects to live storage"
-    terminal_state: blocked_on_user
-    reason: "needs the founder's go; dry run done, nothing uploaded"
-  - id: L2-RESEED-AND-MERGE
-    title: "apply the cloud reseed, commit the numbered migration, then merge PR 363"
-    terminal_state: blocked_on_user
-    reason: "needs the founder's go for the live database apply and, separately, for the merge"
+    terminal_state: verified_clean
+    evidence: "2026-11-28, founder go: 4 uploaded, 0 failed; --verify 4 of 4 match the table; both no-login probes answered 400"
+  - id: L2-RESEED
+    title: "apply the cloud reseed and commit it as migration 191 (the merge of PR 363 follows, same founder go)"
+    terminal_state: closed_in_commit
+    commit: "media-two-new-two-retag@branch"
+    verification: "backups/applied_migrations.json entry 191; exercise_library_cloud_tuples_match_test.dart and exercise_library_cloud_seeded_test.dart"
