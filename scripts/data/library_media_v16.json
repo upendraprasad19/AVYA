@@ -3,9 +3,9 @@
     "bucket": "exercise-media",
     "ledger_completed_at": "2026-10-18T03:13:14.150Z",
     "old_rows": {
-      "entries": 137,
+      "entries": 140,
       "omitted": 0,
-      "sha256": "82eebf19d774b7779c42620c2dd88f87227c67dbb01a1d24f29501ff330fdc15"
+      "sha256": "247b004ed1ad32c9c79da9921874176a9b8a659bca4f092fa162adb8740454c3"
     },
     "origin": "AI recreation of the GIF set in `assets/exercise animations/forgetrainer_animations/gifs`; licensing risk accepted by the founder (D9, 2026-10-21)",
     "taken_down": [],
@@ -1247,6 +1247,25 @@
       "webp_bytes": 307140,
       "webp_sha256": "f12ebde5b206384a85c053aee8e46bd02215fb9c70688ca975f09dd0858af589"
     },
+    "0108-barbell-standing-leg-calf-raise": {
+      "frames": 12,
+      "gif": "0108",
+      "ledger_id": "0108_Barbell_Standing_Leg_Calf_Raise",
+      "source_gif_sha256": "f0721976b14f1220d7b72bb5a837644f920b1d4eb674534da9c17344e108c876",
+      "status": "active",
+      "thumb_bytes": 4510,
+      "thumb_sha256": "1a5a5de484269619f4132e639599c967d290107eddd9ebd989fffd1fd7b25caa",
+      "versions": [
+        {
+          "file": "webp-720/0108_Barbell_Standing_Leg_Calf_Raise_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 422476,
+          "webp_sha256": "c8bb2d71617e7db053f92bca72eca31aa2fa14389cb76b38710d9e7f752e3121"
+        }
+      ],
+      "webp_bytes": 422476,
+      "webp_sha256": "c8bb2d71617e7db053f92bca72eca31aa2fa14389cb76b38710d9e7f752e3121"
+    },
     "0109-barbell-standing-overhead-tricep-extension": {
       "frames": 12,
       "gif": "0109",
@@ -2310,6 +2329,25 @@
       ],
       "webp_bytes": 123878,
       "webp_sha256": "b5a1e28f9bcd15104b6c8fa9740d3c0f34e33a145941b6c788b56b02925921e9"
+    },
+    "0228-cable-standing-kickback": {
+      "frames": 12,
+      "gif": "0228",
+      "ledger_id": "0228_Cable_Standing_Kickback",
+      "source_gif_sha256": "c24a792f3a70d6bc21bf6d7753eff4f7c0b3347eeb167ffe596089fe47496995",
+      "status": "active",
+      "thumb_bytes": 3852,
+      "thumb_sha256": "25f4a854e9028cdb78319c1e5c5d6e0b87a14bb4b96c6c3ce1f5cd5b755549e8",
+      "versions": [
+        {
+          "file": "webp-720/0228_Cable_Standing_Kickback_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 281462,
+          "webp_sha256": "15742e5ec0af54c90e125a1fac2d86ebedf48718555cd1ef380ddd4d0ed9914a"
+        }
+      ],
+      "webp_bytes": 281462,
+      "webp_sha256": "15742e5ec0af54c90e125a1fac2d86ebedf48718555cd1ef380ddd4d0ed9914a"
     },
     "0231-cable-standing-single-arm-tricep-extension": {
       "frames": 12,
@@ -14394,6 +14432,25 @@
       ],
       "webp_bytes": 606296,
       "webp_sha256": "657865749afb5513e314dc9ae89b0c8f00b8280a7870b9366514bd1fc20c761b"
+    },
+    "9001-table-row-clean": {
+      "frames": 12,
+      "gif": "9001",
+      "ledger_id": "table-row-clean",
+      "source_gif_sha256": "480cf4b9a39e3e14d9171855584035daa191cb67127fc7aa132d90079daa4178",
+      "status": "active",
+      "thumb_bytes": 3990,
+      "thumb_sha256": "d06fa44a3c4a4acf9576d532737a35e73c543df522a01191c9caaed158369976",
+      "versions": [
+        {
+          "file": "webp-720/table-row-clean_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 389712,
+          "webp_sha256": "3b8b3b8afee205aebd6e15b442243627eb00872b01f887c1ec969b00dbfa8778"
+        }
+      ],
+      "webp_bytes": 389712,
+      "webp_sha256": "3b8b3b8afee205aebd6e15b442243627eb00872b01f887c1ec969b00dbfa8778"
     }
   },
   "rows": {
@@ -14443,6 +14500,7 @@
     "E048": "3013-low-glute-bridge-on-floor",
     "E049": "0586-lying-leg-curl",
     "E050": "0117-barbell-sumo-deadlift",
+    "E051": "0108-barbell-standing-leg-calf-raise",
     "E052": "0594-seated-calf-raise",
     "E055": "0276-dead-bug",
     "E056": "0175-cable-kneeling-crunch",
@@ -14482,6 +14540,7 @@
     "E106": "0406-dumbbell-shrug",
     "E107": "0597-seated-hip-abduction",
     "E108": "0598-seated-hip-adduction",
+    "E109": "0228-cable-standing-kickback",
     "E113": "0343-dumbbell-lying-single-arm-press",
     "E117": "1269-cable-standing-crossovers",
     "E118": "0596-seated-fly",
@@ -14533,6 +14592,7 @@
     "E258": "0417-dumbbell-standing-calf-raise",
     "E259": "2368-split-squats",
     "E260": "0314-dumbbell-incline-bench-press",
+    "E264": "9001-table-row-clean",
     "E291": "3645-single-leg-bridge-with-outstretched-leg",
     "G0001": "0001-three-quarter-situp",
     "G0002": "0002-45-degree-side-bend",

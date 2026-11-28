@@ -282,6 +282,27 @@ void main() {
       expect(tableViolations(table, map, lib), isEmpty);
     });
 
+    test('(g) the founder file is accepted only as its exact gif, ledger id and slug', () {
+      expect(rows()['E264'], '9001-table-row-clean', reason: 'positive control');
+      expect(tableViolations(table, map, lib).where((s) => s.startsWith('(g)')), isEmpty);
+    });
+
+    test('(g) the founder gif with another ledger id', () {
+      (files()['9001-table-row-clean'] as Json)['ledger_id'] = 'xxxxxrow-clean';
+      expectLeg('g', has: 'founder file');
+    });
+
+    test('(g) the founder ledger id under another gif', () {
+      fileOf('G0103')['ledger_id'] = 'table-row-clean';
+      expectLeg('g', has: 'founder file');
+    });
+
+    test('(g) the founder file under another slug', () {
+      files()['9001-row-clean'] = files().remove('9001-table-row-clean');
+      rows()['E264'] = '9001-row-clean';
+      expectLeg('g', has: '9001-row-clean');
+    });
+
     test('(h) versions[0].file outside webp-720/', () {
       final f = files()[slugOf('G0103')] as Json;
       ((f['versions'] as List).first as Json)['file'] = '../outside/${slugOf('G0103')}.webp';
@@ -536,6 +557,78 @@ void main() {
     test('(P6) a slug that does not start with the entry gif', () {
       rows()['E050'] = slugOf('G0103');
       expectRule('P6', has: 'E050');
+    });
+
+    // The three later founder decisions are pinned here: editing a repick and its entry together would otherwise stay green.
+    test('the repicks are exactly the three decisions of 2026-11-26', () {
+      final r = picks0['repicks'] as Json;
+      expect({for (final e in r.entries) e.key: (e.value as Json)['gif_id']}, {'E051': '0108', 'E109': '0228', 'E264': '9001'});
+    });
+
+    Json repick(String id) => (picks['repicks'] as Json)[id] as Json;
+
+    test('(P8) no repicks map fails closed', () {
+      picks.remove('repicks');
+      expectRule('P8', has: 'no repicks map');
+    });
+
+    for (final bad in <Object?>[null, '', '   ', 7]) {
+      test('(P8) decided_by of "$bad"', () {
+        repick('E051')['decided_by'] = bad;
+        expectRule('P8', has: 'E051 has no decided_by');
+      });
+    }
+
+    test('(P8) replaces that is not the original pick', () {
+      repick('E051')['replaces'] = '0108';
+      expectRule('P8', has: 'E051 replaces');
+    });
+
+    test('(P8) replaces null on a row that had a pick', () {
+      repick('E264')['replaces'] = null;
+      expectRule('P8', has: 'E264 replaces');
+    });
+
+    test('(P8) an absent replaces on a row that had no pick', () {
+      repick('E109').remove('replaces');
+      expectRule('P8', has: 'E109 replaces');
+    });
+
+    test('(P8) a repick that changes nothing', () {
+      repick('E051')['gif_id'] = '0605';
+      expectRule('P8', has: 'E051 changes nothing');
+    });
+
+    test('(P8) a repick with no gif_id', () {
+      repick('E051').remove('gif_id');
+      expectRule('P8', has: 'E051 has no gif_id');
+    });
+
+    test('(P8) a repick on a row that is not a library E row', () {
+      (picks['repicks'] as Json)['G0103'] = {'gif_id': '0001', 'replaces': null, 'decided_by': 'x'};
+      expectRule('P8', has: 'G0103 is not an E row');
+    });
+
+    test('(P8) a repick parked in a bucket instead of applied', () {
+      bucket('held').add(take('entries', 'E051'));
+      expectRule('P8', has: 'E051 is not applied');
+    });
+
+    for (final bad in <Object?>[null, '  ']) {
+      test('(P8) a repicked entry with released_by "$bad"', () {
+        bucket('entries').firstWhere((e) => e['id'] == 'E109')['released_by'] = bad;
+        expectRule('P8', has: 'E109 is not applied');
+      });
+    }
+
+    test('(P2) a repicked entry must carry the repicked gif, not the original pick', () {
+      bucket('entries').firstWhere((e) => e['id'] == 'E051')['gif'] = '0605';
+      expectRule('P2', has: 'E051');
+    });
+
+    test('(P1) a repick with no original pick is still partitioned: its entry removed is a violation', () {
+      take('entries', 'E109');
+      expectRule('P1', has: 'E109');
     });
 
     // (P7) releasing a held or retag-decided pair needs a recorded decision. E027 is held for a different kit (the picture is

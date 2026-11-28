@@ -566,7 +566,7 @@ void main() {
       expect((data.fromDay, data.days.length, data.isEmpty), ('2026-08-12', 9, true));
     });
 
-    test('730 days of four meals build well inside a frame budget', () async {
+    test('730 days of four meals build quickly (fastest of five warm runs)', () async {
       final rows = <Object?>[
         for (var i = 0; i < 730; i++)
           for (final slot in kMealSlots)
@@ -575,26 +575,36 @@ void main() {
               {'name': 'Food ${i % 40}', 'protein': 25, 'calories': 500},
             ]),
       ];
-      final sw = Stopwatch()..start();
-      final data = buildNutritionHistoryData(
-        inputs: (
-          rows: rows,
-          waterByDay: const {},
-          trainingDays: const {},
-          onboardingDay: '2025-01-01',
-          targets: [
-            const TargetEntry(
-                from: '2025-01-01', calories: 2000, protein: 100, carbs: 250,
-                fat: 60, strategy: 'balanced', atMs: 1),
-          ],
-        ),
-        todayKey: '2026-12-31',
-        waterTargetMl: 2500,
-        weights: const [],
-      );
-      sw.stop();
+      NutritionHistoryData build() => buildNutritionHistoryData(
+            inputs: (
+              rows: rows,
+              waterByDay: const {},
+              trainingDays: const {},
+              onboardingDay: '2025-01-01',
+              targets: [
+                const TargetEntry(
+                    from: '2025-01-01', calories: 2000, protein: 100, carbs: 250,
+                    fat: 60, strategy: 'balanced', atMs: 1),
+              ],
+            ),
+            todayKey: '2026-12-31',
+            waterTargetMl: 2500,
+            weights: const [],
+          );
+      // The first call also pays for Dart warm-up (JIT), and one sample on a
+      // loaded machine times the other test files (530 to 723 ms against a
+      // 400 ms bound inside the merge walk, 13 to 196 ms alone; diagnose
+      // 5e91a7). So: one untimed call, then the fastest of five.
+      final data = build();
+      var best = const Duration(days: 1);
+      for (var run = 0; run < 5; run++) {
+        final sw = Stopwatch()..start();
+        build();
+        sw.stop();
+        if (sw.elapsed < best) best = sw.elapsed;
+      }
       expect(data.days.length, 730);
-      expect(sw.elapsedMilliseconds, lessThan(400));
+      expect(best.inMilliseconds, lessThan(200));
     });
   });
 }

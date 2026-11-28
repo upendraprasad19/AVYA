@@ -9,6 +9,7 @@ import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
+import 'package:icanbefitter/features/home/providers/home_provider.dart';
 import 'package:icanbefitter/core/services/swap_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
@@ -55,6 +56,17 @@ Map<String, dynamic> workout(String date, String name,
       'exercises': <Map<String, dynamic>>[],
     };
 
+// OI-348 P3: a missed-day rescue may give a streak freeze back, so a done
+// swap must refresh the freeze chip.
+class _Freeze extends StreakFreezeNotifier {
+  static int builds = 0;
+  @override
+  int build() {
+    builds++;
+    return 0;
+  }
+}
+
 ActiveWorkoutData sessionOn(DateTime? date) => ActiveWorkoutData(
     workoutDay: WorkoutDayData(dayNumber: 1, name: 'Pull', date: date));
 
@@ -91,6 +103,7 @@ void main() {
       subscriptionInfoProvider.overrideWith(() => _Sub(pro)),
       activeWorkoutProvider.overrideWith(() => _Active(active)),
       currentPlanProvider.overrideWith(_Plan.new),
+      streakFreezeProvider.overrideWith(_Freeze.new),
     ]);
     addTearDown(c.dispose);
     return c;
@@ -129,6 +142,15 @@ void main() {
     expect(await swap(c, fri, sat), isA<DaySwapDone>());
     expect(c.read(daySwapWeekProvider(mon))[4].title, 'Legs + Core');
     expect(_Plan.builds, greaterThan(buildsBefore));
+  });
+
+  test('a done swap refreshes the streak-freeze chip (OI-348 P3)', () async {
+    final c = container();
+    c.read(streakFreezeProvider);
+    final before = _Freeze.builds;
+    expect(await swap(c, fri, sat), isA<DaySwapDone>());
+    c.read(streakFreezeProvider);
+    expect(_Freeze.builds, greaterThan(before));
   });
 
   test('a refused swap still refreshes the week (the screen was stale)',
@@ -182,20 +204,20 @@ void main() {
       'preview: PRO vs free allowance, an in-progress date locks, no side '
       'effects', () {
     final pro = container(pro: true);
-    final proPreview = pro.read(daySwapControllerProvider).preview(fri, sat);
+    final proPreview = pro.read(daySwapControllerProvider).preview(fri, sat, origin: DaySwapOrigin.trainDrag);
     expect(proPreview.allowance.limit, 3);
     expect(proPreview.refusal, isNull);
 
     final free = container(pro: false);
     final freePreview =
-        free.read(daySwapControllerProvider).preview(fri, sat);
+        free.read(daySwapControllerProvider).preview(fri, sat, origin: DaySwapOrigin.trainDrag);
     expect(freePreview.allowance.limit, 1);
     expect(freePreview.refusal, isNull);
 
     final active =
         container(active: sessionOn(DateTime.utc(2026, 9, 25))); // fri
     final activePreview =
-        active.read(daySwapControllerProvider).preview(fri, sat);
+        active.read(daySwapControllerProvider).preview(fri, sat, origin: DaySwapOrigin.trainDrag);
     expect(activePreview.refusal, DaySwapRefusal.started);
 
     // No side effects: nothing written, nothing consumed, nothing logged.

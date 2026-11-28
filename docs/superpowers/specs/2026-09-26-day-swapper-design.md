@@ -211,7 +211,7 @@ service, and the cost of the very first sync on a fresh install.
 | 1 | 09-25 | Train gets a drag interaction. It is delivered as pairwise drag-to-swap (see 7). |
 | 2 | 09-25 | ONE shared swap operation for Home, Train and the coach. |
 | 3 | 09-26 | Allowance: free 1 per week, PRO 3 per week, one counter shared by all entry points. |
-| 4 | 09-26 | Swappable days: today or later, same Mon–Sun IST week, planned workout / rest / custom-template days. Locked: completed, any logged sets, today while a workout is in progress, paused, past. The template's `displaced_<date>` backup travels with the template; the cloud `template_id` is cleared on the day the template left. |
+| 4 | 09-26 | Swappable days: today or later, same Mon–Sun IST week, planned workout / rest / custom-template days. Locked: completed, any logged sets, today while a workout is in progress, paused, past. The template's `displaced_<date>` backup travels with the template; the cloud `template_id` is cleared on the day the template left. **Amended 2026-11-26 (OI-348 P3, founder calls; `docs/plans/oi348-landing3d.md`):** one exception to "past": a MISSED day (a planned training day before today, no `wlog_`/`exlog_`, no session in progress) may swap with TODAY only, only while today is a true rest day (`type` and `status` rest), same week; the past row is marked `rescued_into`, shows MOVED, counts as rest; a freeze spent on it is refunded (`refund:<date>` ledger marker); the rescue spends the weekly swap; not offered to the coach origin. Kill switch `disable_missed_day_rescue`. |
 | 5 | 09-26 | The coach tool is PRO-only. Free users get a fallback line in the Captain Manual. |
 | 6 | 09-26 | Allowance = server ledger (`usage_counters` via `consume_quota`, quota key `day_swap`, IST-Monday window, no migration) plus a phone copy. The phone enforces offline; the server count wins when online; fail open; offline overage is tolerated and never undone. |
 | 7 | 09-26 | Train UI = approach A: drag onto another day = one pairwise swap, plus a visible ⇅ on every movable row. A drop opens a confirm sheet first (no instant swap with undo). The "⇄ MOVED" tag stays until the day is completed. The allowance line sits under the week list. A shared "Swap <day> with…" picker replaces the Home SwapSheet. Rearrange mode (B) is rejected. Copy as mocked. |
@@ -285,7 +285,7 @@ sealed class DaySwapResult
 Both days must:
 
 1. be different dates in the same Mon–Sun IST week (`mondayOfIst`, `lib/core/utils/ist_date.dart:113`);
-2. be today or later (IST, `istTodayStr`);
+2. be today or later (IST, `istTodayStr`), except a MISSED day paired with today as a rest day (decision 4 as amended 2026-11-26, OI-348 P3; `DaySwapRules.pairLock` / `rescueLockOf`);
 3. have a schedule row whose `status` is `planned` or `rest`. Every other status is locked:
    `completed`, `skipped`, `paused`, `travel`, `moved`, `dropped`, `none`. So is a missing row.
    Types `workout`, `rest` and `custom_template` are all movable;

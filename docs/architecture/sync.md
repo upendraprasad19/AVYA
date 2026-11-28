@@ -338,6 +338,21 @@ consumers of the same cloud snapshot can never disagree:
   `DaySwapAllowance`) and the stale `plan_json` copy already sitting in
   `userBox['progress']` for pre-existing installs.
 
+- **The schedule restore keeps an UNPUSHED day swap (OI-532, diagnose `f5a2c8`, kill switch
+  `disable_sched_unpushed_swap_guard`).** The cloud `scheduled_workouts` row has no timestamp, so
+  `_restoreScheduledWorkouts` cannot tell a stale row from a newer one. A positive marker does:
+  `workoutBox['sched_swap_unpushed']` (`sync/sched_unpushed_swaps.dart`) holds `{date: token}` for
+  every date a local swap rewrote and the cloud has not confirmed. `swapScheduledDays` puts the two
+  dates in flight and marks them before its first row write and again after its last;
+  `_syncScheduledWorkouts` clears a mark only when `pushIfChanged` returned true AND the mark still
+  holds the token read with the row (a Case 2 omitted-template-key confirm stays unconfirmed for a
+  marked row). The restore leaves a pending date's local row untouched, and also a date marked or
+  cleared since its cloud rows were fetched (`SchedUnpushedSwaps.fetchMark()` before the fetch;
+  the single-call restore takes it before `restore-user-snapshot`). A cloud `completed` still
+  lands; a date with no local row restores. Not a timestamp, never inferred from a missing skip
+  fingerprint, and gone once the push lands, so two devices still converge. Test
+  `test/sync/sched_restore_unpushed_swap_test.dart`.
+
 - **Target history (2026-11-25, `docs/plans/target-history-cloud.md`).** `user_profile.target_history` is NOT part of the profile map. `_restoreUserProfile` removes it from the cloud row always and merges it into `userBox['target_history']` through `TargetHistoryService.adoptFromCloud` before the profile write (also on the write-if-changed early return); the push is `pushTargetHistory`, the last step of `_syncUserProfile` after a successful upsert, through the `merge_target_history` function (a merge by day; a column upsert would let a short list delete a longer one). Kill switch `disable_target_history_cloud`.
 
 **7. The past-timestamp rule (never "now") and Gate G2.** A sync payload never sends `DateTime.now()`
@@ -371,6 +386,7 @@ date already carried a template link; travels WITH the template so a swap-back c
 `disable_weight_hash_skip` / `disable_measurement_hash_skip` / `disable_readiness_hash_skip` /
 `disable_saved_meal_hash_skip` / `disable_custom_item_hash_skip` (per-domain, point 2 table);
 `disable_rest_row_refill_guard` (L1); `disable_swap_arrangement_merge` (L3);
+`disable_sched_unpushed_swap_guard` (OI-532, the unpushed-swap restore guard);
 `disable_plan_merge_skip_when_known` (L2, both halves); `disable_restore_write_if_changed`
 (template / progress / profile restore writes); `disable_restore_single_plan_fetch`;
 `disable_restore_paging_fix` (every legacy paged restore read's tie-break, the three formerly

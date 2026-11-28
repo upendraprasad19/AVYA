@@ -32,7 +32,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../copy/streak_freeze_copy.dart';
+import 'day_swap/day_swap_rules.dart';
+import 'day_swap/missed_day_rescue_flag.dart';
 import 'error_telemetry.dart';
+import 'hive_service.dart';
 import 'sync_flags.dart';
 import 'sync_service.dart';
 import 'subscription_service.dart';
@@ -111,7 +114,94 @@ class StreakProgressService {
   /// (`nowWall()`) so it honors the dev/year-sim time seam.
   static List<String> prunePastHorizon(List<String> usedDates) {
     final cutoff = istDateStr(nowWall().subtract(const Duration(days: 365)));
-    return usedDates.where((d) => d.compareTo(cutoff) >= 0).toList()..sort();
+    // OI-348 P3: a `refund:<date>` marker is kept or pruned by ITS date (as a
+    // raw string it sorts after every digit and would be kept forever).
+    return usedDates
+        .where((d) => FreezeLedger.dateOf(d).compareTo(cutoff) >= 0)
+        .toList()
+      ..sort();
+  }
+
+  /// OI-348 P3 (docs/plans/oi348-landing3d.md §3.4) — gives back the streak
+  /// freeze spent on a day whose missed workout was RESCUED into a later day
+  /// of the same week. DERIVED and idempotent: it looks for the plain ledger
+  /// dates D of this IST week (Monday <= D < today) with no `refund:D`
+  /// marker, whose `schedule_<D>` row is the rescued past day (type rest and
+  /// a `rescued_into` date later than D in D's own week; NOT `is_swapped`:
+  /// a rescue that sends earlier-swapped content back to its origin lands
+  /// without the swap markers, B-pass F1), so a crash between the swap write
+  /// and this call is healed by the next rollover. A copy of the row in
+  /// another week fails the same-week test, since `rescued_into` is never
+  /// re-dated.
+  /// The plain date STAYS in the ledger (the day stays "covered",
+  /// so a device whose schedule lags never spends on it again); the marker
+  /// is what lets [mergeFreezeProgress] count the refund. Capped by tier and
+  /// never lowers a count already above the cap; only the dates actually
+  /// given back get a marker, so a date the cap held back stays owed and a
+  /// later settle (room freed, or a tier read right) still pays it (B-pass
+  /// F6a). Returns how many freezes were given back (0 when capped). Off
+  /// under the kill switch.
+  int settleRescueRefunds({required bool isPro}) {
+    if (!missedDayRescueEnabled()) return 0;
+    final today = istTodayStr();
+    final monday = DaySwapRules.mondayOf(today);
+    final progress = UserRepository.instance.getProgress() ?? {};
+    final used = (progress['streak_freeze_used_dates'] as List?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        const <String>[];
+    final refunded = FreezeLedger.refunds(used);
+    final owed = <String>[];
+    for (final d in FreezeLedger.dates(used).toSet()) {
+      if (d.compareTo(monday) < 0 || d.compareTo(today) >= 0) continue;
+      if (refunded.contains(d)) continue;
+      final raw = HiveService.instance.workoutBox.get('schedule_$d');
+      if (raw is! Map) continue;
+      if (raw['type'] != 'rest') continue;
+      final into = raw[DaySwapRules.rescuedIntoKey];
+      if (into is! String ||
+          into.compareTo(d) <= 0 ||
+          DaySwapRules.mondayOf(into) != DaySwapRules.mondayOf(d)) {
+        continue;
+      }
+      owed.add(d);
+    }
+    if (owed.isEmpty) return 0;
+    owed.sort();
+
+    final rawAvail = progress['streak_freezes_available'];
+    final before = rawAvail is num ? rawAvail.toInt() : 0;
+    final cap = isPro ? 3 : 1;
+    var after = before + owed.length;
+    if (after > cap) after = before > cap ? before : cap;
+    final given = after - before;
+    if (given <= 0) return 0;
+
+    final unshown = progress['streak_freeze_just_used'] == true;
+    final rawCount = progress['streak_freeze_just_used_count'];
+    final storedCount = rawCount is num && rawCount.isFinite
+        ? rawCount.toInt()
+        : (unshown ? 1 : 0);
+    final noticeLeft = storedCount - given;
+
+    UserRepository.instance.updateProgress({
+      'streak_freezes_available': after,
+      'streak_freeze_used_dates': [
+        ...used,
+        for (final d in owed.take(given)) FreezeLedger.marker(d),
+      ],
+      if (unshown && given > 0) ...{
+        'streak_freeze_just_used': noticeLeft > 0,
+        'streak_freeze_just_used_count': noticeLeft > 0 ? noticeLeft : 0,
+      },
+    });
+    unawaited(SyncService.instance.syncFreezes());
+    unawaited(ErrorTelemetry.logEvent(
+      'streak_freeze_refund_done',
+      message: 'before=$before after=$after given=$given '
+          'dates=${owed.join(",")}',
+    ));
+    return given;
   }
 
   /// How many freezes the (still unshown) notice covers once a debit of
@@ -414,17 +504,33 @@ class StreakProgressService {
     // bounded by commitRefill's weekly prune, so this stays deterministic.
     final mergedUsed = (<String>{...localUsed, ...cloudUsed}.toList())..sort();
 
+    // OI-348 P3 (docs/plans/oi348-landing3d.md §3.4): a `refund:<D>` marker
+    // is a legitimate +1 (a rescued missed day). A side is raised by +1 for
+    // each marker the OTHER side has, it lacks, and whose plain date D it
+    // HOLDS (it debited that spend), dated on/after its own last_refill. A
+    // side that never saw the spend is never raised, so the "never refund a
+    // spend" rule below still holds for every spend that was not rescued.
+    // With no markers both raises are 0 and every branch is the old rule.
+    final localRaise = FreezeLedger.unseenRefundsFor(
+        side: localUsed, other: cloudUsed, sideLastRefill: localLastRefill);
+    final cloudRaise = FreezeLedger.unseenRefundsFor(
+        side: cloudUsed, other: localUsed, sideLastRefill: cloudLastRefill);
+    final localMarkerUnseen = FreezeLedger.refunds(localUsed)
+        .difference(FreezeLedger.refunds(cloudUsed))
+        .isNotEmpty;
+
     // Same week on both sides — take the LOWER available (never refund a freeze).
     if (localLastRefill != null &&
         cloudLastRefill != null &&
         localLastRefill == cloudLastRefill) {
-      final avail =
-          localAvailable < cloudAvailable ? localAvailable : cloudAvailable;
+      final l = localAvailable + localRaise;
+      final c = cloudAvailable + cloudRaise;
+      final avail = l < c ? l : c;
       return FreezeMergeResult(
         available: clamp3(avail),
         usedDates: mergedUsed,
         lastRefill: localLastRefill,
-        scheduleSyncUp: false,
+        scheduleSyncUp: localMarkerUnseen,
       );
     }
 
@@ -437,19 +543,68 @@ class StreakProgressService {
             cloudLastRefill.compareTo(localLastRefill) > 0);
     if (cloudWins) {
       return FreezeMergeResult(
-        available: clamp3(cloudAvailable),
+        available: clamp3(cloudAvailable + cloudRaise),
         usedDates: mergedUsed,
         lastRefill: cloudLastRefill ?? localLastRefill,
-        scheduleSyncUp: false,
+        scheduleSyncUp: localMarkerUnseen,
       );
     }
     // Local refill strictly newer — keep local available; push it up to cloud.
     return FreezeMergeResult(
-      available: clamp3(localAvailable),
+      available: clamp3(localAvailable + localRaise),
       usedDates: mergedUsed,
       lastRefill: localLastRefill,
       scheduleSyncUp: true,
     );
+  }
+}
+
+/// OI-348 P3 — the two entry shapes of the PERMANENT freeze ledger
+/// (`streak_freeze_used_dates`, cloud `streak_freezes_used_dates`, `text[]`):
+/// a plain IST date `YYYY-MM-DD` (a freeze was spent covering that day) and a
+/// marker `refund:YYYY-MM-DD` (that spend was given back because the day's
+/// missed workout was rescued, see [StreakProgressService.settleRescueRefunds]).
+/// The plain date stays next to its marker. Pure.
+class FreezeLedger {
+  FreezeLedger._();
+
+  static const String refundPrefix = 'refund:';
+
+  static bool isMarker(String entry) => entry.startsWith(refundPrefix);
+
+  static String marker(String date) => '$refundPrefix$date';
+
+  /// The date an entry is about (the plain date, or a marker's date).
+  static String dateOf(String entry) =>
+      isMarker(entry) ? entry.substring(refundPrefix.length) : entry;
+
+  /// The plain (spent) dates, markers left out.
+  static List<String> dates(Iterable<String> ledger) =>
+      [for (final e in ledger) if (!isMarker(e)) e];
+
+  /// The dates that carry a refund marker.
+  static Set<String> refunds(Iterable<String> ledger) =>
+      {for (final e in ledger) if (isMarker(e)) dateOf(e)};
+
+  /// How many refunds [other] knows that [side] does not, counting only a
+  /// date [side] itself debited (holds as a plain date) on or after
+  /// [sideLastRefill] (no bound when null). See [StreakProgressService.
+  /// mergeFreezeProgress].
+  static int unseenRefundsFor({
+    required List<String> side,
+    required List<String> other,
+    required String? sideLastRefill,
+  }) {
+    final sideDates = dates(side).toSet();
+    final sideRefunds = refunds(side);
+    var n = 0;
+    for (final d in refunds(other)) {
+      if (sideRefunds.contains(d)) continue;
+      if (!sideDates.contains(d)) continue;
+      if (sideLastRefill != null && d.compareTo(sideLastRefill) < 0) continue;
+      n++;
+    }
+    return n;
   }
 }
 

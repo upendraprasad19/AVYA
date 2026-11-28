@@ -889,8 +889,13 @@ class UserRepository {
     // `_restoreFreezes` and the conflict retry merge with the plain rule and
     // would undo it; the local grant is handled below instead.
     if (cloudGrant && !localGrant && cloudAvailable > localAvailable) {
-      final unseenLocalConsumes =
-          localUsed.toSet().difference(cloudUsed.toSet()).length;
+      // OI-348 P3: NET spends only — a `refund:` marker is not a spend, and a
+      // date this device already refunded (rescued) is not one either.
+      final unseenLocalConsumes = FreezeLedger.dates(localUsed)
+          .toSet()
+          .difference(FreezeLedger.dates(cloudUsed).toSet())
+          .difference(FreezeLedger.refunds(localUsed))
+          .length;
       final carried = cloudAvailable - unseenLocalConsumes;
       if (carried > localAvailable) localAvailable = carried;
       if (cloudLastRefill != null &&

@@ -14,6 +14,7 @@ import 'package:icanbefitter/core/services/day_swap/day_swap_allowance.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_copy.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_result.dart';
 import 'package:icanbefitter/core/services/day_swap/day_swap_rules.dart';
+import 'package:icanbefitter/core/services/day_swap/missed_day_rescue_flag.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/core/theme/spacing.dart';
 import 'package:icanbefitter/core/theme/typography.dart';
@@ -70,6 +71,11 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
             title: ''));
 
     if (!isPro && allowance.spent) return DaySwapSpentSheet.forContext(context);
+    final rescueOn = missedDayRescueEnabled();
+    // OI-348: a source day that cannot move (a past day, a done day, …) says
+    // so instead of listing targets the swap would refuse (the Home
+    // long-press opened the picker on any day and never checked this).
+    final sourceLock = source.lock;
 
     return _Sheet(
       child: Column(
@@ -87,9 +93,19 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
             style: AppTypography.bodySm.copyWith(color: AppColors.textDim),
           ),
           const SizedBox(height: 14),
-          for (final d in week)
-            if (d.date != widget.sourceDate && d.lock != DaySwapRefusal.noRow)
-              _dayRow(d, todayStr: todayStr, weekStart: weekStart),
+          if (sourceLock != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                DaySwapCopy.sourceLockedLine(sourceLock, widget.sourceDate),
+                style: AppTypography.body.copyWith(color: AppColors.textDim),
+              ),
+            )
+          else
+            for (final d in week)
+              if (d.date != widget.sourceDate && d.lock != DaySwapRefusal.noRow)
+                _targetRow(d, todayStr: todayStr, weekStart: weekStart,
+                    rescueOn: rescueOn),
           if (_error != null) ...[
             const SizedBox(height: 4),
             Text(_error!,
@@ -108,7 +124,7 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
             ),
           const SizedBox(height: 10),
           Text(
-            DaySwapCopy.pickerFooter,
+            rescueOn ? DaySwapCopy.pickerFooterRescue : DaySwapCopy.pickerFooter,
             textAlign: TextAlign.center,
             style: AppTypography.monoXs
                 .copyWith(color: AppColors.textMute, letterSpacing: 1.2),
@@ -118,9 +134,34 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
     );
   }
 
+  /// One target row. OI-348 P3: a past day moves only with today, so a pair
+  /// the engine would refuse is locked here too. When the refusal is about
+  /// the SOURCE (a missed day paired with a day that is not today), the
+  /// target is not past itself: it says TODAY ONLY (B-pass F5).
+  Widget _targetRow(DaySwapDayState d,
+      {required String todayStr,
+      required String weekStart,
+      required bool rescueOn}) {
+    if (d.lock != null || !rescueOn) {
+      return _dayRow(d, todayStr: todayStr, weekStart: weekStart, lock: d.lock);
+    }
+    final pair = DaySwapRules.pairLock(widget.sourceDate, d.date, todayStr);
+    return _dayRow(d,
+        todayStr: todayStr,
+        weekStart: weekStart,
+        lock: pair?.reason,
+        chip: pair == null || pair.date == d.date
+            ? null
+            : DaySwapCopy.pickerTodayOnlyChip);
+  }
+
   Widget _dayRow(DaySwapDayState d,
-      {required String todayStr, required String weekStart}) {
-    final locked = d.lock != null;
+      {required String todayStr,
+      required String weekStart,
+      required DaySwapRefusal? lock,
+      String? chip}) {
+    final chipLabel = chip ?? lock?.label;
+    final locked = lock != null;
     final selected = _target == d.date;
     final label = '${DaySwapCopy.dayShort(d.date)}'
         '${d.date == todayStr ? ' · ${DaySwapCopy.pickerTodayTag}' : ''}';
@@ -166,8 +207,8 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
                     ],
                   ),
                 ),
-                if (locked && d.lock!.label != null)
-                  WardChip(label: d.lock!.label!, tone: WardChipTone.neutral)
+                if (locked && chipLabel != null)
+                  WardChip(label: chipLabel, tone: WardChipTone.neutral)
                 else if (selected)
                   const Icon(Icons.swap_horiz_rounded,
                       color: AppColors.accent, size: 20),
@@ -201,10 +242,13 @@ class _SwapPickerSheetState extends ConsumerState<SwapPickerSheet> {
       messenger.showSnackBar(_toast(
         title: DaySwapCopy.toastTitle(widget.sourceDate, target),
         body: DaySwapCopy.toastBody(
-            subject: subject,
-            today: istTodayStr(),
-            after: result.allowanceAfter,
-            currentWeekStart: weekStart),
+                subject: subject,
+                today: istTodayStr(),
+                after: result.allowanceAfter,
+                currentWeekStart: weekStart) +
+            (result.freezeRefunded
+                ? ' ${DaySwapCopy.freezeRefundedLine}'
+                : ''),
       ));
       return;
     }

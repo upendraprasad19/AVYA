@@ -9,6 +9,9 @@ typedef Json = Map<String, dynamic>;
 final RegExp _slugRe = RegExp(r'^\d{4}-[a-z0-9]+(-[a-z0-9]+)*$');
 final RegExp _sha256Re = RegExp(r'^[0-9a-f]{64}$');
 
+/// The founder's own files (no gif number): the builder's FOUNDER_FILES, as gif -> (ledger_id, slug).
+const Map<String, (String, String)> founderFiles = {'9001': ('table-row-clean', '9001-table-row-clean')};
+
 /// kebab(s): lower-case, each run outside [a-z0-9] becomes one '-', trim '-'. Permanent: object
 /// names are immutable, so this never changes (the same function is in the builder).
 String kebab(String s) =>
@@ -142,6 +145,13 @@ List<String> tableViolations(Json table, Json map, List<dynamic> library) {
     final lid = f['ledger_id'];
     if (lid is! String || lid.length < 6) {
       out.add('(g) ${e.key}: ledger_id is missing');
+      continue;
+    }
+    final own = founderFiles['${f['gif']}'];
+    if (own != null || founderFiles.values.any((v) => v.$1 == lid)) {
+      if (own == null || own.$1 != lid || e.key != own.$2) {
+        out.add('(g) ${e.key}: a founder file needs its exact gif, ledger id and slug (gif ${f['gif']}, ledger id $lid)');
+      }
       continue;
     }
     final want = '${f['gif']}-${kebab(lid.substring(5))}';

@@ -20,6 +20,7 @@ import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/seed_service.dart';
 
 import '../helpers/hive_test_setup.dart';
+import '../helpers/library_media_three_v29.dart';
 import '../helpers/library_g0355_v25.dart';
 import '../helpers/library_lunge_alias_v28.dart';
 import '../helpers/library_overlay_v26.dart';
@@ -93,11 +94,11 @@ void main() {
   // assets/data/exercise_library.json at 01ed781c (PR #237), computed independently from git with Python's compact
   // json.dumps (the same method reproduces the v22 pin 7a37c26c of library_seed_v23_upgrade_behavioral_test.dart).
   test('the v24 bundle is the v23 bundle minus E053, plus the two G1373 keys, and nothing else', () {
-    expect(sha256.convert(utf8.encode(jsonEncode(_v23Bundle()))).toString(),
+    expect(sha256.convert(utf8.encode(jsonEncode(_v23Bundle().map(withoutMediaV29).toList()))).toString(),
         'd858d26b59e0a7574f779c59f3910647200eb206a4805126122bbc936f8daeff');
   });
 
-  test('a v23 box ends at the current version (v28): E053 is gone, G1373 is written as bundled, the community row and every other row are unchanged', () async {
+  test('a v23 box ends at the current version (v29): E053 is gone, G1373 is written as bundled, the community row and every other row are unchanged', () async {
     final hive = HiveService.instance;
     await _putV23Box(hive);
     await _markSeeded(hive, 23);
@@ -124,16 +125,16 @@ void main() {
         reason: 'G3470 is written as bundled, without the alias');
     expect(_asJson(hive.exerciseBox.get(_communityId))['name'], 'Donkey Calf Raise', reason: 'the prune deletes ids, never a name');
     expect(hive.exerciseBox.length, _bundled().length + 1);
-    expect(hive.configBox.get('exercise_library_version') as int, 28);
+    expect(hive.configBox.get('exercise_library_version') as int, 29);
   });
 
-  test('MIRROR: a box already at the current version (v28, OI-523) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v29) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV23Box(hive);
-    await _markSeeded(hive, 28);
+    await _markSeeded(hive, 29);
     await SeedService.instance.seedIfNeeded();
     expect(hive.exerciseBox.containsKey('E053'), isTrue);
     expect(_asJson(hive.exerciseBox.get('G1373')).containsKey('merged_ids'), isFalse);
-    expect(hive.configBox.get('exercise_library_version') as int, 28);
+    expect(hive.configBox.get('exercise_library_version') as int, 29);
   });
 }

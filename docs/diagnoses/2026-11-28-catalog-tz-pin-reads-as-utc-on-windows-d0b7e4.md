@@ -91,5 +91,5 @@ Git's `sh.exe` the file runs and skips its POSIX-only tests), and the 730-day fr
   defined for `Asia/Kolkata` and for `a/b`, while `UTC` and `IST-5:30` do arrive. So those two scripts run in the
   machine's zone on Windows, which is what this fix does on purpose. Both are unchanged. (The `UTC` result says
   nothing about a value with a slash.)
-- The 730-day frame-budget test fails when the machine is loaded (723 ms against 400 ms in one blocked walk). It is
-  not loosened here.
+- The 730-day speed test fails when the machine is loaded (723 ms against 400 ms in one blocked walk). It is not
+  part of this fix; it is changed separately in diagnose 5e91a7.

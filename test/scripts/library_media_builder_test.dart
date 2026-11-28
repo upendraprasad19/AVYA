@@ -426,6 +426,56 @@ void main() {
     }
   });
 
+  group('the founder file (table-row-clean): one fixed number and slug, old rows only', () {
+    void oldRows9001() => env.writeOldRows({
+          'entries': [
+            {'id': 'E050', 'gif': '9001', 'equipment_checked': true}
+          ]
+        });
+
+    test('an old-rows entry 9001 builds the fixed slug from the table-row-clean ledger entry', () async {
+      oldRows9001();
+      final r = await env.build(extra: ['--old-rows', env.oldRows]);
+      expect(r.exitCode, 0, reason: _out(r));
+      final t = env.readTable();
+      expect((t['rows'] as Map)['E050'], '9001-table-row-clean');
+      final f = (t['files'] as Map)['9001-table-row-clean'] as Map;
+      expect(f['ledger_id'], 'table-row-clean');
+      expect(f['gif'], '9001');
+    });
+
+    test('the G/N media map may not name the founder number', () async {
+      env.writeMap({
+        ..._defaultMap,
+        'G0103': {'_gif': '9001'}
+      });
+      final r = await env.build();
+      expect(r.exitCode, isNot(0));
+      expect(_out(r), contains('is a founder file'));
+      expect(File(env.table).existsSync(), isFalse);
+    });
+
+    test('a real 9001_ ledger entry beside the founder file stops the run', () async {
+      env.dispose();
+      env = _Env(entries: [..._defaultEntries(), FixtureEntry(number: '9001', name: 'Impostor', seed: 11)]);
+      final r = await env.build();
+      expect(r.exitCode, isNot(0));
+      expect(_out(r), contains('two entries for gif 9001'));
+    });
+
+    test('number 9001 held by any other ledger entry is refused', () async {
+      env.dispose();
+      env = _Env(entries: [
+        ..._defaultEntries().where((e) => e.id != 'table-row-clean'),
+        FixtureEntry(number: '9001', name: 'Impostor', seed: 11),
+      ]);
+      oldRows9001();
+      final r = await env.build(extra: ['--old-rows', env.oldRows]);
+      expect(r.exitCode, isNot(0));
+      expect(_out(r), contains('reserved for ledger entry table-row-clean'));
+    });
+  });
+
   group('table maintenance (R13): hold, release, takedown', () {
     test('a rebuild never drops a files entry: a row that leaves the library makes its file unmapped', () async {
       await env.build();
