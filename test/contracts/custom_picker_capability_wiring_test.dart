@@ -1,32 +1,34 @@
-// SOURCE-GREP WIRING TEST — custom-picker-fix (2026-09-17)
+// SOURCE-GREP WIRING TEST — hand-pick exercise lists
 //
-// Pins that all three exercise pickers route CUSTOM exercises through
-// `EquipmentCapability.canOfferInPicker` (unverifiable-equipment customs
-// stay visible) while library/community rows keep the fail-closed
-// `canPerform`, and that the edit-mode writer contract exists.
+// Founder 2026-11-28: a user adding or swapping by hand can pick ANY exercise, so the four
+// hand-pick lists ORDER rows by equipment and never drop one. All four go through
+// `PickerRows.arrange`, and none calls an equipment predicate itself. (Until then this
+// group pinned the opposite: each list hiding rows, custom-picker-fix 2026-09-17.)
+// The file also pins the edit-mode writer contract of the creation sheet.
 //
-// PRESENCE-ONLY test (source-grep) — the BEHAVIORAL proof for the
-// predicate itself lives in `can_offer_in_picker_behavioral_test.dart`,
-// and the edit write→read-same-key arm lives in
-// `custom_exercises_mutations_behavioral_test.dart` (Test 5). Per repo
-// rule 21, source-greps count for presence only; the pairing is
-// deliberate: grep pins the WIRING (which file calls what), the
-// behavioral tests pin the SEMANTICS.
+// PRESENCE-ONLY test (source-grep): it cannot see a list that drops the non-matching
+// buckets. Each list's own widget test carries that:
+// coach_swap_picker_equipment_behavioral_test.dart, swap_sheet_any_equipment_test.dart,
+// template_builder_unique_names_test.dart, exercise_name_unique_screen_test.dart.
+// The arrangement itself: picker_rows_behavioral_test.dart.
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
 String _read(String path) => File(path).readAsStringSync();
 
+/// [path] without its comments, so a call named only in prose does not count.
+String _code(String path) => _read(path)
+    .split('\n')
+    .map((line) {
+      final at = line.indexOf('//');
+      return at < 0 ? line : line.substring(0, at);
+    })
+    .join('\n');
+
 const repoRoot = '.';
 
 void main() {
-  final swapSrc =
-      _read('$repoRoot/lib/features/train/widgets/exercise_swap_sheet.dart');
-  final pickerSrc = _read(
-      '$repoRoot/lib/features/train/screens/active_workout/exercise_picker_sheet.dart');
-  final templateSrc =
-      _read('$repoRoot/lib/features/train/screens/template_builder_screen.dart');
   final sheetSrc = _read(
       '$repoRoot/lib/features/train/widgets/create_custom_exercise_sheet.dart');
   final yourExSrc = _read(
@@ -34,51 +36,26 @@ void main() {
   final chipSrc = _read(
       '$repoRoot/lib/features/train/screens/train/collapsible_section.dart');
 
-  group('picker capability wiring (custom-picker-fix)', () {
-    test('swap sheet: custom list uses canOfferInPicker, library keeps '
-        'canPerform', () {
-      expect(swapSrc.contains('canOfferInPicker'), isTrue,
-          reason: 'the custom list must use the picker-asymmetric predicate');
-      // Library list keeps the fail-closed check; customs use the
-      // canOfferInPicker exemption — exactly ONE canPerform call remains.
-      expect('canPerform('.allMatches(swapSrc).length, 1,
-          reason: 'the library list keeps canPerform; the custom list must '
-              'have switched to canOfferInPicker');
-      expect(swapSrc.contains('isCustom: true'), isTrue,
-          reason: 'provenance is list membership (getCustomExercises output), '
-              'NOT a per-row is_custom field — restored rows carry none');
-    });
-
-    test('picker sheet: filter-then-merge, no per-row discriminator', () {
-      expect(pickerSrc.contains('filteredLibrary'), isTrue);
-      expect(pickerSrc.contains('filteredCustom'), isTrue,
-          reason: 'the two lists filter SEPARATELY then merge — a per-row '
-              'is_custom check would miss the restored population');
-      expect('canPerform('.allMatches(pickerSrc).length, 1,
-          reason: 'library keeps the fail-closed check');
-      expect(pickerSrc.contains('canOfferInPicker'), isTrue);
-      expect(pickerSrc.contains('cap == null'), isTrue,
-          reason: 'the flag-OFF skip is preserved: no filtering at all when '
-              'capability is unresolvable');
-    });
-
-    test('template builder: doableCustom for the custom list', () {
-      expect(templateSrc.contains('doableCustom'), isTrue);
-      expect('canPerform('.allMatches(templateSrc).length, 1,
-          reason: 'library lists keep canPerform inside doable()');
-      expect(templateSrc.contains('canOfferInPicker'), isTrue);
-      expect(templateSrc.contains('cap == null'), isTrue);
-    });
-
-    test('no picker site applies canPerform to a CUSTOM list', () {
-      // The old bug shape: `getCustomExercises()` result piped through
-      // canPerform. If that literal shape reappears in any of the three
-      // sites, customs with [] equipment go dark again.
-      final bugShape = RegExp(r'getCustomExercises\(\)[\s\S]{0,200}canPerform\(');
-      expect(bugShape.hasMatch(swapSrc), isFalse, reason: 'swap sheet');
-      expect(bugShape.hasMatch(pickerSrc), isFalse, reason: 'picker sheet');
-      expect(bugShape.hasMatch(templateSrc), isFalse, reason: 'template builder');
-    });
+  group('hand-pick lists go through PickerRows', () {
+    const lists = {
+      'swap sheet': 'lib/features/train/widgets/exercise_swap_sheet.dart',
+      'mid-workout picker':
+          'lib/features/train/screens/active_workout/exercise_picker_sheet.dart',
+      'template builder':
+          'lib/features/train/screens/template_builder_screen.dart',
+      'coach swap list':
+          'lib/features/ai_coach/widgets/swap_exercise_coach_sheet.dart',
+    };
+    for (final MapEntry(key: label, value: path) in lists.entries) {
+      test('$label arranges its rows and drops none by equipment', () {
+        final code = _code('$repoRoot/$path');
+        expect(code.contains('PickerRows.arrange('), isTrue,
+            reason: 'one arrangement for every hand-pick list');
+        expect(code.contains('canPerform('), isFalse,
+            reason: 'equipment orders a hand-pick list, it never filters it');
+        expect(code.contains('canOfferInPicker('), isFalse);
+      });
+    }
   });
 
   group('creation sheet: muscles + edit mode wiring', () {

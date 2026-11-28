@@ -25,9 +25,10 @@ final _library = <Map<String, dynamic>>[
   {'id': 'E2', 'name': _row, 'category': 'Pull', 'logging_type': 'weight_reps'},
 ];
 
-Future<void> _pump(WidgetTester tester, List<Map<String, dynamic>> exercises) async {
+Future<void> _pump(WidgetTester tester, List<Map<String, dynamic>> exercises,
+    {List<Map<String, dynamic>>? library}) async {
   await ensureHive(tester);
-  await seedLibrary(tester, rows: _library);
+  await seedLibrary(tester, rows: library ?? _library);
   await tester.runAsync(() => HiveService.instance.customBox.clear());
   await tester.pumpWidget(ProviderScope(
     child: MaterialApp(
@@ -58,6 +59,43 @@ Future<void> _openSearch(WidgetTester tester) async {
 }
 
 Finder _card(String name) => find.text(name);
+
+Map<String, dynamic> _gear(String id, String name, List<String> equipment,
+        {String? source, List<String>? aliases}) =>
+    <String, dynamic>{
+      'id': id,
+      'name': name,
+      'category': 'Push',
+      'logging_type': 'weight_reps',
+      'equipment_needed': equipment,
+      'source': ?source,
+      'name_aliases': ?aliases,
+    };
+
+/// A bodyweight user, one own exercise ('Twin Test'), and the search sheet open.
+Future<void> _openAsBodyweight(
+    WidgetTester tester, List<Map<String, dynamic>> library) async {
+  await _pump(tester, const [], library: library);
+  await tester.runAsync(() async {
+    await HiveService.instance.userBox
+        .put('profile', <String, dynamic>{'equipment_access': 'bodyweight'});
+    await HiveService.instance.customBox.put(
+        'custom_exercise_twin', <String, dynamic>{
+      'id': 'custom_exercise_twin',
+      'name': 'Twin Test',
+      'type': 'exercise',
+      'category': 'Push',
+      'logging_type': 'weight_reps',
+      'equipment_needed': <String>[],
+    });
+  });
+  await _openSearch(tester);
+}
+
+int _rowCount(WidgetTester tester) => (tester
+        .widget<ListView>(_inSheet(find.byType(ListView)))
+        .childrenDelegate as SliverChildBuilderDelegate)
+    .childCount!;
 
 void main() {
   tearDownAll(closeHive);
@@ -118,6 +156,59 @@ void main() {
       await _settle(tester);
       expect(find.byType(BottomSheet), findsNothing);
       expect(_card(_row), findsOneWidget);
+    });
+  });
+
+  // Founder 2026-11-28: a user adding by hand can pick ANY exercise. Their equipment only
+  // orders the list, through PickerRows.
+  group('every exercise is offered', () {
+    // The harness keeps one Hive dir per file: the bodyweight profile must not leak.
+    tearDown(() => HiveService.instance.userBox.delete('profile'));
+
+    testWidgets('theirs first, then the rest, and one name once', (tester) async {
+      await _openAsBodyweight(tester, [
+        _gear('A0', 'Barbell Row Test', ['barbell']),
+        _gear('L1', 'Floor Press Test', ['bodyweight']),
+        _gear('Z1', 'Twin Test', ['bodyweight'],
+            source: 'community', aliases: ['Old Twin Name']),
+      ]);
+      double top(String name) => tester.getTopLeft(_inSheet(find.text(name))).dy;
+      expect(top('Floor Press Test'), lessThan(top('Barbell Row Test')));
+      expect(top('Twin Test'), lessThan(top('Barbell Row Test')));
+      expect(_inSheet(find.text('Twin Test')), findsOneWidget);
+
+      // The own exercise answers to the name of the copy it stands for.
+      await tester.enterText(
+          _inSheet(find.byType(TextField)).first, 'old twin name');
+      await _settle(tester);
+      expect(_inSheet(find.text('Twin Test')), findsOneWidget);
+      expect(_inSheet(find.text('Floor Press Test')), findsNothing);
+    });
+
+    testWidgets('a typed name is reachable behind 30 matching rows',
+        (tester) async {
+      await _openAsBodyweight(tester, [
+        _gear('A0', 'Barbell Press', ['barbell']),
+        for (var i = 0; i < 31; i++)
+          _gear('P${100 + i}', 'Press $i', ['bodyweight']),
+      ]);
+      expect(_rowCount(tester), 31,
+          reason: 'the untyped list stays 30 library rows plus the own one');
+
+      await tester.enterText(_inSheet(find.byType(TextField)).first, 'press');
+      await _settle(tester);
+      final barbell = _inSheet(find.text('Barbell Press'));
+      await tester.scrollUntilVisible(barbell, 300,
+          scrollable: find
+              .descendant(
+                  of: _inSheet(find.byType(ListView)),
+                  matching: find.byType(Scrollable))
+              .first);
+      await tester.pump();
+      await tester.tap(barbell);
+      await _settle(tester);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(_card('Barbell Press'), findsOneWidget);
     });
   });
 

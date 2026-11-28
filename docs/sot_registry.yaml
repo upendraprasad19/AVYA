@@ -642,7 +642,7 @@ concepts:
         semantic: pass-through
         fields_read: [via service.getScheduleForDate(day)]
       - file: lib/core/services/swap_service.dart
-        line_range: 163-166
+        line_range: 178-181
         method: SwapService._row(date) (weekStates / preview / swapDays)
         semantic: pass-through
         fields_read: [raw workoutBox schedule_<date> row]
@@ -9459,9 +9459,8 @@ concepts:
           exerciseDuplicateKey: case, repeated / non-breaking spaces and curly
           apostrophes ignored) or the v5 id of an earlier custom refuses with
           duplicate_name and WardroomCopy.customExerciseNameTakenTemplate; the
-          coach tool passes that message through unchanged. ONE exception
-          (founder 2026-11-26): a community row no picker can show does not
-          take its name (see the isNameTaken reader below). Test
+          coach tool passes that message through unchanged. No row is exempt:
+          every hand-pick list shows every row (81a2dd). Test
           test/contracts/custom_exercise_name_unique_behavioral_test.dart.
       - file: lib/core/services/workout_write_service.dart
         line_range: 1718-1760
@@ -9493,21 +9492,19 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 501-532
+        line_range: 498-521
         method: isNameTaken
         semantic: filter
-        fields_read: [name, name_aliases, type, source, equipment_needed]
+        fields_read: [name, name_aliases, type]
         notes: |
           The create guard's one question (f2a6c8): list rows' name and
           name_aliases, then customNamesLower (the user's exercise rows only,
-          so templates in customBox are never compared). While the equipment
-          rule is on (resolveCapabilityFromProfile is not null), a list row
-          is skipped when it is a community row (`source: community`) whose
-          equipment_needed holds nothing the app can read: canPerform refuses
-          it under every setting, so no picker shows it (_noPickerCanShow,
-          founder 2026-11-26).
+          so templates in customBox are never compared). No row is skipped:
+          every hand-pick list shows every exercise, so a taken name can be
+          found by search (founder 2026-11-28; the 2026-11-26 exception for a
+          row no list could show is gone).
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 476-499
+        line_range: 474-497
         method: getCustomExercises
         semantic: filter
         fields_read: [name, category, logging_type, type]
@@ -9516,50 +9513,48 @@ concepts:
           Accepts entries with EITHER `type == 'exercise'` OR custom_exercise_
           key prefix (post-fix for the type-stamp gap a5d29c).
       - file: lib/features/train/widgets/exercise_swap_sheet.dart
-        line_range: 88-113
+        line_range: 89-104
         method: _loadExercises
         semantic: display
         fields_read: [name, category, primary_muscles, equipment_needed]
         notes: |
-          custom-picker-fix (2026-09-17): library rows filter via
-          canPerform (fail-closed); the CUSTOM list filters via
-          canOfferInPicker(isCustom: true) — a user-authored custom with an
-          unverifiable (empty) equipment requirement stays visible. Provenance
-          is list membership, NOT a per-row is_custom field (restored rows
-          carry none).
+          Every library and custom row through PickerRows.arrange (founder
+          2026-11-28): equipment orders, never hides; one row per name. The
+          custom section ignores the category chip. Test
+          test/widgets/swap_sheet_any_equipment_test.dart.
       - file: lib/features/train/screens/active_workout/exercise_picker_sheet.dart
-        line_range: 35-67
+        line_range: 35-44
         method: _loadAllExercises
         semantic: display
         fields_read: [name, category, equipment_needed]
         notes: |
-          custom-picker-fix: filter-then-merge — library (canPerform) and
-          customs (canOfferInPicker isCustom: true) filter SEPARATELY, then
-          merge library-first. No per-row discriminator.
+          PickerRows.arrange(...).merged: the user's equipment first, then the
+          rest, one row per name. Test
+          test/features/train/exercise_name_unique_screen_test.dart.
       - file: lib/features/train/screens/active_workout/screen.dart
         line_range: 1-9999
         method: _showExercisePickerSheet
         semantic: display
         fields_read: [name, category]
       - file: lib/features/ai_coach/widgets/swap_exercise_coach_sheet.dart
-        line_range: 137-181
+        line_range: 136-169
         method: _substitutesFor
         semantic: display
         fields_read: [id, name, equipment_needed]
         notes: |
-          The coach's Swap picker: library rows and customs through
-          canOfferInPicker (isCustom by list membership), the RAW
-          equipment_needed value (a6f3d9: it was passed as text, so every
-          built-in exercise was hidden). Test
+          The coach's Swap picker: PickerRows.arrange, walked bucket by bucket
+          so each option keeps isCustom. Every exercise is offered. Test
           test/contracts/coach_swap_picker_equipment_behavioral_test.dart.
       - file: lib/features/train/screens/template_builder_screen.dart
-        line_range: 561-611
+        line_range: 563-602
         method: _refresh
         semantic: display
         fields_read: [name, category, equipment_needed]
         notes: |
-          custom-picker-fix: library reads keep doable() (canPerform); the
-          custom list uses doableCustom() → canOfferInPicker(isCustom: true).
+          PickerRows.arrange on the whole library and all customs, THEN the
+          name-or-alias search, so which row stands for a name never depends on
+          the query. Untyped: 30 library rows plus all own; a search is not
+          capped. Test test/features/train/template_builder_unique_names_test.dart.
     hive_key_prefix: custom_exercise_
     hive_key_formula: "'custom_exercise_${cloudRow.id}'"
     sync_methods: [_syncCustomItems]
@@ -11581,7 +11576,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 424-434
+        line_range: 422-432
         method: queryV4 injury match
         semantic: flag-check
         fields_read: [injury_contraindications]
@@ -13547,6 +13542,13 @@ concepts:
       `EquipmentCapability.canPerform(equipment_needed, effective)` — keyed on
       `equipment_needed`, NEVER on `equipment_tier`.
 
+      WHAT IT LIMITS (81a2dd, founder 2026-11-28): only what the APP picks (the
+      generator, repeat pins, warm-up, finisher, the injury planner) and what the
+      coach is told. What the USER picks by hand (swap sheet, mid-workout picker,
+      template builder, the coach's swap list, and a coach swap once applied) is
+      never limited: the lists are ORDERED by it (PickerRows) and the swap write
+      has no equipment check.
+
       Two producers, deliberately NOT merged:
         resolveCapability / resolveCapabilityFromProfile  — the HARD FLOOR.
         effectiveEquipmentForSnapshot                     — the AI coach's view.
@@ -13569,7 +13571,7 @@ concepts:
       every warm-up at every tier. The producers fail OPEN (Hive error, unknown
       tier, flag off → null) so a storage fault never empties a plan.
 
-      Flag: `enable_equipment_capability_floor`.
+      Kill switch: `disable_equipment_capability_floor` (default ON).
     writers:
       - file: lib/core/utils/equipment_vocab.dart
         method: effectiveItems / tierItems / floorSanitizedExclusions
@@ -13597,18 +13599,14 @@ concepts:
         method: attach / _buildFinisher
         semantic: hard-filter
         notes: jump_rope degrades to _miniHiitFinisher, matching its four siblings
-      - file: lib/core/services/swap_service.dart
-        method: swapExerciseInDay
-        semantic: refuse
-        notes: throws SwapExerciseException('equipment_unavailable') rather than substituting — the AI coach drives this without any sheet
-      - file: lib/features/ai_coach/widgets/swap_exercise_coach_sheet.dart
-        method: _substitutesFor
+      - file: lib/features/ai_coach/services/injury_swap_planner.dart
+        method: _findSubstitute
         semantic: hard-filter
-        notes: canOfferInPicker on the RAW equipment_needed (the list the library stores); passed as text it refused every library row until a6f3d9. Test test/contracts/coach_swap_picker_equipment_behavioral_test.dart
-      - file: lib/shared/repositories/exercise_repository.dart
-        method: isNameTaken / _noPickerCanShow
-        semantic: advisory
-        notes: while the floor is on, a community row with no readable equipment does not take its name (no picker can show it); founder 2026-11-26
+        notes: the one caller of the swap write where the APP picks the exercise. canOfferInPicker on the row the write would use (SwapService.ownCustomRow); what it cannot replace is returned as `unplaced` and named in the preview. The swap write itself has no equipment check (founder 2026-11-28)
+      - file: lib/shared/repositories/picker_rows.dart
+        method: PickerRows.arrange (the swap sheet, the mid-workout picker, the template builder and the coach's swap list)
+        semantic: ordering
+        notes: a hand-pick list is ORDERED by the floor and never filtered by it (founder 2026-11-28); canPerform for library rows, canOfferInPicker(isCustom) for own ones. Test test/contracts/picker_rows_behavioral_test.dart
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
         method: buildAiContext ('equipment_effective', flag-gated, key omitted when OFF)
         semantic: advisory
@@ -13800,7 +13798,7 @@ concepts:
         semantic: a missing injury field = never excluded; muscle_primary was invisible
         notes: the E252 knee safety hole + muscle-invisibility
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 52-126
+        line_range: 50-124
         method: getByExactName / hasExactNameWhere (exact loop, then name_aliases) + search (name or alias substring)
         semantic: a retired name resolves to its kept twin; an exact name always wins over an alias
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts

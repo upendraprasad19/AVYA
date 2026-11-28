@@ -322,23 +322,33 @@ void main() {
       expect(dayNames(date), ['Row', 'My Move']);
     });
 
-    test('mirror: a community row with no own custom stays refused', () async {
+    // Founder 2026-11-28: a swap picked by hand (the coach's included, once the
+    // user taps APPLY) is not limited by equipment.
+    test('a community row with no readable equipment swaps in', () async {
       await community();
-      await expectLater(
-          swap(),
-          throwsA(isA<SwapExerciseException>()
-              .having((e) => e.code, 'code', 'equipment_unavailable')));
-      expect(dayNames(date), ['Row', 'Curl']);
+      await swap();
+      expect(dayNames(date), ['Row', 'My Move']);
     });
 
-    test('mirror: the own custom is still held to equipment it does name',
-        () async {
+    test('an own custom naming equipment the user lacks swaps in', () async {
       await community();
       await ownCustom(equipment: ['barbell']);
+      await swap();
+      expect(dayNames(date), ['Row', 'My Move']);
+    });
+
+    test('mirror: a name already in the day is still refused', () async {
+      await HiveService.instance.exerciseBox.put('BB', {
+        'id': 'BB',
+        'name': 'Row',
+        'equipment_needed': <String>['barbell'],
+      });
       await expectLater(
-          swap(),
+          engine.swapExerciseInDay(
+              date: date, fromExerciseId: 'Z8', toExerciseId: 'BB'),
           throwsA(isA<SwapExerciseException>()
-              .having((e) => e.code, 'code', 'equipment_unavailable')));
+              .having((e) => e.code, 'code', 'exercise_already_in_workout')));
+      expect(dayNames(date), ['Row', 'Curl']);
     });
 
     test('mirror: a library row wins over a custom with the same id', () async {
@@ -382,9 +392,9 @@ void main() {
         'primary_muscles': ['calves'],
       });
       await putDay(today, [planned(sharedId, 'My Move')]);
-      final swaps = await InjurySwapPlanner.instance
+      final plan = await InjurySwapPlanner.instance
           .plan(bodyPart: 'knee', severity: 'moderate', daysAhead: 1);
-      return [for (final s in swaps) s.fromName];
+      return [for (final s in plan.swaps) s.fromName];
     }
 
     test('the own muscles are the ones judged', () async {
@@ -445,9 +455,9 @@ void main() {
         });
       }
       await putDay(today, [planned('QUAD', 'Quad Move')]);
-      final swaps = await InjurySwapPlanner.instance
+      final plan = await InjurySwapPlanner.instance
           .plan(bodyPart: 'knee', severity: 'moderate', daysAhead: 1);
-      return [for (final s in swaps) s.toName];
+      return [for (final s in plan.swaps) s.toName];
     }
 
     test('an own custom that now loads the injury is not offered', () async {
@@ -506,8 +516,9 @@ void main() {
     test('two affected exercises of one category get DIFFERENT substitutes',
         () async {
       await putDay(today, [hit('Squat'), hit('Lunge')]);
-      final swaps =
-          await planner.plan(bodyPart: 'quad', severity: 'mild', daysAhead: 1);
+      final swaps = (await planner.plan(
+              bodyPart: 'quad', severity: 'mild', daysAhead: 1))
+          .swaps;
       expect(swaps.map((s) => s.fromName), ['Squat', 'Lunge']);
       expect(swaps.map((s) => s.toName).toSet().length, 2,
           reason: 'both used to get the same first match');
@@ -516,24 +527,27 @@ void main() {
     test('rows with no muscle data take the same rule (the library-lookup branch)',
         () async {
       await putDay(today, [planned('Squat', 'Squat'), planned('Lunge', 'Lunge')]);
-      final swaps =
-          await planner.plan(bodyPart: 'quad', severity: 'mild', daysAhead: 1);
+      final swaps = (await planner.plan(
+              bodyPart: 'quad', severity: 'mild', daysAhead: 1))
+          .swaps;
       expect(swaps.map((s) => s.fromName), ['Squat', 'Lunge']);
       expect(swaps.map((s) => s.toName).toSet().length, 2);
     });
 
     test('a substitute already in the day is skipped', () async {
       await putDay(today, [hit('Squat'), planned('Calf Raise', 'calf raise')]);
-      final swaps =
-          await planner.plan(bodyPart: 'quad', severity: 'mild', daysAhead: 1);
+      final swaps = (await planner.plan(
+              bodyPart: 'quad', severity: 'mild', daysAhead: 1))
+          .swaps;
       expect(swaps.single.toName, 'Hamstring Curl');
     });
 
     test('one substitute may repeat on another date', () async {
       await putDay(today, [hit('Squat')]);
       await putDay(tomorrow, [hit('Squat')]);
-      final swaps =
-          await planner.plan(bodyPart: 'quad', severity: 'mild', daysAhead: 2);
+      final swaps = (await planner.plan(
+              bodyPart: 'quad', severity: 'mild', daysAhead: 2))
+          .swaps;
       expect(swaps.map((s) => s.date), [today, tomorrow]);
       expect(swaps[0].toName, swaps[1].toName,
           reason: 'the taken set is per date, not per plan');
@@ -543,8 +557,9 @@ void main() {
         () async {
       await HiveService.instance.exerciseBox.delete('Hamstring Curl');
       await putDay(today, [hit('Squat'), hit('Lunge')]);
-      final swaps =
-          await planner.plan(bodyPart: 'quad', severity: 'mild', daysAhead: 1);
+      final swaps = (await planner.plan(
+              bodyPart: 'quad', severity: 'mild', daysAhead: 1))
+          .swaps;
       expect(swaps.length, 1, reason: 'one substitute, two exercises to place');
       await engine.swapExerciseInDay(
         date: today,
@@ -557,8 +572,9 @@ void main() {
     test('every planned swap executes: the preview promises nothing the guard refuses',
         () async {
       await putDay(today, [hit('Squat'), hit('Lunge')]);
-      final swaps =
-          await planner.plan(bodyPart: 'quad', severity: 'mild', daysAhead: 1);
+      final swaps = (await planner.plan(
+              bodyPart: 'quad', severity: 'mild', daysAhead: 1))
+          .swaps;
       for (final s in swaps) {
         await engine.swapExerciseInDay(
             date: s.date, fromExerciseId: s.fromId, toExerciseId: s.toId);
@@ -566,6 +582,115 @@ void main() {
       final names = dayNames(today);
       expect(names.toSet().length, names.length);
       expect(names, isNot(contains('Squat')));
+    });
+  });
+
+  // The planner is the one caller of the swap write where the APP picks the
+  // exercise, so it applies the equipment rule itself (founder 2026-11-28).
+  group('InjurySwapPlanner: equipment, and what it could not replace', () {
+    final planner = InjurySwapPlanner.instance;
+    final today = istDateStr(DateTime.now());
+
+    Map<String, dynamic> legs(String id, String name, List<String> equipment,
+            {String muscle = 'calves', String? source}) =>
+        {
+          'id': id,
+          'name': name,
+          'category': 'legs',
+          'primary_muscles': [muscle],
+          'equipment_needed': equipment,
+          'source': ?source,
+        };
+
+    Map<String, dynamic> hit() => {
+          ...planned('QUAD', 'Quad Move'),
+          'category': 'legs',
+          'primary_muscles': ['quads'],
+        };
+
+    setUp(() async {
+      await HiveService.instance.userBox
+          .put('profile', <String, dynamic>{'equipment_access': 'bodyweight'});
+      await HiveService.instance.exerciseBox.clear();
+      await HiveService.instance.exerciseBox
+          .put('QUAD', legs('QUAD', 'Quad Move', ['bodyweight'], muscle: 'quads'));
+      await putDay(today, [hit()]);
+    });
+
+    Future<void> candidate(Map<String, dynamic> row) =>
+        HiveService.instance.exerciseBox.put(row['id'], row);
+
+    Future<InjuryPlan> plan() =>
+        planner.plan(bodyPart: 'quad', severity: 'mild', daysAhead: 1);
+
+    Future<List<String>> offered() async =>
+        [for (final s in (await plan()).swaps) s.toName];
+
+    test('a movement the equipment cannot do is skipped for the next one',
+        () async {
+      await candidate(legs('A_BAR', 'Barbell Move', ['barbell']));
+      await candidate(legs('B_BODY', 'Floor Move', ['bodyweight']));
+      expect(await offered(), ['Floor Move']);
+      expect((await plan()).unplaced, isEmpty);
+    });
+
+    test('mirror: with the equipment rule off, the first candidate is offered',
+        () async {
+      await HiveService.instance.configBox
+          .put('disable_equipment_capability_floor', true);
+      addTearDown(() => HiveService.instance.configBox
+          .delete('disable_equipment_capability_floor'));
+      await candidate(legs('A_BAR', 'Barbell Move', ['barbell']));
+      await candidate(legs('B_BODY', 'Floor Move', ['bodyweight']));
+      expect(await offered(), ['Barbell Move']);
+    });
+
+    test('mirror: an own custom with no recorded equipment is offered, whatever '
+        'its community copy says', () async {
+      await candidate(
+          legs('A_OWN', 'Own Move', ['barbell'], source: 'community'));
+      await HiveService.instance.customBox.put('custom_exercise_90', {
+        ...legs('A_OWN', 'Own Move', <String>[]),
+        'type': 'exercise',
+      });
+      expect(await offered(), ['Own Move']);
+    });
+
+    test('an own custom naming equipment the user lacks is not offered', () async {
+      await candidate(
+          legs('A_OWN', 'Own Move', ['bodyweight'], source: 'community'));
+      await HiveService.instance.customBox.put('custom_exercise_91', {
+        ...legs('A_OWN', 'Own Move', ['barbell']),
+        'type': 'exercise',
+      });
+      expect(await offered(), isEmpty);
+    });
+
+    test('no candidate left: no swap, and the exercise is named as unplaced',
+        () async {
+      await candidate(legs('A_BAR', 'Barbell Move', ['barbell']));
+      final result = await plan();
+      expect(result.swaps, isEmpty);
+      expect([for (final u in result.unplaced) (u.date, u.exerciseName)],
+          [(today, 'Quad Move')]);
+    });
+
+    test('the library-lookup branch names it too', () async {
+      // The stored row has no muscle data; only the library row does.
+      await putDay(today, [planned('QUAD', 'Quad Move')]);
+      final result = await plan();
+      expect(result.swaps, isEmpty);
+      expect([for (final u in result.unplaced) (u.date, u.exerciseName)],
+          [(today, 'Quad Move')]);
+    });
+
+    test('mirror: an exercise the library says is unaffected is not unplaced',
+        () async {
+      await candidate(
+          legs('QUAD', 'Quad Move', ['bodyweight'], muscle: 'chest'));
+      final result = await plan();
+      expect(result.swaps, isEmpty);
+      expect(result.unplaced, isEmpty);
     });
   });
 

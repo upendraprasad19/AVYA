@@ -1,9 +1,12 @@
 import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
+import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
 
 import '../../../core/services/auto_appended_custom.dart' show isLibraryRow;
 import '../../../core/services/hive_service.dart';
+import '../../../core/services/swap_service.dart' show SwapService;
 
 /// One planned swap for a single date.
 class InjurySwap {
@@ -22,11 +25,31 @@ class InjurySwap {
   });
 }
 
+/// An affected exercise the planner found no substitute for. It stays in the
+/// plan, so the preview names it.
+class InjuryUnplaced {
+  final String date; // YYYY-MM-DD
+  final String exerciseName;
+
+  const InjuryUnplaced({required this.date, required this.exerciseName});
+}
+
+/// What [InjurySwapPlanner.plan] would change, and what it could not.
+class InjuryPlan {
+  final List<InjurySwap> swaps;
+  final List<InjuryUnplaced> unplaced;
+
+  const InjuryPlan({required this.swaps, required this.unplaced});
+}
+
 /// Plans exercise swaps for a `modify_workout_for_injury` intent.
 ///
 /// Reads scheduled workouts (Hive workoutBox) + exercise library
 /// (Hive exerciseBox) to find safe substitutes that don't load the
 /// affected body part.
+///
+/// The APP picks the substitute here, so equipment is checked HERE and nowhere
+/// downstream: the swap write accepts any exercise a user asks for.
 ///
 /// Two-phase contract with the dispatcher:
 ///   1. [InjuryModifyDiff] calls [plan] then [cacheSwaps] in initState.
@@ -39,16 +62,20 @@ class InjurySwapPlanner {
   final Map<String, List<InjurySwap>> _cache = {};
 
   /// Compute the list of swaps required to modify the next [daysAhead] days.
-  /// Returns an empty list if no upcoming exercises hit the affected body part.
-  Future<List<InjurySwap>> plan({
+  /// Both lists are empty only when no upcoming exercise hits the body part.
+  Future<InjuryPlan> plan({
     required String bodyPart,
     required String severity,
     required int daysAhead,
   }) async {
     final swaps = <InjurySwap>[];
+    final unplaced = <InjuryUnplaced>[];
     final today = DateTime.now();
     final affectedMuscles = _affectedMusclesForBodyPart(bodyPart);
-    if (affectedMuscles.isEmpty) return swaps;
+    if (affectedMuscles.isEmpty) {
+      return InjuryPlan(swaps: swaps, unplaced: unplaced);
+    }
+    final capability = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
 
     for (var i = 0; i < daysAhead; i++) {
       final d = today.add(Duration(days: i));
@@ -94,6 +121,7 @@ class InjurySwapPlanner {
             category: (ex['category'] ?? libEntry?['category'])?.toString(),
             avoidMuscles: affectedMuscles,
             takenNames: takenNames,
+            capability: capability,
           );
           if (sub != null) {
             takenNames.add(exerciseNameKey(sub.name));
@@ -104,6 +132,8 @@ class InjurySwapPlanner {
               toId: sub.id,
               toName: sub.name,
             ));
+          } else {
+            unplaced.add(InjuryUnplaced(date: dateStr, exerciseName: exName));
           }
         } else {
           // Schedule entry didn't have muscle data — check the library entry.
@@ -115,6 +145,7 @@ class InjurySwapPlanner {
               category: libEntry['category']?.toString(),
               avoidMuscles: affectedMuscles,
               takenNames: takenNames,
+              capability: capability,
             );
             if (sub != null) {
               takenNames.add(exerciseNameKey(sub.name));
@@ -125,12 +156,15 @@ class InjurySwapPlanner {
                 toId: sub.id,
                 toName: sub.name,
               ));
+            } else {
+              unplaced
+                  .add(InjuryUnplaced(date: dateStr, exerciseName: exName));
             }
           }
         }
       }
     }
-    return swaps;
+    return InjuryPlan(swaps: swaps, unplaced: unplaced);
   }
 
   void cacheSwaps(String intentId, List<InjurySwap> swaps) {
@@ -222,11 +256,13 @@ class InjurySwapPlanner {
   ///   - is NOT [fromId]
   ///   - matches [category] (if provided)
   ///   - does NOT load any of [avoidMuscles]
+  ///   - the user's equipment covers ([capability]; null means no rule)
   ({String id, String name})? _findSubstitute({
     required String fromId,
     required String? category,
     required Set<String> avoidMuscles,
     required Set<String> takenNames,
+    required Set<String>? capability,
   }) {
     final box = HiveService.instance.exerciseBox;
     final wantedCat = category?.toLowerCase();
@@ -243,6 +279,18 @@ class InjurySwapPlanner {
 
       // Skip if this candidate hits the affected muscles too.
       if (_exerciseHitsMuscles(row, avoidMuscles)) continue;
+
+      if (capability != null) {
+        // Judged on the row the swap would write, with the write's own lookup.
+        final own = isLibraryRow(ex)
+            ? null
+            : SwapService.ownCustomRow(HiveService.instance, id);
+        if (!EquipmentCapability.canOfferInPicker(
+            (own ?? ex)['equipment_needed'], capability,
+            isCustom: own != null)) {
+          continue;
+        }
+      }
 
       final name = (row['name'] ?? id).toString();
       if (takenNames.contains(exerciseNameKey(name))) continue;

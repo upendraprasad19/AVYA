@@ -34,24 +34,24 @@ class EquipmentCapability {
     return needed.every(effective.contains);
   }
 
-  /// Picker visibility, distinct from [canPerform]'s hard capability check.
+  /// [canPerform] with one exemption, for a USER'S OWN row.
   ///
-  /// A USER-AUTHORED custom exercise whose equipment requirement is
-  /// UNVERIFIABLE (empty / null / all-unmappable after normalization) is
-  /// always offered in a picker: the user created it, has already performed
-  /// it, and the picker is an explicit user choice — not a generated
-  /// prescription. `canPerform`'s fail-closed rule would hide every such
-  /// row forever, because the creation sheet has no equipment field and
-  /// stores `[]` by design (create_custom_exercise_sheet.dart), which made
-  /// every custom exercise invisible in all three pickers (swap / add /
-  /// template builder) the moment OI-89's flag defaulted ON.
+  /// A custom exercise whose equipment requirement is UNVERIFIABLE (empty /
+  /// null / all-unmappable after normalization) passes: the user created it and
+  /// has already performed it. `canPerform`'s fail-closed rule would refuse
+  /// every such row, because the creation sheet has no equipment field and
+  /// stores `[]` by design (create_custom_exercise_sheet.dart).
+  ///
+  /// Callers: `PickerRows.arrange` (whether an own row is listed with the
+  /// user's equipment), `InjurySwapPlanner` and the repeat phase's pinned rows.
+  /// No hand-pick list hides a row by it (founder 2026-11-28).
   ///
   /// The fast path fires ONLY on an unparseable requirement. A custom row
   /// WITH parseable equipment (AI-authored via
   /// `WorkoutRepository.createCustomExercise`, which normalizes free text)
   /// still takes the fail-closed [canPerform] path. Library / community
   /// rows are never exempted: pass `isCustom: false` — provenance comes
-  /// from LIST MEMBERSHIP (the caller filtered `getCustomExercises()`),
+  /// from LIST MEMBERSHIP (the caller read `getCustomExercises()`),
   /// never from row content, because restored custom rows carry no
   /// `is_custom` field (the cloud table has no such column; restore stamps
   /// only `type: 'exercise'`).

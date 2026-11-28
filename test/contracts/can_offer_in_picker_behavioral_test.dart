@@ -10,9 +10,12 @@
 //            ⇒ `equipment_needed: []` by design (the sheet has no equipment
 //            field); the AI tool passes free text, which is normalized and
 //            may store real tokens.
-// Readers:   exercise_swap_sheet.dart `_loadExercises`,
-//            exercise_picker_sheet.dart `_loadAllExercises`,
-//            template_builder_screen.dart `_refresh` (doableCustom).
+// Readers:   picker_rows.dart `PickerRows.arrange` (own rows),
+//            injury_swap_planner.dart `_findSubstitute`,
+//            exercise_selector.dart `buildPinnedDays` (repeat pins).
+//
+// Since 81a2dd (founder 2026-11-28) no hand-pick list HIDES a row by this predicate:
+// the lists only order by it. The history below is why the exemption exists.
 //
 // The bug this pins: the OI-89 capability filter is FAIL-CLOSED on an
 // unreadable/empty requirement (canPerform returns false for []). The

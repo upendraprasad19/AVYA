@@ -38,7 +38,6 @@ import 'write_result.dart';
 import '../utils/date_utils.dart';
 import '../utils/exercise_name_identity.dart';
 import '../utils/ist_date.dart';
-import '../../shared/repositories/plan_engine/equipment_capability.dart';
 import '../../shared/repositories/plan_engine/finisher_safety.dart';
 import '../../shared/repositories/plan_engine/finisher_show_context.dart';
 import '../../shared/repositories/plan_engine/session_budget.dart' show SessionBudget;
@@ -120,6 +119,22 @@ class SwapService {
   static SwapService get instance => _instance;
 
   final HiveService _hive = HiveService.instance;
+
+  /// The user's own custom exercise with this id or name, or null. The swap
+  /// write resolves its target through it, and InjurySwapPlanner judges its
+  /// candidates on the same row.
+  static Map<String, dynamic>? ownCustomRow(HiveService hive, String idOrName) {
+    for (final key in hive.customBox.keys) {
+      if (key is! String || !key.startsWith('custom_exercise_')) continue;
+      final candidate = hive.customBox.get(key);
+      if (candidate is! Map) continue;
+      final row = Map<String, dynamic>.from(candidate);
+      final id = (row['id'] as String?) ?? '';
+      final name = (row['name'] as String?) ?? '';
+      if (id == idOrName || name == idOrName) return row;
+    }
+    return null;
+  }
 
   void _registerLifecycle() {
     SingletonLifecycleRegistry.register('SwapService', _onUserChanged);
@@ -673,32 +688,13 @@ class SwapService {
     }
 
     Map<String, dynamic>? newLib;
-    // custom-picker-fix (B-pass F4): provenance is knowable HERE — whether
-    // the target resolved from the library or from the user's customBox
-    // scan below. The picker exemption policy
-    // (EquipmentCapability.canOfferInPicker) applies identically: a
-    // user-authored custom with an UNVERIFIABLE equipment requirement is a
-    // valid swap target; library rows stay fail-closed.
-    bool targetIsCustom = false;
     final libRaw = _hive.exerciseBox.get(toExerciseId);
     if (libRaw is Map) newLib = Map<String, dynamic>.from(libRaw);
     // An approved community row is stored under its cloud id, which for its
     // author is the id of their own custom. The own custom is what the pickers
     // offered, so it wins over a community row (never over a library row).
     if (newLib == null || !isLibraryRow(newLib)) {
-      for (final key in _hive.customBox.keys) {
-        if (key is! String || !key.startsWith('custom_exercise_')) continue;
-        final candidate = _hive.customBox.get(key);
-        if (candidate is! Map) continue;
-        final candMap = Map<String, dynamic>.from(candidate);
-        final candId = (candMap['id'] as String?) ?? '';
-        final candName = (candMap['name'] as String?) ?? '';
-        if (candId == toExerciseId || candName == toExerciseId) {
-          newLib = candMap;
-          targetIsCustom = true;
-          break;
-        }
-      }
+      newLib = ownCustomRow(_hive, toExerciseId) ?? newLib;
     }
     if (newLib == null) {
       throw SwapExerciseException(
@@ -724,27 +720,10 @@ class SwapService {
       }
     }
 
-    // ⑦ OI-89 seam 9: this service had NO equipment check, and the AI coach's
-    // `swap_exercise` tool drives it (tool_dispatcher.dart:275, :588) without
-    // ever opening the swap sheet — so filtering that sheet does not cover this
-    // path. WorkoutScheduleService.swapExerciseInDay delegates here too, so one
-    // check covers both entry points.
-    //
-    // Refuses rather than silently substituting: the caller ASKED for a specific
-    // exercise, and quietly giving them a different one is worse than saying no.
-    // The AI coach surfaces the message to the user.
-    final capability = TrainingHistoryAnalyzer.resolveCapabilityFromProfile();
-    if (capability != null &&
-        !EquipmentCapability.canOfferInPicker(
-            newLib['equipment_needed'], capability,
-            isCustom: targetIsCustom)) {
-      throw SwapExerciseException(
-        'equipment_unavailable',
-        '"${(newLib['name'] as String?) ?? toExerciseId}" needs equipment you '
-            'have not told us you have. Add it under Profile > Equipment, or '
-            'pick another exercise.',
-      );
-    }
+    // No equipment check: a swap the user asked for can be any exercise
+    // (founder 2026-11-28); the coach's is written only after they tap APPLY.
+    // The one caller where the APP picks the exercise, InjurySwapPlanner,
+    // filters its own candidates.
 
     final original = exercises[matchIndex];
     // The logging type that is STORED on the replacement (and read later by the

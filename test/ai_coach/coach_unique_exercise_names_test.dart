@@ -118,8 +118,9 @@ void main() {
     test('modify_workout_for_injury applies every planned swap with no repeat',
         () async {
       await _putToday([_planned('Squat', 'Squat'), _planned('Lunge', 'Lunge')]);
-      final swaps = await InjurySwapPlanner.instance
-          .plan(bodyPart: 'quad', severity: 'mild', daysAhead: 1);
+      final swaps = (await InjurySwapPlanner.instance
+              .plan(bodyPart: 'quad', severity: 'mild', daysAhead: 1))
+          .swaps;
       expect(swaps.length, 2);
       final intent = _intent(
           'modify_workout_for_injury', {'bodyPart': 'quad', 'severity': 'mild'});

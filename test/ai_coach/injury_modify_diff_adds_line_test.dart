@@ -1,7 +1,8 @@
 // Unit 3C (OI-396, founder d77 / d78): the injury diff preview tells the user the injury will be added to their profile
 // before they confirm (`Adds Knee to your injuries (change it in Edit Profile)`), in BOTH branches: no upcoming
 // exercise to change (the case where confirming only records the injury) and the normal swap list. No line when the
-// profile already holds it.
+// profile already holds it. The preview also names every affected exercise it found no substitute for (founder
+// 2026-11-28 batch): "no exercise hits this body part" is said only when none does.
 @Timeout(Duration(minutes: 2))
 library;
 
@@ -33,22 +34,29 @@ void main() {
   testWidgets('fonts degrade before any Hive mock', renderFontsFirst);
   tearDownAll(closeHive);
 
-  Future<void> seed(WidgetTester tester, {required Object? injuries, bool withSquatToday = false}) async {
+  Future<void> seed(WidgetTester tester,
+      {required Object? injuries,
+      bool withSquatToday = false,
+      bool curlNeedsBarbell = false,
+      bool withNordicToday = false}) async {
     await ensureHive(tester);
     await tester.runAsync(() async {
       await HiveService.instance.workoutBox.clear();
+      await HiveService.instance.exerciseBox.clear();
       await HiveService.instance.userBox.put('profile', {'primary_goal': 'lose_fat', 'injuries': injuries});
       await HiveService.instance.exerciseBox.put('Squat', {
         'id': 'Squat',
         'name': 'Squat',
         'category': 'legs',
         'primary_muscles': ['quads'],
+        'equipment_needed': ['bodyweight'],
       });
       await HiveService.instance.exerciseBox.put('Leg Curl', {
         'id': 'Leg Curl',
         'name': 'Leg Curl',
         'category': 'legs',
         'primary_muscles': ['hamstrings'],
+        'equipment_needed': [curlNeedsBarbell ? 'barbell' : 'bodyweight'],
       });
       if (withSquatToday) {
         final today = istDateStr(DateTime.now());
@@ -59,6 +67,8 @@ void main() {
           'status': 'planned',
           'exercises': [
             {'exercise_id': 'Squat', 'exercise_name': 'Squat', 'sets': 3, 'reps': '8', 'primary_muscles': ['quads']},
+            if (withNordicToday)
+              {'exercise_id': 'Pistol', 'exercise_name': 'Pistol', 'sets': 3, 'reps': '8', 'primary_muscles': ['quads']},
           ],
         });
       }
@@ -83,6 +93,39 @@ void main() {
     await _pump(tester, 'knee');
     expect(find.byKey(const ValueKey('injury_adds_profile_line')), findsNothing);
     expect(find.textContaining('Confirm to record the injury anyway.'), findsOneWidget);
+  });
+
+  const unplaced = ValueKey('injury_unplaced_block');
+  const heading = 'No substitute found for these. They stay in your plan:';
+
+  testWidgets('nothing could be replaced: the exercises are named, never "no exercise hits"',
+      (tester) async {
+    await seed(tester, injuries: const ['none'], withSquatToday: true, curlNeedsBarbell: true);
+    await _pump(tester, 'quad');
+    expect(find.byKey(unplaced), findsOneWidget);
+    expect(find.text(heading), findsOneWidget);
+    expect(find.text('${istDateStr(DateTime.now())} · Squat'), findsOneWidget);
+    expect(find.textContaining('hit this body part'), findsNothing);
+    expect(find.text('Confirm to save the injury to your profile.'), findsOneWidget);
+  });
+
+  testWidgets('some replaced, some not: both the block and the change list', (tester) async {
+    // One substitute, two affected exercises.
+    await seed(tester, injuries: const ['knee'], withSquatToday: true, withNordicToday: true);
+    await _pump(tester, 'quad');
+    expect(find.byKey(unplaced), findsOneWidget);
+    expect(find.text('${istDateStr(DateTime.now())} · Pistol'), findsOneWidget);
+    expect(find.textContaining('1 change across 1 day'), findsOneWidget);
+    expect(find.textContaining('Confirm to'), findsNothing);
+    expect(tester.getTopLeft(find.byKey(unplaced)).dy,
+        lessThan(tester.getTopLeft(find.textContaining(' across ')).dy));
+  });
+
+  testWidgets('mirror: truly unaffected days show no block', (tester) async {
+    await seed(tester, injuries: const ['knee']);
+    await _pump(tester, 'quad');
+    expect(find.byKey(unplaced), findsNothing);
+    expect(find.textContaining('hit this body part'), findsOneWidget);
   });
 
   testWidgets('the swap list branch carries the line too', (tester) async {

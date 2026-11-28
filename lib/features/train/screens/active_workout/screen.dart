@@ -42,9 +42,9 @@ import 'exercise_media_viewer.dart';
 import 'exercise_last_try_lines.dart';
 
 // ⑦ OI-89 seams 6 + 8: the swap sheet and the exercise picker are `part of`
-// this library, so their capability imports must live here.
+// this library, so their equipment imports must live here.
+import 'package:icanbefitter/shared/repositories/picker_rows.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/training_history_analyzer.dart';
-import 'package:icanbefitter/shared/repositories/plan_engine/equipment_capability.dart';
 import 'package:icanbefitter/shared/repositories/plan_engine/finisher_safety.dart';
 
 part 'coaching_content_panel.dart';

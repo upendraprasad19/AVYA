@@ -1,13 +1,16 @@
 // BEHAVIOURAL: which substitutes the AI coach's Swap picker offers.
 //
+// Founder 2026-11-28: a swap the user picks by hand ignores equipment, so EVERY exercise is
+// offered; the ones the user's equipment covers come first. History below.
+//
 // Found 2026-11-26 while checking the OI-348 walk's picker rules: `_substitutesFor` passed
 // `equipment_needed?.toString()` to the equipment rule. The library stores that field as a LIST,
 // so the rule received the text "[dumbbells]", could not read it, and failed closed: every
 // built-in exercise was hidden from every user with a profile. The sheet's two earlier tests
 // seed a plain String (or no profile), so neither saw it.
 //
-// Reader: lib/features/ai_coach/widgets/swap_exercise_coach_sheet.dart `_substitutesFor`.
-// The same rows go through the same rule in swap_service.dart `swapExerciseInDay`.
+// Reader: lib/features/ai_coach/widgets/swap_exercise_coach_sheet.dart `_substitutesFor`,
+// through lib/shared/repositories/picker_rows.dart.
 @Timeout(Duration(minutes: 3))
 library;
 
@@ -16,6 +19,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/ai_coach/widgets/swap_exercise_coach_sheet.dart';
@@ -26,7 +30,7 @@ import '../helpers/hive_test_setup.dart';
 
 const _planned = 'Planned Lift';
 
-Future<void> _seed(String tier) async {
+Future<void> _seed(String tier, {List<String> alsoPlanned = const []}) async {
   await HiveService.instance.userBox
       .put('profile', <String, dynamic>{'equipment_access': tier});
   await HiveService.instance.workoutBox.put(
@@ -37,13 +41,16 @@ Future<void> _seed(String tier) async {
     'status': 'planned',
     'exercises': <Map<String, dynamic>>[
       {'exercise_id': 'ex_planned', 'exercise_name': _planned},
+      for (final n in alsoPlanned) {'exercise_id': n, 'exercise_name': n},
     ],
   });
   // The library's real shape: `equipment_needed` is a LIST.
+  // The barbell row sorts FIRST in Hive, so an order assertion cannot pass unless the
+  // list really puts the user's equipment first.
   for (final (id, name, equipment) in <(String, String, List<String>)>[
+    ('A0', 'Barbell Row Test', ['barbell']),
     ('L1', 'Floor Press Test', ['bodyweight']),
     ('L2', 'Dumbbell Press Test', ['dumbbells']),
-    ('L3', 'Barbell Row Test', ['barbell']),
     ('L4', 'Unlisted Gear Test', []),
   ]) {
     await HiveService.instance.exerciseBox.put(id, <String, dynamic>{
@@ -53,7 +60,7 @@ Future<void> _seed(String tier) async {
       if (id == 'L2') 'name_aliases': ['Old DB Push Test'],
     });
   }
-  // A row with no equipment field at all: the swap itself refuses it too.
+  // A row with no equipment field at all.
   await HiveService.instance.exerciseBox
       .put('L5', <String, dynamic>{'id': 'L5', 'name': 'No Gear Field Test'});
   for (final (key, name, equipment) in <(String, String, List<String>)>[
@@ -76,14 +83,14 @@ void main() {
   /// its place.
   Future<void> openSubstitutes(WidgetTester tester, String tier,
       Future<void> Function(Set<String> offered) check,
-      {bool shared = false}) async {
+      {bool shared = false, List<String> alsoPlanned = const []}) async {
     late Directory dir;
     late ProviderContainer container;
     await tester.runAsync(() async {
       dir = await setUpHiveForTests();
       container = ProviderContainer();
       await HiveService.instance.exerciseBox.clear();
-      await _seed(tier);
+      await _seed(tier, alsoPlanned: alsoPlanned);
       if (shared) {
         const id = 'shared-id';
         await HiveService.instance.exerciseBox.put(id, <String, dynamic>{
@@ -136,15 +143,27 @@ void main() {
     });
   }
 
-  testWidgets('a full-gym user is offered the built-in exercises', (tester) async {
+  const everyName = {
+    'Floor Press Test',
+    'Dumbbell Press Test',
+    'Barbell Row Test',
+    'Unlisted Gear Test',
+    'No Gear Field Test',
+    'Own Move Test',
+    'Own Barbell Test',
+  };
+
+  double top(WidgetTester tester, String name) =>
+      tester.getTopLeft(find.textContaining(name)).dy;
+
+  testWidgets('a full-gym user is offered every exercise', (tester) async {
     await openSubstitutes(tester, 'full_gym', (offered) async {
-      expect(offered, {
-        'Floor Press Test',
-        'Dumbbell Press Test',
-        'Barbell Row Test',
-        'Own Move Test',
-        'Own Barbell Test',
-      }, reason: 'a built-in row with no readable equipment stays hidden');
+      expect(offered, everyName);
+      expect(find.text('Exercises that match your equipment are listed first.'),
+          findsOneWidget);
+      expect(top(tester, 'Floor Press Test'),
+          lessThan(top(tester, 'Unlisted Gear Test')),
+          reason: 'a row with no readable equipment is listed after the matches');
     });
   });
 
@@ -180,9 +199,9 @@ void main() {
       await type('zzz');
       expect(find.text('No exercise matches that search.'), findsOneWidget);
 
-      // Equipment still filters what a search can reach.
+      // A search reaches every exercise, whatever its equipment.
       await type('unlisted gear');
-      expect(shown('Unlisted Gear Test'), 0);
+      expect(shown('Unlisted Gear Test'), 1);
 
       await tester.tap(find.text('BACK'));
       await tester.pumpAndSettle();
@@ -215,12 +234,32 @@ void main() {
     });
   });
 
-  testWidgets('mirror: a bodyweight user is offered only what they can do',
+  testWidgets('a bodyweight user is offered every exercise, their equipment first',
       (tester) async {
     await openSubstitutes(tester, 'bodyweight', (offered) async {
-      expect(offered, {'Floor Press Test', 'Own Move Test'},
-          reason: 'the barbell rows, own or built-in, are the ones the swap '
-              'itself would refuse');
+      expect(offered, everyName);
+      for (final matching in ['Floor Press Test', 'Own Move Test']) {
+        for (final other in ['Barbell Row Test', 'Own Barbell Test']) {
+          expect(top(tester, matching), lessThan(top(tester, other)),
+              reason: '$matching is listed before $other');
+        }
+      }
     });
+  });
+
+  testWidgets('a name already in the workout is labelled and cannot be picked',
+      (tester) async {
+    await openSubstitutes(tester, 'bodyweight', (offered) async {
+      final taken = find.textContaining('Barbell Row Test  ·'
+          '${WardroomCopy.activeAlreadyInWorkoutTag}');
+      expect(taken, findsOneWidget);
+      await tester.tap(taken);
+      await tester.pumpAndSettle();
+      expect(
+          tester
+              .widget<WardButton>(find.widgetWithText(WardButton, 'SWAP'))
+              .onPressed,
+          isNull);
+    }, alsoPlanned: ['Barbell Row Test']);
   });
 }

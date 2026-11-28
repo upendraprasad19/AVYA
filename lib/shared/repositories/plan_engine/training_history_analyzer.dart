@@ -243,8 +243,9 @@ class TrainingHistoryAnalyzer {
   /// ⑦ OI-89: the capability set read entirely from the stored profile.
   ///
   /// The plan engine gets its tier and exclusions passed down from generateV4;
-  /// the UI seams (swap sheet, exercise picker, template builder) have no such
-  /// caller, so they read all three here. Same null semantics as
+  /// the callers outside generation (the hand-pick lists, which only ORDER by
+  /// it, and the injury planner, which filters) have no such caller, so they
+  /// read all three here. Same null semantics as
   /// [resolveCapability] — null means "do not enforce".
   static Set<String>? resolveCapabilityFromProfile() {
     try {
