@@ -37,6 +37,7 @@ import 'package:uuid/uuid.dart';
 
 import 'package:icanbefitter/core/services/library_retired_ids.dart';
 
+import '../helpers/library_v30_rows.dart';
 import '../helpers/spawn.dart';
 
 /// scripts/seed_exercise_library.js NAMESPACE: cloud ids are UUID v5 of
@@ -129,7 +130,7 @@ String _retagRollbackLine() {
 /// library v28, OI-523)`. The rollback text is
 /// shaped by the batch, so the checks are too; a label this test does not know is a violation, never a pass.
 String? _batchLabel(String sql) {
-  final m = RegExp(r'exercises, library v\d+, (?:Batch (C2[a-z]|S1b-[23])|Unit (1B-F2)|(OI-523))\)').firstMatch(sql);
+  final m = RegExp(r'exercises, library v\d+, (?:Batch (C2[a-z]|S1b-[23])|Unit (1B-F2)|(OI-523|OI-443))\)').firstMatch(sql);
   return m == null ? null : (m.group(1) ?? m.group(2) ?? m.group(3));
 }
 
@@ -297,6 +298,43 @@ List<String> _rollbackViolationsV28(String sql) {
   return out;
 }
 
+/// Library v30 (OI-443): E027 changes two cloud columns and E120 one; the batch inserts G0592 and G0979.
+const _v30NewIds = ['G0592', 'G0979'];
+
+/// The three restore lines, built in Dart from the old values typed in test/helpers/library_v30_rows.dart (never from the
+/// generator's records), in the order the generator writes them (by row, then by record).
+List<String> _v30RestoreLines() => [
+      for (final (id, column) in [('E027', 'equipment_needed'), ('E027', 'coaching_cues'), ('E120', 'equipment_needed')])
+        "UPDATE exercise_library SET $column = ${_sqlArray(retaggedBeforeV30[id]![column]! as List)} WHERE id = '${_cloudId(id)}';",
+    ];
+String _v30DeactivateLine() =>
+    "UPDATE exercise_library SET is_active = false WHERE id IN (${_v30NewIds.map((i) => "'${_cloudId(i)}'").join(', ')});";
+
+List<String> _rollbackViolationsV30(String sql) {
+  final out = <String>[];
+  final restores = _v30RestoreLines();
+  final deactivate = _v30DeactivateLine();
+  if (!sql.contains('-- Rollback strategy: inline   -- ${restores.join(' ')} $deactivate  (')) {
+    out.add('the Rollback strategy header does not name the three restores and the deactivation');
+  }
+  for (final l in [...restores, deactivate]) {
+    if (!sql.contains('--   $l')) out.add('the commented rollback block does not hold: ${l.substring(0, 70)}');
+  }
+  if (!sql.contains('(2 carry new values) and INSERTs 2 new row(s)')) out.add('the Destructive header does not count 2 changed rows and 2 inserted');
+  if (!sql.contains('the 2 changed row(s) are E027 T-Bar Row (equipment_needed, coaching_cues), E120 Svend Press (equipment_needed) ')) {
+    out.add('the Intent line does not name the two changed rows with their columns');
+  }
+  if (!sql.contains('0 removed and 2 inserted row(s) belong to this batch (Machine Preacher Curl and Band Pallof Press: G0592 G0979)')) {
+    out.add('the Intent line does not name the two inserted rows');
+  }
+  if (sql.contains('IN ()')) out.add('an empty IN () list (a SQL syntax error)');
+  if (RegExp(r'^--   UPDATE exercise_library SET is_active = true WHERE id', multiLine: true).hasMatch(sql)) {
+    out.add('library v30 removes and merges no row, so its rollback has no reactivation line');
+  }
+  if (_removalEntries().any((e) => e['removed_in'] == 'v30')) out.add('the removals file has an entry removed_in v30; this batch owns none');
+  return out;
+}
+
 /// Batch C2c: the rollback restores E230's four cloud columns from the record's `before`; the batch owns no removal and no twin,
 /// so there is no reactivation or deactivation line and no empty `IN ()` list.
 List<String> _rollbackViolationsC2c(String sql) {
@@ -317,6 +355,7 @@ List<String> _rollbackViolationsC2c(String sql) {
 /// twins, C2c restores E230. The header counts what it does.
 List<String> _rollbackViolations(String sql, List<Map<String, dynamic>> rows) {
   final label = _batchLabel(sql);
+  if (label == 'OI-443') return _rollbackViolationsV30(sql);
   if (label == 'OI-523') return _rollbackViolationsV28(sql);
   if (label == '1B-F2') return _rollbackViolationsF2(sql);
   if (label == 'S1b-3') return _rollbackViolationsS1b3(sql);
@@ -408,6 +447,43 @@ const _f2Batch = r"""const BATCH = {
 };
 """;
 
+/// The generator's BATCH as OI-523 shipped it (restated from the generator at d2d92832, the generation of migration 183):
+/// the v28 guard test runs the sandbox generator with this block in place of the current one, with 176 as the previous seed.
+const _v28Batch = r"""const BATCH = {
+  label: 'library v28, OI-523',
+  diagnose: '2026-11-23-lunge-alias-v28-b4d9e1',
+  // Rows the Batch C1 importer wrote carry this `source` literal: the C1 rows, the four Batch C2b twins and the S1b-2 nine.
+  newRowSource: 'exercise-gif-set',
+  // The removals file carries `removed_in` ('c2a' | 'c2b') per remove entry: ALL are deactivated (idempotent), but a batch's
+  // rollback reactivates only the ones it removed itself. OI-523 (library v28) removes and merges no row (its tag matches no entry
+  // of either file).
+  batchTag: 'v28',
+  removalsFile: path.join(ROOT, 'scripts', 'data', 'library_batch_c2_removals.json'),
+  // Kept-row records ({id, before, after} rows for ONE cloud column each): the library row must equal `after` (a record that
+  // drifted from the library would seed one thing and roll back to another); `before` is what the inline rollback restores.
+  // OI-523: name_aliases on G3470 Forward Lunge (the alias "Reverse Lunge" goes; the cloud value becomes NULL). The F2
+  // movement_pattern record is live (migration 176) and the S1b-3 name_aliases record is live (migration 175): both re-seed as
+  // unchanged rows, so neither is a record of this batch.
+  keptRowRecords: [
+    {
+      file: path.join(ROOT, 'scripts', 'data', 'library_v28_lunge_alias.json'),
+      column: 'name_aliases',
+      note: 'name_aliases: the wrong-movement alias "Reverse Lunge" removed from G3470 Forward Lunge (1 row; the cloud value becomes NULL)',
+    },
+  ],
+  // Rows this batch INSERTs. The cloud never deletes, so the rollback would deactivate them. OI-523 adds none.
+  newRowIds: [],
+  newRowNote: 'none',
+  // The importer's merges record ({id, name, into, merged_in}): rows retired INTO a kept row. The rows whose merged_in is
+  // batchTag are this batch's own: deactivated here for the first time, and reactivated (with their own cues from the
+  // previous seed) by its rollback. A missing file is a hard stop. OI-523 owns no merge; the S1b-3 merge (E053 into
+  // G1373) re-runs as an idempotent retire UPDATE.
+  mergesFile: path.join(ROOT, 'scripts', 'data', 'library_s1b3_merges.json'),
+  // The seed migration this one follows: its text is the other half of the rollback sentence.
+  previousMigration: '176',
+};
+""";
+
 const _sandboxName = '999_guard_seed_exercise_library.sql';
 File _sandboxOut(Directory root) => File('${root.path}/out/$_sandboxName');
 Future<ProcessResult> _runSandbox(Directory root, String why) =>
@@ -424,7 +500,7 @@ Future<void> _refused(Directory root, String why, List<String> says) async {
 }
 
 /// A temp copy of the generator and every input it reads (never the real tree): the library, the removals file, the merges
-/// record, the kept-row records (v28, F2 and S1b-3) and the previous seed migration [prev].
+/// record, the kept-row records (v30, v28, F2 and S1b-3) and the previous seed migration [prev].
 Future<void> _withGeneratorSandbox(String prev, Future<void> Function(Directory root, File gen, String genText) body) async {
   final root = Directory.systemTemp.createTempSync('seed_guard_');
   try {
@@ -438,6 +514,8 @@ Future<void> _withGeneratorSandbox(String prev, Future<void> Function(Directory 
       'scripts/data/library_f2_movement_pattern.json',
       'scripts/data/library_v28_lunge_alias.json',
       'scripts/data/library_s1b3_name_aliases.json',
+      'scripts/data/library_v30_equipment.json',
+      'scripts/data/library_v30_t_bar_cues.json',
       'assets/data/exercise_library.json',
       'supabase/migrations/${prev}_reseed_exercise_library.sql',
     ]) {
@@ -751,8 +829,8 @@ void main() {
 
     test('the generated file carries the C1 header, every row uuid and the pinned rollback', () {
       expect(plain, contains('-- Destructive?: yes'));
-      expect(plain, contains('-- Linked diagnose-doc: 2026-11-23-lunge-alias-v28-b4d9e1'));
-      expect(_batchLabel(plain), 'OI-523', reason: 'the generator names the batch the rollback checks are shaped by');
+      expect(plain, contains('-- Linked diagnose-doc: 2026-11-28-media-two-new-two-retag-c41a7e'));
+      expect(_batchLabel(plain), 'OI-443', reason: 'the generator names the batch the rollback checks are shaped by');
       expect(_removalViolations(plain), isEmpty);
       expect(_removalViolations(split), isEmpty);
       expect(_tupleViolations(plain, rows), isEmpty);
@@ -824,13 +902,13 @@ void main() {
     });
 
     test('an Intent line that names a batch this test has no shape for (or none) is a violation, never a pass', () {
-      final unknown = plain.replaceFirst('OI-523)', 'OI-999)');
+      final unknown = plain.replaceFirst('OI-443)', 'OI-999)');
       expect(unknown, isNot(plain), reason: 'the mutation must apply');
       expect(_rollbackViolations(unknown, rows), isNotEmpty);
-      final batchWord = plain.replaceFirst('OI-523)', 'Batch OI-523)');
+      final batchWord = plain.replaceFirst('OI-443)', 'Batch OI-443)');
       expect(batchWord, isNot(plain), reason: 'the mutation must apply');
       expect(_rollbackViolations(batchWord, rows), isNotEmpty, reason: 'an OI label spelled as a Batch is no known shape');
-      final none = plain.replaceFirst(RegExp(r'exercises, library v\d+, OI-523\)'), 'exercises)');
+      final none = plain.replaceFirst(RegExp(r'exercises, library v\d+, OI-443\)'), 'exercises)');
       expect(none, isNot(plain), reason: 'the mutation must apply');
       expect(_rollbackViolations(none, rows), isNotEmpty);
     });
@@ -955,8 +1033,90 @@ void main() {
     });
 
     // OI-523 (seed v28): the restore is what 176 seeded, and the generated file differs from 176 on exactly the G3470 tuple.
-    test('OI-523: the restore is the name_aliases value migration 176 seeded, and the generated file differs from 176 on exactly the G3470 tuple', () {
+    // Library v30: the restores are what 183 seeded, and the generated file differs from 183 on the two retagged tuples and
+    // the two inserted ones only.
+    test('library v30: the restores are the values migration 183 seeded, and the generated file differs from 183 on exactly E027 and E120 plus two inserts', () {
+      final m183 = File('supabase/migrations/183_reseed_exercise_library.sql').readAsStringSync();
+      final a = _tuplesById(m183);
+      final b = _tuplesById(plain);
+      for (final (id, column) in [('E027', 'equipment_needed'), ('E027', 'coaching_cues'), ('E120', 'equipment_needed')]) {
+        expect(a[_cloudId(id)], contains(_sqlArray(retaggedBeforeV30[id]![column]! as List)), reason: '$id $column: before is what 183 seeded');
+        expect(b[_cloudId(id)], isNot(contains(_sqlArray(retaggedBeforeV30[id]![column]! as List))), reason: '$id $column changed');
+      }
+      expect(b.keys.toSet().difference(a.keys.toSet()), {for (final i in _v30NewIds) _cloudId(i)});
+      expect(a.keys.toSet().difference(b.keys.toSet()), isEmpty, reason: 'no row dropped');
+      // `created_at` is `now()` text in both files, so the tuple lines compare as they stand.
+      final differ = [for (final k in a.keys) if (a[k] != b[k]) k]..sort();
+      expect(differ, ([_cloudId('E027'), _cloudId('E120')]..sort()));
+    });
+
+    test('MUTATION (library v30): each deleted restore, a changed restore value, a dropped deactivation, a wrong count and a stray reactivation are each a violation', () {
+      for (final sql in [plain, split]) {
+        expect(_rollbackViolations(sql, rows), isEmpty);
+      }
+      for (final line in [..._v30RestoreLines(), _v30DeactivateLine()]) {
+        final gone = plain.replaceAll('--   $line', '');
+        expect(gone, isNot(plain), reason: 'the mutation must apply');
+        expect(_rollbackViolations(gone, rows), isNotEmpty, reason: 'deleted: ${line.substring(0, 80)}');
+      }
+      final value = plain.replaceAll("SET equipment_needed = ARRAY['barbell']::text[] WHERE id = '${_cloudId('E120')}'",
+          "SET equipment_needed = ARRAY['dumbbells']::text[] WHERE id = '${_cloudId('E120')}'");
+      expect(value, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(value, rows), isNotEmpty, reason: 'restore value changed');
+      final count = plain.replaceAll('(2 carry new values)', '(3 carry new values)');
+      expect(count, isNot(plain), reason: 'the mutation must apply');
+      expect(_rollbackViolations(count, rows), isNotEmpty, reason: 'rows counted per column');
+      expect(_rollbackViolations('$plain\n--   UPDATE exercise_library SET is_active = true WHERE id = \'x\';', rows), isNotEmpty,
+          reason: 'stray reactivation');
+    });
+
+    // The v30 generator guard: E027 changes TWO cloud columns, held by two records.
+    test('the generator refuses (library v30): a missing record, a wrong before on either E027 column, two records naming one column, and a generator that reverts one column at a time', () async {
+      await _withGeneratorSandbox('183', (root, gen, genText) async {
+        final equipment = File('${root.path}/scripts/data/library_v30_equipment.json');
+        final cues = File('${root.path}/scripts/data/library_v30_t_bar_cues.json');
+        final equipmentText = equipment.readAsStringSync();
+        final cuesText = cues.readAsStringSync();
+        Map<String, dynamic> decode(String t) => jsonDecode(t) as Map<String, dynamic>;
+        String withBefore(String text, String id, List<String> before) {
+          final rec = decode(text);
+          return jsonEncode({...rec, 'rows': [
+            for (final r in (rec['rows'] as List).cast<Map<String, dynamic>>()) r['id'] == id ? {...r, 'before': before} : r
+          ]});
+        }
+
+        final ok = await _runSandbox(root, 'seed generator with the unmodified v30 records');
+        expect(ok.exitCode, 0, reason: '${ok.stdout}${ok.stderr}');
+        expect(_rollbackViolations(_sandboxOut(root).readAsStringSync(), _rows()), isEmpty);
+        _sandboxOut(root).deleteSync();
+
+        cues.deleteSync();
+        await _refused(root, 'no cues record', ['kept-row record not found']);
+        cues.writeAsStringSync(withBefore(cuesText, 'E027', ['Wide stance']));
+        await _refused(root, 'a wrong cues before', ['E027', 'previous seed migration (183)']);
+        cues.writeAsStringSync(cuesText);
+        equipment.writeAsStringSync(withBefore(equipmentText, 'E027', ['cables']));
+        await _refused(root, 'a wrong equipment before', ['E027', 'previous seed migration (183)']);
+        equipment.writeAsStringSync(equipmentText);
+
+        // Two records naming E027 equipment_needed.
+        final doubled = decode(equipmentText);
+        equipment.writeAsStringSync(jsonEncode({...doubled, 'rows': [...(doubled['rows'] as List), (doubled['rows'] as List).first]}));
+        await _refused(root, 'one column named twice', ['two kept-row records name E027 equipment_needed']);
+        equipment.writeAsStringSync(equipmentText);
+
+        // MUTATION: revert only the first of a row's columns (the one-column rule this batch replaced).
+        const all = 'for (const x of entries) reverted[x.rec.column] = x.e.before;';
+        expect(genText, contains(all), reason: 'the mutation must apply');
+        gen.writeAsStringSync(genText.replaceFirst(all, 'reverted[entries[0].rec.column] = entries[0].e.before;'));
+        await _refused(root, 'a generator that reverts one column only', ['E027', 'previous seed migration (183)']);
+        gen.writeAsStringSync(genText);
+      });
+    });
+
+    test('OI-523: the restore is the name_aliases value migration 176 seeded, and the applied file 183 differs from 176 on exactly the G3470 tuple', () {
       final m176 = File('supabase/migrations/176_reseed_exercise_library.sql').readAsStringSync();
+      final plain = File('supabase/migrations/183_reseed_exercise_library.sql').readAsStringSync();
       final byId = {for (final r in rows) r['id'] as String: r};
       final e = (_v28Record()['rows'] as List).cast<Map<String, dynamic>>().single;
       final id = e['id'] as String;
@@ -973,6 +1133,7 @@ void main() {
     });
 
     test('MUTATION (OI-523): a deleted restore, a changed restore value, a wrong changed-row count and a stray is_active line are each a violation', () {
+      final plain = File('supabase/migrations/183_reseed_exercise_library.sql').readAsStringSync();
       expect(_batchLabel(plain), 'OI-523');
       expect(_rollbackViolations(plain, rows), isEmpty);
       final restore = _v28RestoreLine();
@@ -992,8 +1153,12 @@ void main() {
 
     // The generator's guard for the v28 record: the sandbox holds migration 176 as the previous seed and the v28 record.
     test('the generator refuses (OI-523): a missing or drifted record, a wrong before, a library row that still carries the alias, and a generator that compares after null to undefined; the unmodified files generate the v28 shape', () async {
-      await _withGeneratorSandbox('176', (root, gen, genText) async {
+      await _withGeneratorSandbox('176', (root, gen, genText0) async {
+        // Since library v30 the generator's BATCH is v30's: the sandbox is given the v28 BATCH back (restated above).
+        final genText = genText0.replaceFirst(RegExp(r'const BATCH = \{[\s\S]*?\n\};\n'), _v28Batch);
+        expect(genText, isNot(genText0), reason: 'the mutation must apply');
         expect(genText, contains("label: 'library v28, OI-523'"));
+        gen.writeAsStringSync(genText);
         final recFile = File('${root.path}/scripts/data/library_v28_lunge_alias.json');
         final recText = recFile.readAsStringSync();
         final rec = _v28Record();

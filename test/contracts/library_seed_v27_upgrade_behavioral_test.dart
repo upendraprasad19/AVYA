@@ -21,6 +21,7 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 
 import '../helpers/hive_test_setup.dart';
 import '../helpers/library_media_three_v29.dart';
+import '../helpers/library_v30_rows.dart';
 import '../helpers/library_lunge_alias_v28.dart';
 import '../helpers/library_overlay_v26.dart';
 
@@ -64,7 +65,7 @@ void main() {
   // assets/data/exercise_library.json at the branch base (main 67b536e4), computed independently with Python's compact
   // json.dumps (ensure_ascii off), the method of library_seed_v26_upgrade_behavioral_test.dart.
   test('the v27 bundle is the v26 bundle with the 27 overlays copied, and nothing else', () {
-    expect(sha256.convert(utf8.encode(jsonEncode(_v26Bundle().map(withoutMediaV29).toList()))).toString(),
+    expect(sha256.convert(utf8.encode(jsonEncode(beforeV30(_v26Bundle()).map(withoutMediaV29).toList()))).toString(),
         '2fb9cc7377e39cd72e9e15dc5c3a6440b93d883b644b1ea06e8ce713f6858cef');
   });
 
@@ -93,18 +94,18 @@ void main() {
     expect(_asJson(hive.exerciseBox.get(lungeAliasRowIdV28)).containsKey('name_aliases'), isFalse,
         reason: 'G3470 is written as bundled, without the alias');
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 29);
+    expect(hive.configBox.get('exercise_library_version') as int, 30);
   });
 
-  test('MIRROR: a box already at the current version (v29) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v30) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV26Box(hive);
-    await _markSeeded(hive, 29);
+    await _markSeeded(hive, 30);
     await SeedService.instance.seedIfNeeded();
     for (final id in overlayRowIdsV27) {
       final r = _asJson(hive.exerciseBox.get(id));
       expect(r.containsKey('slot_pattern') || r.containsKey('slot_focus'), isTrue, reason: '$id keeps its v26 form');
     }
-    expect(hive.configBox.get('exercise_library_version') as int, 29);
+    expect(hive.configBox.get('exercise_library_version') as int, 30);
   });
 }

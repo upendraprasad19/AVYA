@@ -13928,6 +13928,9 @@ concepts:
         method: _exerciseLibraryVersion (26 to 27)
         notes: putAll writes the 27 copied rows into exerciseBox by id (Unit 1B-F2)
       - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (29 to 30)
+        notes: putAll writes G0592 and G0979 and the retagged E027 / E120 into exerciseBox by id (library v30, OI-443); without the bump an installed device keeps barbell equipment and never sees the two rows (library_seed_v30_upgrade_behavioral_test.dart)
+      - file: lib/core/services/seed_service.dart
         method: _exerciseLibraryVersion (27 to 28)
         notes: putAll writes G3470 into exerciseBox by id without its name_aliases entry (OI-523); without the bump an installed device keeps the alias
       - file: scripts/data/library_v28_lunge_alias.json
@@ -15461,7 +15464,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 196-196
+        line_range: 200-200
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -15505,7 +15508,7 @@ concepts:
         line_range: 198-219
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 196-196
+        line_range: 200-200
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -15591,7 +15594,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 196-196
+        line_range: 200-200
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart

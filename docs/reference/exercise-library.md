@@ -6,15 +6,15 @@ status: scaffold
 
 # Exercise Library Reference
 
-914 exercises seeded in bundled JSON (`assets/data/exercise_library.json`): the 285 original rows (`E###`) and the 629 rows Batch C1 added (`G####` and `N##`, `source` "exercise-gif-set", written by `scripts/add_library_batch_c_v15.js` from `scripts/data/library_batch_c_source.json`; 79 more converted rows are held with an owner, OI-437). The category counts below are the original 250-row scaffold and are no longer exact. Categories:
+872 exercises seeded in bundled JSON (`assets/data/exercise_library.json`, seed 30): 228 original rows (`E###`) and 644 added rows (`G####` and `N##`, `source` "exercise-gif-set", written by `scripts/add_library_batch_c_v15.js` from `scripts/data/library_batch_c_source.json`; 79 more converted rows are held with an owner, OI-437). The category counts below are the original 250-row scaffold and are no longer exact. Categories:
 - Push (~35), Pull (~35), Legs (~40), Core (~25)
 - Cardio (~20), Flexibility (~30), Calisthenics (~10)
 - Indian Traditional (5): Dand, Baithak, Surya Namaskar, Malkhamb, Hindu Warrior Flow
 
 Every exercise has: coaching_cues, common_mistakes, breathing_cue, warmup_protocol, pro_tip, MET_value, logging_type, difficulty, suitable_for, regression/progression links, image URLs.
 
-## Media fields (introduced in library v16, 137 old rows added in v17, E230 in v20, three more in v29; optional)
-Three optional keys on the 761 rows that have a Wardroom animation: the 621 new rows that have one (the other 21 new rows have none) and 140 old `E` rows (137 since the OI-443 release, E051, E109 and E264 since v29, E230 Standing Single Leg Curl since Batch C2c, E053 Donkey Calf Raise gone since Library Batch S1b-3) (see `docs/operations/EXERCISE_MEDIA.md`). A row carries **all three or none**; absent, never `null`; always the last three keys, in this order. Since Batch M2a (OI-440) the app reads them through `resolveMedia`.
+## Media fields (introduced in library v16, 137 old rows added in v17, E230 in v20, three more in v29, four in v30; optional)
+Three optional keys on the 765 rows that have a Wardroom animation: the 623 new rows that have one (the other 21 new rows have none) and 142 old `E` rows (137 since the OI-443 release, E051, E109 and E264 since v29, E027 and E120 since v30, E230 Standing Single Leg Curl since Batch C2c, E053 Donkey Calf Raise gone since Library Batch S1b-3) (see `docs/operations/EXERCISE_MEDIA.md`). A row carries **all three or none**; absent, never `null`; always the last three keys, in this order. Since Batch M2a (OI-440) the app reads them through `resolveMedia`.
 | Field | Type | Purpose |
 |-------|------|---------|
 | `media_slug` | string | `<4-digit gif number>-<kebab(name)>`, for example `0103-barbell-standing-ab-rollout`. Two rows with one gif number share one slug. One fixed exception for a founder's own file with no gif number: `9001-table-row-clean`. |

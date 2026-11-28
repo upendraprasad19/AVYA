@@ -18,6 +18,7 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 
 import '../helpers/hive_test_setup.dart';
 import '../helpers/library_media_three_v29.dart';
+import '../helpers/library_v30_rows.dart';
 
 const _slugs = {
   'E051': '0108-barbell-standing-leg-calf-raise',
@@ -50,7 +51,7 @@ void main() {
 
   // sha256 of the shipped v28 asset (HEAD 7ba0745a), computed from git with Python's compact json.dumps (ensure_ascii off).
   test('the v29 bundle is the v28 bundle plus the media keys of three rows, and nothing else', () {
-    expect(sha256.convert(utf8.encode(jsonEncode(_v28Bundle()))).toString(),
+    expect(sha256.convert(utf8.encode(jsonEncode(beforeV30(_v28Bundle())))).toString(),
         '62825408779e63bcbc883fe85e16e0e44de4473d5c217e77c237585d1666311c');
     final byId = {for (final r in _bundled()) r['id'] as String: r};
     for (final e in _slugs.entries) {
@@ -60,7 +61,7 @@ void main() {
     }
   });
 
-  test('a v28 box ends at v29: the three rows get their animation, every other row is unchanged', () async {
+  test('a v28 box ends at the current version (v30): the three rows get their animation, every other row is unchanged', () async {
     final hive = HiveService.instance;
     await _seedV28(hive, markedVersion: 28);
     for (final id in _slugs.keys) {
@@ -79,12 +80,12 @@ void main() {
     for (final e in others.entries) {
       expect(jsonEncode(_asJson(hive.exerciseBox.get(e.key))), e.value, reason: '${e.key} must be unchanged');
     }
-    expect(hive.configBox.get('exercise_library_version') as int, 29);
+    expect(hive.configBox.get('exercise_library_version') as int, 30);
   });
 
-  test('MIRROR: a box already at the current version (v29) is not rewritten', () async {
+  test('MIRROR: a box already at the current version (v30) is not rewritten', () async {
     final hive = HiveService.instance;
-    await _seedV28(hive, markedVersion: 29);
+    await _seedV28(hive, markedVersion: 30);
     await SeedService.instance.seedIfNeeded();
     for (final id in _slugs.keys) {
       expect(_asJson(hive.exerciseBox.get(id)).containsKey('media_slug'), isFalse, reason: id);

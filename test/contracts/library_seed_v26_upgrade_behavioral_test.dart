@@ -21,6 +21,7 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 
 import '../helpers/hive_test_setup.dart';
 import '../helpers/library_media_three_v29.dart';
+import '../helpers/library_v30_rows.dart';
 import '../helpers/library_g0355_v25.dart';
 import '../helpers/library_lunge_alias_v28.dart';
 import '../helpers/library_overlay_v26.dart';
@@ -64,11 +65,11 @@ void main() {
   // assets/data/exercise_library.json at the branch base (main 4e0637ae), computed independently with Python's compact
   // json.dumps (ensure_ascii off), the method of library_seed_v25_upgrade_behavioral_test.dart.
   test('the v26 bundle is the v25 bundle plus beginner on G0355, and nothing else', () {
-    expect(sha256.convert(utf8.encode(jsonEncode(_v25Bundle().map(withoutMediaV29).toList()))).toString(),
+    expect(sha256.convert(utf8.encode(jsonEncode(beforeV30(_v25Bundle()).map(withoutMediaV29).toList()))).toString(),
         'ea479a1ee98b1c906cec680cda1da167e4fba5704dc88a65e13212eaf5ff874e');
   });
 
-  test('a v25 box ends at the current version (v29): G0355 is written as bundled, every other row is unchanged', () async {
+  test('a v25 box ends at the current version (v30): G0355 is written as bundled, every other row is unchanged', () async {
     final hive = HiveService.instance;
     await _putV25Box(hive);
     await _markSeeded(hive, 25);
@@ -89,15 +90,15 @@ void main() {
     expect(_asJson(hive.exerciseBox.get(lungeAliasRowIdV28)).containsKey('name_aliases'), isFalse,
         reason: 'G3470 is written as bundled, without the alias');
     expect(hive.exerciseBox.length, _bundled().length);
-    expect(hive.configBox.get('exercise_library_version') as int, 29);
+    expect(hive.configBox.get('exercise_library_version') as int, 30);
   });
 
-  test('MIRROR: a box already at the current version (v29) is not rewritten (the upgrade fires only when the stored version is older)', () async {
+  test('MIRROR: a box already at the current version (v30) is not rewritten (the upgrade fires only when the stored version is older)', () async {
     final hive = HiveService.instance;
     await _putV25Box(hive);
-    await _markSeeded(hive, 29);
+    await _markSeeded(hive, 30);
     await SeedService.instance.seedIfNeeded();
     expect(_asJson(hive.exerciseBox.get(g0355Id))['core_levels'], g0355CoreLevelsV25);
-    expect(hive.configBox.get('exercise_library_version') as int, 29);
+    expect(hive.configBox.get('exercise_library_version') as int, 30);
   });
 }
