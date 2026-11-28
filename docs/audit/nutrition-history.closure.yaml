@@ -1,0 +1,136 @@
+# Closure ledger — nutrition-history (Landing A). Gate 40
+# (validate_audit_closure.dart): one terminal_state per entry, no `deferred:`
+# key. `<branch>@branch` is the in-branch commit form.
+
+batch: nutrition-history
+plan: docs/plans/nutrition-history.md
+plan_review_record: docs/plan-reviews/nutrition-history.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-25-weekly-cards-stale-after-target-change-a9d5c3.md
+  - docs/diagnoses/2026-11-25-home-nutrition-fallback-targets-differ-c2a4e8.md
+  - docs/diagnoses/2026-11-25-weekly-cards-day-on-wrong-bar-d7b3f1.md
+  - docs/diagnoses/2026-11-26-sync-source-test-depends-on-directory-order-e4b7a9.md
+
+findings:
+  - id: A1
+    title: "Nutrition History screen: all ten founder items, built only from Hive"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      test/contracts/nutrition_history_writer_to_reader_test.dart (25 tests: every day of the
+      series equals totalMacrosForDate on real Hive with the box's other row kinds present;
+      day classes; aggregates; top foods; each insight line on both sides of its threshold) and
+      test/features/nutrition/nutrition_history_screen_test.dart (17 tests at 360 dp and text
+      scale 1.3: empty, 1 / 10 / 400 days, chips, no-target mode, minimum samples, bar and
+      heatmap taps, day sheet, entry row and back). NOT verified on a device.
+
+  - id: A2
+    title: "Target history on the phone (userBox['target_history'], one writer, four triggers)"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      test/contracts/nutrition_target_history_writer_to_reader_test.dart (19 tests, real Hive
+      through ProfileWriteService) and the T2 case added to
+      test/contracts/day_rollover_provider_invalidation_behavioral_test.dart.
+
+  - id: C1
+    title: "Weekly Insights cards stale after a target change (diagnose a9d5c3)"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      test/contracts/weekly_nutrition_follows_target_change_behavioral_test.dart; mutant M12
+      (list entry removed) reddened 3 tests.
+
+  - id: C2
+    title: "Home and Nutrition used different fallback targets (diagnose c2a4e8)"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      Same file, five profiles, Home == Nutrition with literals; preservation test of 24 cases
+      green before and after the move. Mutants M5 (12 red) and M18 (4 red).
+
+  - id: C3
+    title: "Readers of the removed one-day calorie override deleted"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      grep over lib/, test/, supabase/functions/ and scripts/ for getActiveTargetOverride,
+      getDailyCalorieTargetWithOverrides, _resolveBaseDailyCalories, _applyCalorieOverride:
+      no hit. A `\btarget_override_` grep hits only the retired naming row and the history
+      builder's comment. Whole-project analyze has no warning. Old rows stay in place, unread.
+
+  - id: C4
+    title: "Dead reader NutritionRepository.computeWeeklyReportData deleted"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      No caller in lib/. Its line in test/sync/nutrition_slot_store_readers_test.dart and its
+      two registry mentions removed; that test's whole-box loop count is 16 with the reason.
+
+  - id: C5
+    title: "Weekly Insights cards put a day on the wrong bar (diagnose d7b3f1)"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      test/contracts/weekly_nutrition_day_bucket_behavioral_test.dart written first and RED on
+      the unchanged code (expected [100, 200, 300, 0, 0, 0, 0], got [300, 300, 0, ...] on a
+      Wednesday). Mutants M17 (2 red) and M25 (1 red).
+
+  - id: M
+    title: "Rule 21 mutation run: 28 mutants, each applied (one site counted) and reverted"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      All 28 KILLED (scratch script nh_mutate.py, tree restored and re-checked with git diff):
+      M1 saved meal counted (4 red), M2 every day in averages (1), M3 band 11 % (1), M4 protein
+      strict (1), M5 stored pack ignored (12), M6 compares 4 of 5 (2), M7 same-day append (6),
+      M8 from < (1), M9 T1 removed (7), M10 T2 removed (1), M11 T3 removed (1), M12 C1 entry
+      (3), M13 food key (1), M14 insight gap 151 (2), M15 provider anon guard (3), M16
+      under-calories on target (3), M17 week index (2), M18 Home own default (4), M19 partial
+      share 20 % (1), M20 today breaks a run (2), M21 slot case (1), M22 kill switch (1), M23
+      fallback recorded (1), M24 patchProfileWith hook (1), M25 notifier index (1), M26 plural
+      fold (1; its first form did not compile and was replaced, a compile error is no proof),
+      M27 water counts today (1), M28 assumed never set (2).
+
+  - id: R
+    title: "Plan review rounds 1-4: 10 P1, 24 P2, 20 P3"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      Each finding folded into plan sections 11, 12, 13 and U12; per-round summary in
+      docs/plan-reviews/nutrition-history.md. Round 4 converged.
+
+  - id: BP
+    title: "B-pass on ec84affa: 2 P2, 6 P3"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      docs/reviews/ec84affa06db-review.md, each finding with its status. Eight more mutants
+      (N1-N8), all KILLED: N1 future entry obeyed (2 red), N2 no round trip (1), N3 any length
+      (1), N4 no floor (1), N5 zero target judged (1), N6 zero target recorded (1), N7 low
+      protein reads under (1), N8 countedRow accepts any date string (1). Finding 1's
+      catchError is presence only (no harness makes a put fail late).
+
+  - id: CI2
+    title: "CI on the B-pass commit: two red tests in Unit Tests shard 2/4"
+    terminal_state: closed_in_commit
+    commit: nutrition-history@branch
+    verification: >
+      (1) day_rollover_provider_invalidation_behavioral_test seeded a meal row with a full
+      timestamp as `date`; the strict day-key rule (B-pass finding 3) counts it nowhere, as the
+      day reader always did. The fixture now uses istDateStr (the shape every writer stores).
+      My miss: that file was not re-run after the review fixes. (2)
+      sync_template_before_schedule_order_test depended on the directory listing order
+      (diagnose e4b7a9, pre-existing, not caused by this branch): 90 of 300 random part-file
+      orders failed the old pattern, 0 of 300 the new one.
+
+  - id: B
+    title: "Landing B: cloud backup of the target history (user_profile.target_history + merge RPC + push + restore)"
+    terminal_state: closed_in_commit
+    commit: target-history-cloud@branch
+    verification: >
+      Built on branch target-history-cloud (PR #350, plan docs/plans/target-history-cloud.md,
+      closure docs/audit/target-history-cloud.closure.yaml). Migration 190 applied on
+      2026-11-26 after the founder's go and verified live.
+
+closed_count: 12

@@ -1,0 +1,78 @@
+{
+  "taken_at": "2026-09-29",
+  "project_id": "dedsavbjuwgarrhphgnl",
+  "purpose": "pre-apply snapshot of every users row with a non-default subscription mirror, before migration 152 drops users.subscription_status / subscription_expires_at (OI-202). subscription_status is 'pro' for all 8. Only the orphan (subscription_rows=0) has data not derivable from public.subscriptions.",
+  "rows": [
+    {
+      "user_id": "039b8eb3-f9e9-4673-b7eb-7f14c1a53bc4",
+      "subscription_status": "pro",
+      "subscription_expires_at": "2026-07-03T11:12:16.359508+00:00",
+      "subscription_rows": 1,
+      "max_active_end_date": "2026-07-03T11:12:16.359508+00:00",
+      "orphan": false
+    },
+    {
+      "user_id": "0f35f3dd-7077-4b0e-966d-34b683130fa4",
+      "subscription_status": "pro",
+      "subscription_expires_at": "2026-10-15T06:00:34.082+00:00",
+      "subscription_rows": 1,
+      "max_active_end_date": "2026-10-15T06:00:34.082+00:00",
+      "orphan": false
+    },
+    {
+      "user_id": "4d27a40b-ce2b-48e6-8485-f6f5a1b85863",
+      "subscription_status": "pro",
+      "subscription_expires_at": "2026-06-22T03:14:41.46023+00:00",
+      "subscription_rows": 0,
+      "max_active_end_date": null,
+      "orphan": true
+    },
+    {
+      "user_id": "8c8a1d03-c844-4307-9789-6717028155e0",
+      "subscription_status": "pro",
+      "subscription_expires_at": "2026-10-25T14:22:38.479+00:00",
+      "subscription_rows": 1,
+      "max_active_end_date": "2026-10-25T14:22:38.479+00:00",
+      "orphan": false
+    },
+    {
+      "user_id": "a3385bc6-2b89-4a6d-ba38-1fa948f4de7f",
+      "subscription_status": "pro",
+      "subscription_expires_at": "2028-09-13T01:57:09.803223+00:00",
+      "subscription_rows": 1,
+      "max_active_end_date": "2028-09-13T01:57:09.803223+00:00",
+      "orphan": false
+    },
+    {
+      "user_id": "d7a67a37-0b05-4f0a-b13c-388bff3cb59b",
+      "subscription_status": "pro",
+      "subscription_expires_at": "2027-09-14T17:37:49.242+00:00",
+      "subscription_rows": 6,
+      "max_active_end_date": "2027-09-14T17:37:49.242+00:00",
+      "orphan": false
+    },
+    {
+      "user_id": "e34b04a9-3d43-445a-9377-685da6a6e810",
+      "subscription_status": "pro",
+      "subscription_expires_at": "2026-07-13T00:36:59.905337+00:00",
+      "subscription_rows": 2,
+      "max_active_end_date": "2026-07-13T00:36:59.905337+00:00",
+      "orphan": false
+    },
+    {
+      "user_id": "ee22d247-d57d-4ff7-80ad-e6668b9a4b14",
+      "subscription_status": "pro",
+      "subscription_expires_at": "2026-10-17T18:04:04.09+00:00",
+      "subscription_rows": 2,
+      "max_active_end_date": "2026-10-17T18:04:04.09+00:00",
+      "orphan": false
+    }
+  ],
+  "dropped_objects_live_definitions": {
+    "trigger": "CREATE TRIGGER trg_subscription_update_user AFTER INSERT OR UPDATE ON public.subscriptions FOR EACH ROW WHEN ((new.status = 'active'::text)) EXECUTE FUNCTION update_user_subscription_status()",
+    "update_user_subscription_status": "CREATE OR REPLACE FUNCTION public.update_user_subscription_status()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  IF NEW.status = 'active' THEN\n    UPDATE users SET\n      subscription_status = 'pro',\n      subscription_expires_at = GREATEST(COALESCE(subscription_expires_at, NEW.end_date), NEW.end_date)\n    WHERE id = NEW.user_id;\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n",
+    "extend_subscription": "CREATE OR REPLACE FUNCTION public.extend_subscription(p_user_id uuid, p_days integer)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  -- Atomically extend the most recent active subscription\n  UPDATE subscriptions\n  SET end_date = end_date + (p_days || ' days')::interval\n  WHERE id = (\n    SELECT id FROM subscriptions\n    WHERE user_id = p_user_id AND status = 'active'\n    ORDER BY end_date DESC\n    LIMIT 1\n  );\n\n  -- Update the users table to reflect the new expiry\n  UPDATE users\n  SET subscription_status = 'pro',\n      subscription_expires_at = (\n        SELECT end_date FROM subscriptions\n        WHERE user_id = p_user_id AND status = 'active'\n        ORDER BY end_date DESC\n        LIMIT 1\n      )\n  WHERE id = p_user_id;\nEND;\n$function$\n",
+    "founder_metrics_pre_152": "see supabase/migrations/093 (body) and the live pg_get_functiondef read on 2026-09-29: pro_active = users with subscription_status='pro' and (expires is null or > now()); pro_expired = 'pro' with expires <= now(); free = coalesce(status,'free')='free'.",
+    "acls": "both functions: {postgres=X/postgres,service_role=X/postgres}; private.founder_metrics(): {postgres=X/postgres,service_role=X/postgres}"
+  }
+}

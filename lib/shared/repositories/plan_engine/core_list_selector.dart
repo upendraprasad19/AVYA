@@ -1,0 +1,469 @@
+// Batch B1 (docs/plans/2026-10-22-library-core-list-pool.md, spec §4): the
+// core-list pool. Pure and static — ExerciseSelector._pickCoreList calls
+// [CoreListSelector.rankedPool] once per slot, for every generation since Unit 1B-F
+// (docs/plans/2026-11-10-generator-1bf-flip.md) deleted the flag and the cascade.
+//
+// Every list field read from Hive arrives as List<dynamic>; [_strs] maps it to
+// strings before comparing.
+import 'package:flutter/foundation.dart';
+
+import '../../../core/utils/equipment_vocab.dart';
+import 'equipment_capability.dart';
+import 'models.dart';
+
+/// One slot's record in [CoreListTrace].
+class CoreListTraceSlot {
+  final int day;
+  final String variant;
+  final MuscleSlot slot;
+  final String level;
+  /// `core`, `fill`, `drop`, or `emergency` (an any-level core pick, Ruling 12).
+  final String source;
+  final String? pickedId;
+  final int poolSize;
+  final bool improvisedRemoved;
+  final int nonImprovisedInPool;
+  final Set<String> families;
+  final String? pickedFamily;
+  /// Generator step 1A, R2: jump rows were partitioned out of a mixed pool.
+  final bool jumpRemoved;
+  /// R2: the pool held only jump rows, so they were kept (never empties a slot).
+  final bool jumpOnlyPool;
+  /// R3 (a): the isolation slot's pool held a like-for-like implement row and
+  /// was reduced to those rows.
+  final bool likeForLikeImplement;
+  const CoreListTraceSlot({
+    required this.day,
+    required this.variant,
+    required this.slot,
+    required this.level,
+    required this.source,
+    required this.pickedId,
+    required this.poolSize,
+    required this.improvisedRemoved,
+    required this.nonImprovisedInPool,
+    required this.families,
+    required this.pickedFamily,
+    required this.jumpRemoved,
+    required this.jumpOnlyPool,
+    required this.likeForLikeImplement,
+  });
+}
+
+/// Provenance of the ON path, written by production code and read only by
+/// tests (plan Ruling 9) — not a reimplementation, so not a mirror.
+class CoreListTrace {
+  /// `_pickCoreList` calls (one per `pickV4`; before Unit 1B-F, the times `pickV4` delegated to the pool).
+  int delegations = 0;
+  final List<CoreListTraceSlot> slots = [];
+  /// (day, variant) whose emptied list copied the other variant's.
+  final List<({int day, String variant})> copied = [];
+  /// (day, variant) re-run with core rows of ANY level (both variants empty).
+  final List<({int day, String variant})> emergencyAnyLevel = [];
+}
+
+class CoreListSelector {
+  @visibleForTesting
+  static CoreListTrace? debugTrace;
+
+  static const _rank = {'beginner': 0, 'intermediate': 1, 'advanced': 2};
+
+  /// Patterns where an implement row beats an improvised one (OI-387/388).
+  /// `vertical_push` joined in generator step 1A (plan v7): the R3 (b) fit key
+  /// ranked a loaded press first, but once variant B or phase 2 avoided it,
+  /// `_preferNovel` walked to Pike Push Up (foundational, so ahead of the
+  /// non-foundational dumbbell presses in phase 1); only the partition keeps it
+  /// out (gate R9 (iii), home_dumbbells advanced).
+  static const _implementPatterns = {
+    'elbow_flexion',
+    'elbow_extension',
+    'shoulder_isolation',
+    'horizontal_pull',
+    'vertical_pull',
+    'vertical_push',
+  };
+
+  /// What a bodyweight user always has: none, bodyweight and the household
+  /// baseline (`EquipmentVocab.tierItems['bodyweight']`).
+  static final Set<String> improvisedTokens =
+      EquipmentVocab.tierItems['bodyweight']!.toSet();
+
+  /// Generator step 1A, R3 (a): a row's first-listed muscle may name a HEAD of
+  /// the slot's muscle in parentheses ("Calves (Soleus)"). Only the heads listed
+  /// here count as the same muscle; "Glutes (medius)" deliberately does not.
+  static const _sameMuscleHeads = <String, Set<String>>{
+    'calves': {'gastrocnemius', 'soleus'},
+  };
+
+  /// Library Batch S1b-1 (founder 2026-11-09, "gym users get the hip abduction
+  /// machine"): the Hip slot names a region, not a muscle, so a row whose
+  /// first-listed muscle is one of these counts as like-for-like for it. Without
+  /// this the R3 (a) reduction never fired in the Hip slot and a gym user got the
+  /// bodyweight Glute Kickback or Side Lying Hip Adduction there.
+  static const _slotRegionMuscles = <String, Set<String>>{
+    'hip': {'abductors', 'adductors'},
+  };
+
+  /// R3 (a): true when [firstMuscle] names [targetMuscle]: equal after
+  /// lower-casing, a full match of `<target> (<head>)` with `<head>` in
+  /// [_sameMuscleHeads] for that target, or a muscle of the target region in
+  /// [_slotRegionMuscles]. Never a prefix match.
+  @visibleForTesting
+  static bool namesMuscle(String firstMuscle, String targetMuscle) {
+    final m = firstMuscle.trim().toLowerCase();
+    final t = targetMuscle.trim().toLowerCase();
+    if (m == t) return true;
+    if (_slotRegionMuscles[t]?.contains(m) ?? false) return true;
+    for (final head in _sameMuscleHeads[t] ?? const <String>{}) {
+      if (m == '$t ($head)') return true;
+    }
+    return false;
+  }
+
+  /// Generator step 1A, R4: true when [row] is on a core list at [level] or an
+  /// easier one (the Ruling 12 emergency's rule). A retired row
+  /// (`core_levels: []`) or a row with no core fields is false.
+  static bool isCoreAtOrEasier(Map<String, dynamic> row, String level) {
+    final rank = _rank[level] ?? 0;
+    return _strs(row['core_levels']).any((l) => (_rank[l] ?? 99) <= rank);
+  }
+
+  /// R2: a jump row (high impact or plyometric discipline).
+  static bool isJumpRow(Map<String, dynamic> r) =>
+      r['high_impact'] == true || r['discipline'] == 'plyometric';
+
+  static List<String> _strs(Object? v) {
+    if (v is List) return [for (final e in v) e.toString()];
+    if (v is String) return [v];
+    return const [];
+  }
+
+  /// True iff the user has any kit beyond the improvised set. Keyed on the
+  /// capability set, not the tier label, so a bodyweight user who OWNS
+  /// dumbbells gets the implement preference too.
+  static bool needsImplementPreference(
+      Set<String>? capability, String equipmentTier) {
+    final kit = capability ??
+        EquipmentVocab.tierItems[equipmentTier]?.toSet() ??
+        const <String>{};
+    return kit.any((t) => !improvisedTokens.contains(t));
+  }
+
+  /// The built exercise's type (OI-385): `compound` / `isolation` when the row
+  /// says so anywhere in `exercise_type` (shipped rows list `calisthenics`
+  /// first), else the slot's own type.
+  static String typeFor(Map<String, dynamic> row, MuscleSlot slot) {
+    final types = [for (final t in _strs(row['exercise_type'])) t.toLowerCase()];
+    if (types.contains('compound')) return 'compound';
+    if (types.contains('isolation')) return 'isolation';
+    return slot.exerciseType;
+  }
+
+  static String _norm(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_/()]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
+  /// Sort key b (OI-386): does [row] serve [slot]'s sub-focus? `cable` means
+  /// the canonical `cables` token; `isolation` the exercise type; otherwise a
+  /// label in `target_focus ∪ primary_muscles` whose normalised
+  /// form contains the normalised "$targetMuscle $subFocus". False when the
+  /// slot has no sub-focus.
+  static bool subFocusMatches(Map<String, dynamic> row, MuscleSlot slot) {
+    final sub = slot.subFocus;
+    if (sub == null) return false;
+    if (sub == 'cable') {
+      return _strs(row['equipment_needed']).contains('cables');
+    }
+    if (sub == 'isolation') {
+      return _strs(row['exercise_type']).contains('isolation');
+    }
+    final needle = _norm('${slot.targetMuscle} $sub');
+    return [
+      ..._strs(row['target_focus']),
+      ..._strs(row['primary_muscles']),
+    ].any((l) => _norm(l).contains(needle));
+  }
+
+  /// The ranked candidate list for one slot (plan Task 3, "The rankedPool
+  /// algorithm"). `ordered` is empty iff `source == 'drop'`. [anyCoreLevel]
+  /// admits core rows of an EASIER or equal level only, nearest level first,
+  /// and skips family fill (the empty-day emergency, Ruling 12: "easier core
+  /// moves"); a row with `core_levels: []` never enters.
+  static ({
+    List<Map<String, dynamic>> ordered,
+    String source,
+    bool improvisedRemoved,
+    int nonImprovisedInPool,
+    Set<String> families,
+    bool jumpRemoved,
+    bool jumpOnlyPool,
+    bool likeForLikeImplement,
+  }) rankedPool({
+    required List<Map<String, dynamic>> rows,
+    required MuscleSlot slot,
+    required String level,
+    required int phase,
+    required String equipmentTier,
+    required Set<String>? capability,
+    required Set<String> exclusions,
+    required bool Function(Map<String, dynamic>) isContraindicated,
+    required Set<String> pickedNames,
+    required Set<String> demotedNames,
+    Set<String> softAvoidNames = const {},
+    Set<String> walkedNames = const {},
+    bool anyCoreLevel = false,
+    bool loadedWins = true,
+  }) {
+    final pattern = slot.movementPattern;
+    final muscle = slot.targetMuscle.toLowerCase();
+    final tier = equipmentTier.toLowerCase();
+    final levelRank = _rank[level] ?? 0;
+
+    bool patternOk(Map<String, dynamic> r) =>
+        _strs(r['movement_pattern']).contains(pattern);
+    bool target(Map<String, dynamic> r) =>
+        _strs(r['target_focus'])
+            .any((l) => l.toLowerCase().contains(muscle)) ||
+        _strs(r['primary_muscles']).any((m) => m.toLowerCase().contains(muscle));
+    List<String> levels(Map<String, dynamic> r) => _strs(r['core_levels']);
+    // Emergency only: levels between the user's and the row's nearest
+    // easier-or-equal core level; null = core only at a harder level.
+    int? easierGap(Map<String, dynamic> r) {
+      int? gap;
+      for (final l in levels(r)) {
+        final d = levelRank - (_rank[l] ?? 0);
+        if (d >= 0 && (gap == null || d < gap)) gap = d;
+      }
+      return gap;
+    }
+
+    // 1. Hard filter F.
+    bool passes(Map<String, dynamic> r) {
+      if (!patternOk(r) || !r.containsKey('core_levels')) return false;
+      final discipline = r['discipline'];
+      if (discipline == 'calisthenics_skill' || discipline == 'olympic') {
+        return false;
+      }
+      if (capability != null) {
+        if (!EquipmentCapability.canPerform(r['equipment_needed'], capability)) {
+          return false;
+        }
+      } else if (tier.isNotEmpty) {
+        // queryV4's tier rule (exercise_repository.dart, capability == null).
+        final tiers = r['equipment_tier'];
+        if (tiers is List &&
+            tiers.isNotEmpty &&
+            !tiers.any((t) => t.toString().toLowerCase() == tier)) {
+          return false;
+        }
+      }
+      if (exclusions.isNotEmpty &&
+          EquipmentVocab.fromProfile(r['equipment_needed'])
+              .any(exclusions.contains)) {
+        return false;
+      }
+      if (isContraindicated(r)) return false;
+      return !pickedNames.contains(r['name']);
+    }
+
+    // 2-3. Core pool, else family fill.
+    var source = 'core';
+    var families = <String>{};
+    var pool = [
+      for (final r in rows)
+        if (passes(r) &&
+            target(r) &&
+            (anyCoreLevel ? easierGap(r) != null : levels(r).contains(level)))
+          r
+    ];
+    if (pool.isEmpty && !anyCoreLevel) {
+      families = {
+        for (final r in rows)
+          if (patternOk(r) &&
+              target(r) &&
+              levels(r).contains(level) &&
+              r['variant_family'] is String)
+            r['variant_family'] as String
+      };
+      final capLevel =
+          level.isEmpty ? level : level[0].toUpperCase() + level.substring(1);
+      pool = [
+        for (final r in rows)
+          if (passes(r) &&
+              target(r) &&
+              families.contains(r['variant_family']) &&
+              !levels(r).any((l) => (_rank[l] ?? 0) <= levelRank) &&
+              _strs(r['suitable_for']).contains(capLevel))
+            r
+      ];
+      source = 'fill';
+    }
+    if (pool.isEmpty) {
+      return (
+        ordered: const <Map<String, dynamic>>[],
+        source: 'drop',
+        improvisedRemoved: false,
+        nonImprovisedInPool: 0,
+        families: families,
+        jumpRemoved: false,
+        jumpOnlyPool: false,
+        likeForLikeImplement: false,
+      );
+    }
+
+    // 3b. Generator step 1A, R2: jump rows (high impact / plyometric) leave a
+    // mixed pool, BEFORE the improvised filter so a lone plyo-box implement row
+    // cannot survive it. A partition, not a sort key: `_preferNovel` walks past
+    // any ordering, so only removal keeps a jump row out of a strength slot. A
+    // jump-only pool is kept (never empties a slot).
+    final jumps = pool.where(isJumpRow).length;
+    final jumpOnlyPool = jumps == pool.length;
+    var jumpRemoved = false;
+    if (jumps > 0 && !jumpOnlyPool) {
+      pool = pool.where((r) => !isJumpRow(r)).toList();
+      jumpRemoved = true;
+    }
+
+    // 4. Improvised filter (OI-387/388), never emptying the pool.
+    bool improvised(Map<String, dynamic> r) =>
+        EquipmentVocab.fromProfile(r['equipment_needed'])
+            .every(improvisedTokens.contains);
+    final nonImprovised = pool.where((r) => !improvised(r)).length;
+    var improvisedRemoved = false;
+    final implementUser = needsImplementPreference(capability, equipmentTier);
+    if (implementUser &&
+        _implementPatterns.contains(pattern) &&
+        nonImprovised > 0 &&
+        nonImprovised < pool.length) {
+      pool = pool.where((r) => !improvised(r)).toList();
+      improvisedRemoved = true;
+    }
+
+    // 4b. R3 (a): in any other non-core ISOLATION slot, an implement user's pool
+    // is reduced to the like-for-like implement rows (isolation type, first-listed
+    // muscle names the slot's muscle) when one exists. Reducing (not just
+    // dropping the improvised rows) keeps compound or other-muscle rows from
+    // reaching variant B or phase 2 once the first row is avoided.
+    var likeForLikeImplement = false;
+    if (implementUser &&
+        !_implementPatterns.contains(pattern) &&
+        pattern != 'core' &&
+        slot.exerciseType.toLowerCase() == 'isolation') {
+      bool likeForLike(Map<String, dynamic> r) {
+        if (improvised(r)) return false;
+        if (!_strs(r['exercise_type'])
+            .any((t) => t.toLowerCase() == 'isolation')) {
+          return false;
+        }
+        final prim = _strs(r['primary_muscles']);
+        return prim.isNotEmpty && namesMuscle(prim.first, slot.targetMuscle);
+      }
+
+      final ll = pool.where(likeForLike).toList();
+      if (ll.isNotEmpty) {
+        pool = ll;
+        likeForLikeImplement = true;
+      }
+    }
+
+    // R3 (b): the implement-fit key's capability (null capability reads the
+    // tier's items, as needsImplementPreference does).
+    final fitKit = capability ??
+        EquipmentVocab.tierItems[tier]?.toSet() ??
+        const <String>{};
+    // Unit 1B-R, Ruling 2 (founder d25): the fit key orders rows of equal sub-focus and type match in every non-core
+    // slot, isolation-typed ones included (the quad slot typed `isolation` held bodyweight Walking Lunge over Step Up and
+    // Dumbbell Walking Lunge). `loadedWins: false` (kill switch `disable_loaded_wins`) restores compound slots only.
+    final fitApplies =
+        pattern != 'core' && (loadedWins || slot.exerciseType.toLowerCase() == 'compound');
+    bool fits(Map<String, dynamic> r) =>
+        EquipmentVocab.fromProfile(r['equipment_needed']).any(
+            (t) => fitKit.contains(t) && !improvisedTokens.contains(t));
+    // R5: last tie-break in a Glutes hinge slot, a glute-first row.
+    final gluteSlot =
+        slot.targetMuscle.toLowerCase() == 'glutes' && pattern == 'hip_dominant';
+    bool gluteFirst(Map<String, dynamic> r) {
+      final prim = _strs(r['primary_muscles']);
+      return prim.isNotEmpty && prim.first.toLowerCase().contains('glute');
+    }
+
+    // 5. Order: L6 partition, soft avoid, then keys a-e, ties by id.
+    final sub = slot.subFocus;
+    final type = slot.exerciseType.toLowerCase();
+    bool foundational(Map<String, dynamic> r) => r['is_foundational'] == true;
+    // How well a row matches the slot: the sub-focus and type keys below, folded into one number (lower is better).
+    int slotMatch(Map<String, dynamic> r) =>
+        (sub != null && !subFocusMatches(r, slot) ? 2 : 0) +
+        (_strs(r['exercise_type']).any((t) => t.toLowerCase() == type) ? 0 : 1);
+    // Keys d onward (the order before Unit 1B-R's key).
+    List<int> restKeys(Map<String, dynamic> r) => [
+          phase == 1 && !foundational(r) ? 1 : 0,
+          sub != null && !subFocusMatches(r, slot) ? 1 : 0,
+          _strs(r['exercise_type']).any((t) => t.toLowerCase() == type) ? 0 : 1,
+          // R3 (b): a row using an implement the user has, in a compound slot.
+          fitApplies && !fits(r) ? 1 : 0,
+          (r['priority_tier'] as num?)?.toInt() ?? 3,
+          foundational(r) ? 0 : 1,
+          // R5: last tie-break, Glutes hinge slots only.
+          gluteSlot && !gluteFirst(r) ? 1 : 0,
+        ];
+    // Unit 1B-R, Ruling 3 (founder d25): in phase 1 a bodyweight row gives way to `topFit`, the loaded row that will
+    // actually be picked (the first fitting row by the keys that follow, skipping the rows `_preferNovel` will walk
+    // past), when `topFit` matches the slot at least as well. So the pick is `topFit` or a bodyweight row that matches
+    // BETTER, never a worse-matching loaded row; key d still decides across foundational status, as before. A gym
+    // user's loaded rows keep their order (the key is 0 for each); a bodyweight user is unchanged (no `topFit`). Under
+    // Ruling 12's emergency the easier-gap key comes first, as in the sort. For an injured user whose pool holds curated
+    // substitutes, `_selectCandidate` picks from that list in its own order, so this key is inert there (it changes
+    // neither the list's members nor their order).
+    int byRest(Map<String, dynamic> x, Map<String, dynamic> y) {
+      final a = [if (anyCoreLevel) easierGap(x)!, ...restKeys(x)];
+      final b = [if (anyCoreLevel) easierGap(y)!, ...restKeys(y)];
+      for (var i = 0; i < a.length; i++) {
+        final c = a[i].compareTo(b[i]);
+        if (c != 0) return c;
+      }
+      return (x['id'] ?? '').toString().compareTo((y['id'] ?? '').toString());
+    }
+    Map<String, dynamic>? topFit;
+    if (loadedWins && phase == 1 && fitApplies) {
+      for (final r in pool) {
+        final n = r['name'] as String? ?? '';
+        if (!fits(r) ||
+            demotedNames.contains(n) ||
+            softAvoidNames.contains(n) ||
+            walkedNames.contains(n.toLowerCase())) {
+          continue;
+        }
+        if (topFit == null || byRest(r, topFit) < 0) topFit = r;
+      }
+    }
+    final topFitMatch = topFit == null ? 4 : slotMatch(topFit); // 4: no row matches that badly, the key is 0
+    List<int> keys(Map<String, dynamic> r) => [
+          demotedNames.contains(r['name']) ? 1 : 0,
+          softAvoidNames.contains(r['name']) ? 1 : 0,
+          anyCoreLevel ? easierGap(r)! : 0,
+          !fits(r) && topFitMatch <= slotMatch(r) ? 1 : 0,
+          ...restKeys(r),
+        ];
+    final keyed = [for (final r in pool) (r, keys(r))];
+    keyed.sort((x, y) {
+      for (var i = 0; i < x.$2.length; i++) {
+        final c = x.$2[i].compareTo(y.$2[i]);
+        if (c != 0) return c;
+      }
+      return (x.$1['id'] ?? '').toString().compareTo((y.$1['id'] ?? '').toString());
+    });
+    return (
+      ordered: [for (final k in keyed) k.$1],
+      source: source,
+      improvisedRemoved: improvisedRemoved,
+      nonImprovisedInPool: nonImprovised,
+      families: families,
+      jumpRemoved: jumpRemoved,
+      jumpOnlyPool: jumpOnlyPool,
+      likeForLikeImplement: likeForLikeImplement,
+    );
+  }
+}

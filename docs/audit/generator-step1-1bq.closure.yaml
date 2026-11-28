@@ -1,0 +1,64 @@
+# Closure ledger - generator-step1-1bq (Unit 1B-Q: the B leg day gets a quad compound, OI-475 L1, founder d13).
+# Plan docs/plans/2026-11-10-generator-1bq-variant-b-quads.md, record docs/plan-reviews/generator-step1-1b.md,
+# diagnose cf970c. Gate 40 (validate_audit_closure.dart).
+batch: generator-step1-1bq
+plan_review_record: docs/plan-reviews/generator-step1-1b.md
+total_findings: 10
+closed_count: 10
+
+findings:
+  - id: 1BQ-SPLIT
+    title: "The B leg day of the 3, 4 and 5-day splits carries a priority-1 Quads compound, second; its Glutes isolation slot sits behind Calves (4-day: and Core)"
+    terminal_state: closed_in_commit
+    commit: "2c933701"
+    verification: "split_resolver.dart _get3DayV4 / _get4DayV4 / _get5DayV4 slotsB; test/contracts/variant_b_quads_behavioral_test.dart (66 tests); mutations in diagnose cf970c (six, each reddens 1 to 28)."
+
+  - id: 1BQ-KILL-SWITCH
+    title: "Kill-switch disable_variant_b_quad (PlanEngineFlags.variantBQuadEnabled, default ON) restores the old B lists verbatim"
+    terminal_state: closed_in_commit
+    commit: "2c933701"
+    verification: "variant_b_quads_behavioral_test.dart kill-switch tests; the OFF branch is main's list verbatim, and with the key set all 998 golden personas hashed equal to main cc8286ad (0 differ). Deleted by the step-2 OI-475 L2 change (OI-475 board text). docs/naming_conventions.md row."
+
+  - id: 1BQ-GOLDEN
+    title: "Golden re-recorded with attribution: 242 of 998 keys, all build_muscle 3/4/5-day or strength 3-day"
+    terminal_state: closed_in_commit
+    commit: "2c933701"
+    verification: "test/fixtures/generator_golden_hashes.json; changed keys build_muscle 3d 44, 4d 86, 5d 60, strength 3d 52, none elsewhere; the kill-switch run is the counterfactual (0 keys differ from the base fixture)."
+
+  - id: 1BQ-SAME-MOVEMENT-FLOOR
+    title: "Same-movement gate ON non-vacuity floor re-measured 977 -> 931, OFF 5 unchanged (shared days stay 0)"
+    terminal_state: closed_in_commit
+    commit: "2c933701"
+    verification: "test/plan_generator/same_movement_day_gate_test.dart comment and floor (the run printed ON 931, OFF 5, 0 shared days); the drop is N19 Dumbbell Glute Bridge, the home_dumbbells Glutes isolation pick (audit ON weeks 1-2: 1444 -> 1289)."
+
+  - id: 1BQ-AUDIT
+    title: "2,304-plan audit: ON plans worse than their live twin 186 -> 4 (Quads 184 -> 0); zero-set plans live 92 -> 28, ON 278 -> 32; no muscle of any kind gains a zero-set week in either world"
+    terminal_state: closed_in_commit
+    commit: "2c933701"
+    verification: "Plan section 2, final tree vs main cc8286ad (plan_audit_dump_test.dart, both worlds; per-plan credited sets from plan_dump w[].v, every muscle, every week)."
+
+  - id: 1BQ-COST-QUADS
+    title: "52 live / 14 ON plans hold fewer week-2 quad sets (live: build_muscle 4/5-day full_gym, the Wall Sit isolation seat became a loaded compound with fewer sets); lowest 2, none reaches 0"
+    terminal_state: verified_clean
+    evidence: "Plan section 2 (example build_muscle|4|beginner|full_gym|30|3 Wall Sit 4 -> Goblet Squat 2). A loaded squat pattern for an isometric hold is the step-1 aim; the weekly quad floor is OI-475 L2 (step 2)."
+
+  - id: 1BQ-COST-GLUTES
+    title: "94 live / 116 ON plans hold fewer week-2 Glutes sets (the Glutes isolation row drops at short minutes; 34 live by 2 or more, worst 6 -> 2); none reaches 0"
+    terminal_state: verified_clean
+    evidence: "Plan section 2; both B hinge rows still credit Glutes. The alternative order (isolation fourth) cost 51 live plans every Calves set and 12 live / 24 ON every Core set in weeks 2 and 4 (round 2; also 8 ON plans without Calves)."
+
+  - id: 1BQ-COST-HAMSTRINGS
+    title: "74 live / 73 ON plans hold fewer week-2 Hamstrings sets (mostly by 1; the Quads compound takes a seat ahead of the curl); none reaches 0"
+    terminal_state: verified_clean
+    evidence: "Plan section 2 (per-plan comparison from plan_dump, not the ab_swing share); variant_b_quads_behavioral_test.dart pins week-2 Hamstrings sets > 0 on its grid."
+
+  - id: 1BQ-COST-OTHER
+    title: "Calves 28 / 21 and Core 35 / 8 plans fall by a set or two; ab_swing plans live 293 -> 304, ON 257 -> 402; stretch_lift live +21; seven ON plans seat E292 Sliding Leg Curl, six as on main and one new (strength|3|advanced|home_dumbbells|30|1)"
+    terminal_state: verified_clean
+    evidence: "Plan section 2. No zero-set week for any muscle. ab_swing is week 2 gaining quads where it had none while A and B still differ by half (step 2 weekly floor). The E292 plans are the step-1 plan's named household residue (main 274, round 2 268, now 275); the one plan new against main had no week-2 quad set on main and now seats Step Up plus Sliding Leg Curl, and is the whole 274 -> 275 and unloaded 441 -> 440 movement."
+
+  - id: 1BQ-RESIDUE-OI489
+    title: "Four ON plans still worse than their live twin, all present on main before this unit (2 no Chest week 2, 2 no Hamstrings weeks 1-3; advanced bodyweight 30 min)"
+    terminal_state: upstream_blocked
+    blocker: "OI-489 / step-1 plan item 1B-12: core-list picker mechanisms (B Push day chest list; the Hamstrings slot left empty, path not established, possibly OI-485's class) in the ship-dark ON world, outside the split this unit changes."
+    reopen_when: "the 1B-1 flip plan (item 1B-12 is its entry criterion)"

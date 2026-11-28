@@ -1,0 +1,201 @@
+# Closure ledger - oi520-enforce-lockfile (CI check that fails a PR whose pubspec.lock `flutter pub get` would change, PR 317).
+# Gate 40. One terminal_state per finding or unit; no `deferred:` key. Three plan-review rounds (R1-, R2-, R3-) plus one author
+# finding between rounds (A-1), then a B-pass of one fresh seat on head ffd2906c (BP-). `oi520-enforce-lockfile@branch` is the
+# in-branch commit form: the closing commit that carries this file is the one that moves OI-520 and writes the review files.
+
+batch: oi520-enforce-lockfile
+plan_review_record: docs/plan-reviews/oi520-enforce-lockfile.md
+bpass_review: docs/reviews/oi520-enforce-lockfile-bpass.md
+diagnose_docs: []
+total_findings: 32
+closed_count: 32
+
+findings:
+  - id: U1-GUARD
+    title: "Required Analyze job gains a step that fails a PR whose pubspec.lock pub get would change or that deletes it (git ls-files --error-unmatch + git diff --exit-code), plus the contract test"
+    terminal_state: closed_in_commit
+    commit: "2ff9aacb"
+    verification: "real runner: red on a pre-PR-314 lock (PR 319, flag version), on an edited sdks floor (PR 320) and on a deleted lock (PR 321), green on the good lock (runs 44990058448, 44993118794, 44998296576 and the run on 4469655e); the final shape of the step is unchanged since 2ff9aacb, the reader and the comments were hardened in 15e906ad, 7c9a5ebe and 63fcbf35"
+
+  - id: U2-MUTATION-PROOF
+    title: "The contract test is mutated against the real workflow and against its own reader (rule 21)"
+    terminal_state: closed_in_commit
+    commit: "63fcbf35"
+    verification: "71 cases (61 in-memory mutants, 7 controls, 3 shape cases); harness scratchpad run_mutants4.js applies 55 real mutations (M01-M21, G01, T01-T32, X01) to the committed head 63fcbf35 and the test reddened exactly as intended on all 55, 0 survivors (plan F14); the first run had 4 survivors (T16, T22, T23, T25) which five added cases closed"
+
+  - id: U3-SWEEP-WARN
+    title: "Local pre-push contract sweep warned (-81 failures) on every push of the branch"
+    terminal_state: verified_clean
+    evidence: "itemised against a detached clean origin/main (c8a19ef4) sweep: 81 failures all in test/scripts/land_pr_e2e_test.dart, each with SignalException errno 50 (143 marker lines), 0 names only in the push and 0 only in the control on every push; the Windows harness class of reference_windows_full_suite_two_known_failures; CI (Linux, four shards) green on every code head; see the review's section on the sweep"
+
+  - id: U4-NO-NEW-GATE
+    title: "No scripts/check_*.dart gate is added, so rule 24 (gate_test_ledger) does not apply"
+    terminal_state: verified_clean
+    evidence: "git diff --stat origin/main...HEAD lists test.yml, dependabot.yml, hooks.md, the plan, the test, and this batch's review files; no file under scripts/ is added or changed; the protection is a CI step plus a test/contracts test under rule 21"
+
+  - id: U5-OI-520-CLOSED
+    title: "OI-520 moved from open_issues.md to closed_issues.md with its Outcome; the closing commit cites closes-oi: OI-520"
+    terminal_state: closed_in_commit
+    commit: "oi520-enforce-lockfile@branch"
+    verification: "scripts/check_closes_oi_performed.dart reads OI-520 as CLOSED across both boards at the merge; scripts/check_oi_numbering_unique.dart passes"
+
+  - id: U6-SKILL-EVOLUTION
+    title: "Skill self-evolution (CLAUDE.md 5.1): code-review lens 6 gains a hand-rolled-parser sub-check (fail closed, a mutant or control per tolerance, mutate the reader's own helpers)"
+    terminal_state: closed_in_commit
+    commit: "oi520-enforce-lockfile@branch"
+    verification: ".claude/skills/code-review/SKILL.md edited in the closing commit; the review's Tuning entry names it"
+
+  - id: U7-DEPENDABOT-COST
+    title: "A Dependabot pub PR whose lock pub get would change now goes red and cannot be fixed on its dependabot/* branch (the record gate's exemption is lost by a human commit)"
+    terminal_state: blocked_on_user
+    reason: "an intended consequence of the founder's choice (option a), reported in the closing message; remediation routes are written down (normal-named branch plus a platform-tier record, bump the Flutter pin everywhere, or a Dependabot ignore rule); the founder picks the route per PR; a web-UI merge is not blocked because main has no required status checks; next scheduled Dependabot run Monday 2026-11-23 06:00 IST"
+
+  - id: R1-1
+    title: "Plan round 1, P1: the remediation the comment and R1 gave (fix the lock on the Dependabot branch) is a dead end"
+    terminal_state: closed_in_commit
+    commit: "800debb9"
+    verification: "read scripts/check_plan_review_record_exists.dart:611-619 and scripts/plan_review_record_lib.dart:387-393; F12, R1, C6 and the workflow comment rewritten with the real routes"
+
+  - id: R1-2
+    title: "Plan round 1, P2: the merge step omits --allow-workflow-change"
+    terminal_state: closed_in_commit
+    commit: "800debb9"
+    verification: "read scripts/safe_pr_merge_lib.dart:274-295; F13, the verification plan and the merge order name it"
+
+  - id: R1-3
+    title: "Plan round 1, P2: gate demands the plan did not name (tuning entry, record fields, how OI-520 closes, ledger label, rule 24, commit prefix)"
+    terminal_state: closed_in_commit
+    commit: "800debb9"
+    verification: "checked against the scripts; step 5 of the merge order and C6 name each"
+
+  - id: R1-4
+    title: "Plan round 1, P2: --enforce-lockfile is narrower than a clean tree after pub get (metadata drift passes)"
+    terminal_state: closed_in_commit
+    commit: "800debb9"
+    verification: "reproduced (F10); mechanism changed to pub get plus git diff --exit-code (F3 measures both cases failing); test, comment and OI-520 Outcome follow"
+
+  - id: R1-5
+    title: "Plan round 1, P2: the test passes weakenings it does not pin (flutter-version of the job, defaults/env, a second Analyze, a uses step before the guard, container)"
+    terminal_state: closed_in_commit
+    commit: "800debb9"
+    verification: "allowlist of job keys, of the actions before the resolving step, check-name uniqueness and the single flutter-version added (mutants 11 to 19); the rest is stated as R6 with its compensating controls"
+
+  - id: R1-6
+    title: "Plan round 1, P3: comment wording (other jobs, inference as fact, required)"
+    terminal_state: closed_in_commit
+    commit: "800debb9"
+    verification: "comment rewritten to say what was measured and to name safe_pr_merge.sh"
+
+  - id: R1-7
+    title: "Plan round 1, P3: mutants assert only a non-empty problem list"
+    terminal_state: closed_in_commit
+    commit: "800debb9"
+    verification: "each mutant now asserts the token its problem must carry"
+
+  - id: R1-8
+    title: "Plan round 1, P3: plan citations (the loop is in _judgeCheckRuns; base versus HEAD lines)"
+    terminal_state: closed_in_commit
+    commit: "800debb9"
+    verification: "F1, F2, F3, F7 corrected and state the base"
+
+  - id: A-1
+    title: "Author finding, P2: the v2 verify step passes a PR that deletes pubspec.lock (pub get regenerates it untracked, git diff ignores untracked files)"
+    terminal_state: closed_in_commit
+    commit: "2ff9aacb"
+    verification: "measured exit 0 (F15); git ls-files --error-unmatch prepended; two mirror mutants; 12 real mutations reddened (F14); the deleted-lock case went red on a real runner (PR 321)"
+
+  - id: R2-1
+    title: "Plan round 2, P2: _jobKeys stopped reading at steps:, so a job key written after the steps was never judged"
+    terminal_state: closed_in_commit
+    commit: "15e906ad"
+    verification: "_jobKeys now reads every four-space key of the whole job block; mirror mutants write continue-on-error, if and env after steps; real mutations in F14"
+
+  - id: R2-2
+    title: "Plan round 2, P3: [resolve-extra-keys] and [job-missing] had no killing mutant"
+    terminal_state: closed_in_commit
+    commit: "15e906ad"
+    verification: "mutants env on the resolving step and job id renamed added; both also run as real mutations"
+
+  - id: R2-3
+    title: "Plan round 2, P3: 'EXACTLY what the pinned Flutter writes' overclaims (a CRLF lock under eol=lf is left untouched by pub get)"
+    terminal_state: closed_in_commit
+    commit: "15e906ad"
+    verification: "step renamed Verify pubspec.lock is unchanged after pub get (OI-520); the workflow comment, the test header and C1 reworded"
+
+  - id: R2-4
+    title: "Plan round 2, P3: step 5 under-specified the tuning entry and the record frontmatter and cited the wrong lines for the in-place flip"
+    terminal_state: closed_in_commit
+    commit: "15e906ad"
+    verification: "checked against scripts/skill_tuning_lib.dart:420-470, scripts/check_plan_review_record_exists.dart:760-790 and scripts/check_closes_oi_cited.dart:83-97,156-160; step 5 rewritten"
+
+  - id: R2-5
+    title: "Plan round 2, P3: residual evasions (quoted name twin, comment after a job id, key : value, a job named Analyze in another workflow file)"
+    terminal_state: closed_in_commit
+    commit: "15e906ad"
+    verification: "reader tolerates comments, quotes and key : spacing; a new [other-workflow] problem reads every other workflow file; two mutants and a false-positive control"
+
+  - id: R2-6
+    title: "Plan round 2, P3: no operator-facing record of the guard or of its cost; dependabot.yml still said pub bumps merge freely"
+    terminal_state: closed_in_commit
+    commit: "15e906ad"
+    verification: ".github/dependabot.yml comment corrected; docs/architecture/hooks.md gained the section CI lockfile guard"
+
+  - id: R3-1
+    title: "Plan round 3, P3: a twin named by its id only, a flow-style twin or a folded-scalar twin was invisible to the uniqueness check"
+    terminal_state: closed_in_commit
+    commit: "7c9a5ebe"
+    verification: "the check name is the name: or, when absent, the id (case-insensitive); an unreadable name: counts as the check name; mutants for each, in this file and in other files"
+
+  - id: R3-2
+    title: "Plan round 3, P3: _steps merged a non-canonical step line into the previous step; the allowed actions' with: arguments were unpinned"
+    terminal_state: closed_in_commit
+    commit: "7c9a5ebe"
+    verification: "reader fails closed ([unparsed]); [pre-step] for a repeated allowed action, an extra step key and an extra with: key; four mutants"
+
+  - id: R3-3
+    title: "Plan round 3, P3: 11 of 13 helper tolerances had no mutant"
+    terminal_state: closed_in_commit
+    commit: "63fcbf35"
+    verification: "mutants and 7 controls for each tolerance; real-mutation harness 55 of 55 as intended, 0 survivors after the four survivors of the first run were closed"
+
+  - id: R3-4
+    title: "Plan round 3, P3: the dependabot.yml sentence made the exemption conditional on the lock; hooks.md cited an agent-memory file as if tracked"
+    terminal_state: closed_in_commit
+    commit: "7c9a5ebe"
+    verification: "dependabot.yml now says the exemption never looks at the lock and the red Analyze is what blocks; hooks.md says agent memory, not tracked in this repo"
+
+  - id: BP-1
+    title: "B-pass, P2: a flow-style step or a -  name: step before the resolving step was invisible to _steps (a neutering step kept the test green)"
+    terminal_state: closed_in_commit
+    commit: "7c9a5ebe"
+    verification: "measured by the author (F16: git update-index --assume-unchanged makes verify rc=0 on a rewritten lock); reader fails closed; mutants for a flow-style step, -  name:, an anchor, a bare dash and <<:; real mutations M17 and M18 red"
+
+  - id: BP-2
+    title: "B-pass, P2: two mutants hard-coded flutter-version 3.41.4, so a legitimate Flutter bump turned the test red"
+    terminal_state: closed_in_commit
+    commit: "7c9a5ebe"
+    verification: "the pin and the checkout line are read from the real workflow; real mutation G01 (all six pins bumped to 3.42.0) stays green"
+
+  - id: BP-3
+    title: "B-pass, P3: a job whose id is Analyze with no name: produces a check-run of that name and was not counted"
+    terminal_state: closed_in_commit
+    commit: "7c9a5ebe"
+    verification: "same fix as R3-1"
+
+  - id: BP-4
+    title: "B-pass, P3: tolerances without a killing mutant; the comment-quotes-the-command test is vacuous for the comment stripping"
+    terminal_state: closed_in_commit
+    commit: "63fcbf35"
+    verification: "same fix as R3-3; the control comment inside with: makes _strip observable"
+
+  - id: BP-5
+    title: "B-pass, P3: [required-job] read safe_pr_merge_lib.dart as source with a regex, defeatable by a multi-line comment"
+    terminal_state: closed_in_commit
+    commit: "7c9a5ebe"
+    verification: "the test imports requiredSuccessJobs; real mutation M10 (the entry removed from the library) is red"
+
+  - id: BP-6
+    title: "B-pass, P3: hooks.md pins-the-shape overclaim, the dependabot.yml causal phrase, and the plan's tier for hooks.md"
+    terminal_state: closed_in_commit
+    commit: "7c9a5ebe"
+    verification: "all three reworded; docs/blast_radius.yaml:124 makes hooks.md platform; the branch tier is platform either way"

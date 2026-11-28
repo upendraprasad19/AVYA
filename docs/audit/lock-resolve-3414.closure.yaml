@@ -1,0 +1,213 @@
+# Closure ledger - lock-resolve-3414 (commit pubspec.lock as Flutter 3.41.4 resolves it, PR 314).
+# Gate 40. One terminal_state per finding or unit; no `deferred:` key. Two plan-review rounds (R1-, R2-), then a B-pass of two
+# fresh seats on head 510a641c (BA- = seat A, the lock; BB- = seat B, the plan and the board). `lock-resolve-3414@branch` is the
+# in-branch commit form: the fixes for the BA-/BB- findings land in the commit that carries this file.
+
+batch: lock-resolve-3414
+plan_review_record: docs/plan-reviews/lock-resolve-3414.md
+bpass_review: docs/reviews/lock-resolve-3414-bpass.md
+diagnose_docs: []
+total_findings: 34
+closed_count: 34
+
+findings:
+  - id: U1-LOCK
+    title: "pubspec.lock replaced by the file flutter pub get writes under Flutter 3.41.4 (127+/47-, 19 changed, 11 added, 1 removed)"
+    terminal_state: closed_in_commit
+    commit: "be8eb1db"
+    verification: "scratch folder: flutter pub get --enforce-lockfile exits 0 on the new pair (65 on main's), lock hash B990F94F...D7C2 unchanged; scratch git repo: plain pub get leaves git diff --exit-code -- pubspec.lock at 0; CI green on 510a641c"
+
+  - id: U2-RECURRENCE-GUARD
+    title: "Nothing stops the next Dependabot pub PR from regenerating the lock under another SDK (CI re-resolves, so it stays green)"
+    terminal_state: blocked_on_user
+    reason: "the founder chooses the guard (CI --enforce-lockfile, a Dependabot configuration change, or a stated manual regeneration step); filed as OI-520 with the three options under Done when; the next scheduled Dependabot pub run is Monday 2026-11-23 06:00 IST"
+
+  - id: U3-UNDECLARED-TEST-META
+    title: "package:test (53 test files) and package:meta (lib/features/ai_coach/repositories/ai_coach_repository.dart:32) are imported but declared in no pubspec section"
+    terminal_state: blocked_on_user
+    reason: "the founder chooses between declaring both and moving the test imports to flutter_test; filed as OI-521; declaring them here would change pubspec.yaml and make the lock differ from the one the +50 AAB was built from"
+
+  - id: U4-SWEEP-WARN
+    title: "Local pre-push contract sweep warned (+707 ~8 -27 on 28 selected files) when the branch was pushed"
+    terminal_state: verified_clean
+    evidence: "itemised: 27 failures in four sync/hook e2e files (10 + 11 + 5 + 1), all harness causes (POSIX stubs, /tmp paths, tools missing on PATH), 0 SIGTERM errno 50; the same four files on a detached checkout of clean origin/main 20c0e40b fail the same 27 test names (0 differ, +114 ~2 -27); CI on the head ran the whole suite green; see the review's section on the sweep"
+
+  - id: R1-1
+    title: "Plan round 1, P1: claim C2 false as worded (meta, test and flutter_riverpod are imported)"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "F11 re-derived by an import count over all 31 names; C2 rewritten; seat A recounted (147 / 174 / 1 / 53, zero for the other 28)"
+
+  - id: R1-2
+    title: "Plan round 1, P2: test is a hidden transitive dependency"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "F12 (riverpod-3.2.1/pubspec.yaml:28 declares test ^1.0.0); R4 and OI-521"
+
+  - id: R1-3
+    title: "Plan round 1, P2: R1 and R3 understated, recurrence near-certain"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "R1 and R3 rewritten, OI-520 filed (terminal state of the guard itself: U2-RECURRENCE-GUARD)"
+
+  - id: R1-4
+    title: "Plan round 1, P2: the verification cannot tell the two locks apart"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "R5 states that CI re-resolves; the two scratch acceptance checks were added to the verification plan"
+
+  - id: R1-5
+    title: "Plan round 1, P2: writer/reader list wrong"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "F9 and F10 corrected, Vercel added to C1; B-pass finding BA-2 later repointed two citations"
+
+  - id: R1-6
+    title: "Plan round 1, P2: C4 correct but the gate demands unstated"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "C4 spells out the exemptions and the record fields, checked against scripts/plan_review_record_lib.dart and scripts/check_plan_review_record_exists.dart"
+
+  - id: R1-7
+    title: "Plan round 1, P3: stale details and wording"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "folded into plan v2"
+
+  - id: R2-1
+    title: "Plan round 2, P2: board entries conflict with main (OI-519 appended at the same spot)"
+    terminal_state: closed_in_commit
+    commit: "b6d355de"
+    verification: "reproduced (1 conflict); the branch was synced through scripts/sync_with_main.sh --commit first and the entries appended after the merge; scripts/check_oi_numbering_unique.dart passes"
+
+  - id: R2-2
+    title: "Plan round 2, P2: R1 said the SDK was unknown although a cheap measurement settles it"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "F15 (exit 0 at 2c2b3496, 65 at a6c1825d) and F16 measured; Problem, R1, R3 and OI-520 rewritten"
+
+  - id: R2-3
+    title: "Plan round 2, P2: commit order and review-file naming unstated"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "section Commit and merge order added; review named lock-resolve-3414-bpass.md (204 -bpass.md precedents exist)"
+
+  - id: R2-4
+    title: "Plan round 2, P3: C2 calls direct dependencies transitive; generator downgrade effect unstated"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "C2 cites pubspec.yaml:39,40,99,100, no tracked *.g.dart, no @riverpod (seat A recounted)"
+
+  - id: R2-5
+    title: "Plan round 2, P3: check (2) needs a git repository"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "verification plan names the scratch git repository; finding BB-6 later corrected its pass condition"
+
+  - id: R2-6
+    title: "Plan round 2, P3: R4 and OI-521 wording; literal blocked_on_user"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "R4 and both board entries rewritten; the Blocked on lines start with blocked_on_user"
+
+  - id: R2-7
+    title: "Plan round 2, P3: C4 omits the frontmatter-only reading and the tuning-entry rules"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "added to C4 (check_plan_review_record_exists.dart:768); finding BB-2 later corrected where the tuning check runs"
+
+  - id: R2-8
+    title: "Plan round 2, P3: F3 wording"
+    terminal_state: closed_in_commit
+    commit: "510a641c"
+    verification: "rewritten; finding BA-3 later added the package_config evidence"
+
+  - id: BA-1
+    title: "B-pass seat A, P2: the plan never addresses the platform tier's requires list (blast_radius.yaml:25)"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "section Platform-tier requirements added to the plan: B-pass done, regression and behavioural evidence = the two acceptance checks (fail on main's lock, pass on this one), feature_flag not applicable with the rollback stated"
+
+  - id: BA-2
+    title: "B-pass seat A, P3: F10 cites comment lines; dart run scripts/* and the .fvmrc parity gap are not listed"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "F10 now cites scripts/pre-push.sh:139 and scripts/run_full_suite.sh:44 (read both lines), lists dart run scripts/* via scripts/_dart_bin.sh:98-103 and states .fvmrc is ungated"
+
+  - id: BA-3
+    title: "B-pass seat A, P3: F3 says which lock the build read is unproven; .dart_tool/package_config.json is independent evidence"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "read the primary's .dart_tool/package_config.json: generator pub 3.11.1, mtime 11:24:16, the regenerated lock's versions; F3 and C2 cite it"
+
+  - id: BA-4
+    title: "B-pass seat A, P3: C2 says the SDK forces the versions of all shipped packages"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "C2 split into SDK pins (packages/flutter/pubspec.yaml:18-19, flutter_test:20,21,28,33) and resolver choices; flutter_riverpod-3.3.1/pubspec.yaml:30 pins riverpod 3.2.1 exactly; the absolute 'never buildable or tested' removed"
+
+  - id: BA-5
+    title: "B-pass seat A, P3: the committed lock contradicts itself (sdks.flutter >=3.38.4 with two packages that need >=3.41.0) and the analyzer ignore did not bind"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "read the old lock line 1801 and the two pub-cache pubspecs (flutter >=3.41.0); added to the plan Problem section and to OI-520"
+
+  - id: BB-1
+    title: "B-pass seat B, P2: step 6 merges without the record replay that land_pr.sh performs"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "step 6 of the plan replays CI's record gate by hand on the merge commit (the sequence of scripts/land_pr.dart:476-566) and requires its PASS line before safe_pr_merge.sh; land_pr.sh exits 4 on this machine"
+
+  - id: BB-2
+    title: "B-pass seat B, P3: C4 puts the tuning-entry check at the merge and omits its shape rules"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "read scripts/check_skill_tuning_history.dart:20-31 and scripts/skill_tuning_lib.dart:430-470; C4 rewritten"
+
+  - id: BB-3
+    title: "B-pass seat B, P3: F10 cites comment lines (same as BA-2)"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "see BA-2"
+
+  - id: BB-4
+    title: "B-pass seat B, P3: 'Dependabot produced PRs on Saturday' is not established"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "git log gave the three commit times (03:55, 03:57, 04:47 UTC) and the branch names image_picker-1.2.3 and onesignal_flutter-5.6.7; F13, R3 and OI-520 state dates and a rebase, not PR creation"
+
+  - id: BB-5
+    title: "B-pass seat B, P3: 'docs-only' although one path of main's range is under lib/"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "git diff --stat 0907ee0d 20c0e40b lists closed_issues.md, open_issues.md and lib/features/train/CLAUDE.md; reworded 'only markdown'"
+
+  - id: BB-6
+    title: "B-pass seat B, P3: check (2) cannot be 'git status --porcelain empty' in a bare scratch repo"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "measured: without .gitignore the scratch repo lists ?? .dart_tool/ and ?? .flutter-plugins-dependencies; the check is now git diff --exit-code -- pubspec.lock plus status --untracked-files=no, both empty"
+
+  - id: BB-7
+    title: "B-pass seat B, P3: 'only checks which files changed' understates the Dependabot exemption"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "read scripts/check_plan_review_record_exists.dart:611-621 (branch prefix, authors, manifest-only paths); R3 and OI-520 reworded"
+
+  - id: BB-8
+    title: "B-pass seat B, P3: three inferences written as facts (Dart 3.12 resolver; riverpod 3.4.3 deps; why riverpod is held at 3.2.1)"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "each is now marked as a pub.dev API fact outside the repo or as an inference; the 3.2.1 hold is attributed to flutter_riverpod 3.3.1's exact pin (pub cache pubspec.yaml:30)"
+
+  - id: BB-9
+    title: "B-pass seat B, P2: no closure ledger for a batch of more than four findings (CLAUDE.md 4.2)"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "this file; dart run scripts/validate_audit_closure.dart docs/audit/lock-resolve-3414.closure.yaml passes (run before the commit)"
+
+  - id: BB-10
+    title: "B-pass seat B, P3: 'acceptance checks re-run by the B-pass seat' overclaims (seat B could not run flutter)"
+    terminal_state: closed_in_commit
+    commit: "lock-resolve-3414@branch"
+    verification: "verification plan now says the coordinator (on the merged lock blob) and seat A ran them; results are in the review file"

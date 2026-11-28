@@ -1,0 +1,54 @@
+# Closure ledger — oi358-unique-exercise-names (OI-358; plan docs/plans/oi358-unique-exercise-names.md)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per unit; no `deferred:` key.
+
+batch: oi358-unique-exercise-names
+plan_review_record: docs/plan-reviews/oi358-unique-exercise-names.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-06-exercise-name-unique-in-day-e6a4d9.md
+closed_count: 9
+
+findings:
+  - id: U1
+    title: "The shared rule: exerciseNameKey, exerciseRowName, exerciseNameKeysOf, firstPerExerciseName"
+    terminal_state: closed_in_commit
+    commit: oi358-unique-exercise-names@branch
+    verification: "test/contracts/exercise_name_unique_in_day_behavioral_test.dart (rule group, exlogKey parity); M01, M02 and the row-name mutants red"
+  - id: U2
+    title: "Session writers: addExercise and swapExercise refuse a taken name and return SessionExerciseChange"
+    terminal_state: closed_in_commit
+    commit: oi358-unique-exercise-names@branch
+    verification: "test/contracts/exercise_name_unique_in_day_behavioral_test.dart; other-slot exclusion and enum mutants red"
+  - id: U3
+    title: "Last line at startWorkout: keep the first of each name, log a count and no name"
+    terminal_state: closed_in_commit
+    commit: oi358-unique-exercise-names@branch
+    verification: "test/features/train/exercise_name_unique_screen_test.dart case C through the real startWorkout; event payload pinned"
+  - id: U4
+    title: "Train pickers grey a taken row; every call site branches on the result; UNDO finds its slot at tap time; the builder reads both row shapes"
+    terminal_state: closed_in_commit
+    commit: oi358-unique-exercise-names@branch
+    verification: "test/features/train/exercise_name_unique_screen_test.dart, test/features/train/template_builder_unique_names_test.dart; M18 and M24 re-proved after the first run"
+  - id: U5
+    title: "Coach swap: swapExerciseInDay throws exercise_already_in_workout, the dispatcher maps it, CoachSwapSheet labels taken options"
+    terminal_state: closed_in_commit
+    commit: oi358-unique-exercise-names@branch
+    verification: "test/ai_coach/coach_unique_exercise_names_test.dart; stored row byte-identical on refusal"
+  - id: U6
+    title: "InjurySwapPlanner: per-date takenNames so two exercises never share a substitute"
+    terminal_state: closed_in_commit
+    commit: oi358-unique-exercise-names@branch
+    verification: "test/contracts/exercise_name_unique_in_day_behavioral_test.dart (planner group); per-date reset mutant red"
+  - id: U7
+    title: "Templates: createTemplate pre-pass refuses before the first write; assignTemplateToDate keeps the first on raw rows"
+    terminal_state: closed_in_commit
+    commit: oi358-unique-exercise-names@branch
+    verification: "test/contracts/exercise_name_unique_in_day_behavioral_test.dart (zero rows on a day-2 duplicate, nameless rows survive); moved-check and post-normalise mutants red"
+  - id: BPASS_e141930e4739
+    title: "B-pass findings (0 P0, 0 P1, 1 P2, 2 P3): SoT ranges re-anchored on declarations (F1), the builder keeps the first per name on load (F3); F2 false alarm, the mapped message has one caller and it passes date: today"
+    terminal_state: closed_in_commit
+    commit: oi358-unique-exercise-names@branch
+    verification: "docs/reviews/e141930e4739-review.md; test/features/train/template_builder_unique_names_test.dart (M47, M48, M49 red); check_sot_registry_parity PASS"
+  - id: DEVICE_A16
+    title: "Founder's device walk of the release build: grey rows, refusal message, coach answer"
+    terminal_state: blocked_on_user
+    reason: "Founder-owned: needs the next /build-apk; OI-348 row A16 lists the steps. Release-build behaviour of the old crash was never measured."
