@@ -193,7 +193,11 @@ class SeedService {
   //   v29 (docs/plans/2026-11-26-media-three-adds.md): E051 Standing Calf Raise, E109 Glute Kickback (Cable) and E264
   //   Table Row gain their animation keys. No cloud reseed (the cloud tuples do not carry media keys). Without this bump
   //   an existing install never gets the three animations (library_seed_v29_upgrade_behavioral_test.dart).
-  static const int _exerciseLibraryVersion = 29;
+  //   v30 (docs/plans/2026-11-28-media-two-new-two-retag.md): two new rows (G0592 Machine Preacher Curl, G0979 Band
+  //   Pallof Press); E027 T-Bar Row moves to machines (new cues) and E120 Svend Press to dumbbells, both with their
+  //   animation. The cloud reseed carries equipment, E027's cues and the two new rows. Without this bump an existing
+  //   install keeps the old rows (library_seed_v30_upgrade_behavioral_test.dart).
+  static const int _exerciseLibraryVersion = 30;
   static const String _exerciseVersionKey = 'exercise_library_version';
 
   /// Bump this integer whenever the bundled food_database.json changes

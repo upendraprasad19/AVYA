@@ -77,7 +77,7 @@ void main() {
       expect(p.assetPaths, isEmpty);
       expect(p.monogram, isNotEmpty);
     }
-    expect(checked, 721, reason: 'the artwork-less set is 721 rows (870 minus the 149 with artwork; Library Batch S1b-2 added 9 without art, Library Batch S1b-3 removed artwork-less E053)');
+    expect(checked, 723, reason: 'the artwork-less set is 723 rows (872 minus the 149 with artwork; library v30 added 2 without art, Library Batch S1b-2 added 9 without art, Library Batch S1b-3 removed artwork-less E053)');
   });
 
   test('an unknown name never throws and never claims artwork', () {

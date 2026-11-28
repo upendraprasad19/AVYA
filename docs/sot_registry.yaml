@@ -13772,7 +13772,7 @@ concepts:
         method: scripts/repair_exercise_library_v12.js (repairText, mergeDuplicates, relabel, dropPlates)
         notes: v12 (Batch A) — 136 un-shifted text rows, cues one per item, 7 duplicates retired (name_aliases + merged_ids on the kept row), E172/E163 labels, E207/E179 plate keys dropped
       - file: lib/core/services/seed_service.dart
-        line_range: 327-377
+        line_range: 331-381
         method: _exerciseLibraryVersion (11→12) + retiredLibraryIds + pruneRetired after putAll in _seedExercises
         notes: putAll never deletes, so the prune is what removes a retired row from an existing install
       - file: supabase/migrations/162_reseed_exercise_library.sql
@@ -13970,6 +13970,9 @@ concepts:
       - file: lib/core/services/seed_service.dart
         method: _exerciseLibraryVersion (26 to 27)
         notes: putAll writes the 27 copied rows into exerciseBox by id (Unit 1B-F2)
+      - file: lib/core/services/seed_service.dart
+        method: _exerciseLibraryVersion (29 to 30)
+        notes: putAll writes G0592 and G0979 and the retagged E027 / E120 into exerciseBox by id (library v30, OI-443); without the bump an installed device keeps barbell equipment and never sees the two rows (library_seed_v30_upgrade_behavioral_test.dart)
       - file: lib/core/services/seed_service.dart
         method: _exerciseLibraryVersion (27 to 28)
         notes: putAll writes G3470 into exerciseBox by id without its name_aliases entry (OI-523); without the bump an installed device keeps the alias
@@ -15504,7 +15507,7 @@ concepts:
         line_range: 1-2
         method: demo_slug + demo_pair fields
       - file: lib/core/services/seed_service.dart
-        line_range: 196-196
+        line_range: 200-200
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/plate_resolver.dart
@@ -15545,10 +15548,10 @@ concepts:
       constant is bumped again. WARNING: the bucket is private; a row's keys are not a public URL.
     writers:
       - file: scripts/add_library_batch_c_v15.js
-        line_range: 198-219
+        line_range: 199-220
         method: applyMedia
       - file: lib/core/services/seed_service.dart
-        line_range: 196-196
+        line_range: 200-200
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_media_resolver.dart
@@ -15634,7 +15637,7 @@ concepts:
         line_range: 1-2
         method: coaching_cues + common_mistakes + breathing_cue + warmup_protocol fields
       - file: lib/core/services/seed_service.dart
-        line_range: 196-196
+        line_range: 200-200
         method: _exerciseLibraryVersion
     readers:
       - file: lib/shared/widgets/exercise_plate/exercise_cues.dart

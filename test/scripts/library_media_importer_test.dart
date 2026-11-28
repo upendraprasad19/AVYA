@@ -26,6 +26,8 @@ const _injRel = 'scripts/data/library_injury_additions_v15.json';
 const _mediaRel = 'scripts/data/library_media_v16.json';
 const _mapRel = 'scripts/data/library_batch_c_media_map.json';
 const _e230Rel = 'scripts/data/library_e230_retag.json';
+const _e027Rel = 'scripts/data/library_e027_retag.json';
+const _e120Rel = 'scripts/data/library_e120_retag.json';
 const _s1Rel = 'scripts/data/library_s1_core_levels.json';
 const _s1b2Rel = 'scripts/data/library_s1b2_suitable_for.json';
 const _s1b3MergesRel = 'scripts/data/library_s1b3_merges.json';
@@ -44,7 +46,7 @@ class _Tree {
     Directory('${dir.path}/scripts/data').createSync(recursive: true);
     Directory('${dir.path}/assets/data').createSync(recursive: true);
     File(script).writeAsStringSync(File(_importer).readAsStringSync());
-    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, coreLevels: _s1Rel, suitableFor: _s1b2Rel, merges: _s1b3MergesRel, injuryTags: _v25InjRel, overlayCopy: _f2CopyRel}.entries) {
+    for (final e in {src: _srcRel, inj: _injRel, media: _mediaRel, lib: _libRel, retag: _e230Rel, retagE027: _e027Rel, retagE120: _e120Rel, coreLevels: _s1Rel, suitableFor: _s1b2Rel, merges: _s1b3MergesRel, injuryTags: _v25InjRel, overlayCopy: _f2CopyRel}.entries) {
       File(e.key).writeAsStringSync(File(e.value).readAsStringSync());
     }
   }
@@ -56,6 +58,8 @@ class _Tree {
   String get inj => '${dir.path}/scripts/data/library_injury_additions_v15.json';
   String get media => '${dir.path}/scripts/data/library_media_v16.json';
   String get retag => '${dir.path}/scripts/data/library_e230_retag.json';
+  String get retagE027 => '${dir.path}/scripts/data/library_e027_retag.json';
+  String get retagE120 => '${dir.path}/scripts/data/library_e120_retag.json';
   String get coreLevels => '${dir.path}/scripts/data/library_s1_core_levels.json';
   String get suitableFor => '${dir.path}/scripts/data/library_s1b2_suitable_for.json';
   String get merges => '${dir.path}/scripts/data/library_s1b3_merges.json';
@@ -487,6 +491,68 @@ void main() {
       expect(t2.exitCode, isNot(0), reason: _out(t2));
       expect(_err(t2), contains('same keys'));
       expect(t.readLibText(), beforeText, reason: 'a refused run must not write');
+    });
+  });
+
+  // Library v30 (OI-443): the stage reads a LIST of records; E027 and E120 joined E230.
+  group('the retag stage (library v30, E027 and E120)', () {
+    setUp(() => File('${t.dir.path}/scripts/data/library_batch_c2_removals.json')
+        .writeAsStringSync(File('scripts/data/library_batch_c2_removals.json').readAsStringSync()));
+
+    Json recordAt(String path) => _readJson(path);
+
+    /// The tree's library with [id]'s recorded keys set back to the record's `before`.
+    String libAtBefore(String id, String recordPath, {void Function(Json row)? edit}) {
+      final lib = t.readLib();
+      final i = lib.indexWhere((r) => r['id'] == id);
+      lib[i] = {...lib[i], ...(recordAt(recordPath)['before'] as Map).cast<String, dynamic>()};
+      edit?.call(lib[i]);
+      return const JsonEncoder.withIndent('  ').convert(lib);
+    }
+
+    for (final (id, rel) in [('E027', _e027Rel), ('E120', _e120Rel)]) {
+      String pathOf() => id == 'E027' ? t.retagE027 : t.retagE120;
+
+      test('$id at before is retagged back to the shipped bytes; a rerun and --check agree', () async {
+        final beforeText = libAtBefore(id, rel);
+        t.writeLibText(beforeText);
+        expect(beforeText, isNot(File(_libRel).readAsStringSync()), reason: 'the fixture really is at before');
+        final check = await t.importer(extra: ['--check']);
+        expect(check.exitCode, isNot(0), reason: 'a fresh import would retag $id: ${_out(check)}');
+        final r = await t.importer();
+        expect(r.exitCode, 0, reason: _out(r));
+        expect(t.readLibText(), File(_libRel).readAsStringSync());
+        final ok = await t.importer(extra: ['--check']);
+        expect(ok.exitCode, 0, reason: _out(ok));
+      });
+
+      test('$id with a foreign value is refused, naming the row and the key, and nothing is written', () async {
+        final foreign = libAtBefore(id, rel, edit: (row) => row['equipment_needed'] = ['cables']);
+        t.writeLibText(foreign);
+        final r = await t.importer();
+        expect(r.exitCode, isNot(0), reason: _out(r));
+        expect(_err(r), allOf(contains(id), contains('equipment_needed')));
+        expect(t.readLibText(), foreign);
+      });
+
+      test('without its record $id stays at before (each list entry is load-bearing)', () async {
+        final beforeText = libAtBefore(id, rel);
+        t.writeLibText(beforeText);
+        File(pathOf()).deleteSync();
+        final r = await t.importer();
+        expect(r.exitCode, 0, reason: _out(r));
+        expect(_out(r), contains('retag stage skipped'));
+        expect(jsonEncode(_byId(t.readLib())[id]!['equipment_needed']), '["barbell"]');
+      });
+    }
+
+    test('two records naming one row are refused and nothing is written', () async {
+      File(t.retagE120).writeAsStringSync(File(t.retagE027).readAsStringSync());
+      final text = t.readLibText();
+      final r = await t.importer();
+      expect(r.exitCode, isNot(0), reason: _out(r));
+      expect(_err(r), allOf(contains('E027'), contains('another retag record')));
+      expect(t.readLibText(), text);
     });
   });
 

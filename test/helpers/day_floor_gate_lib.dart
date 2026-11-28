@@ -321,7 +321,8 @@ class DayFloorGate {
     final file = File(dayFloorFixturePath);
     final fixture = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     expect(fixture[key], {'runs': t.runs, 'sha256': digest},
-        reason: '$key: the floor-off plans no longer equal the world recorded on 421cd2d2 (the kill switch, plan §2 F5)');
+        reason: '$key: the floor-off plans no longer equal the recorded switch-off world (the kill switch, plan §2 F5; '
+            'self-recorded since library v30, last proven equal to 421cd2d2 at seed 29)');
     expect(t.bad, isEmpty);
     expect(t.thinOn, 0);
     expect(t.pinsDiffer, 0);

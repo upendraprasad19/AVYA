@@ -127,6 +127,12 @@
       "equipment_checked": true
     },
     {
+      "id": "E027",
+      "gif": "0606",
+      "equipment_checked": true,
+      "released_by": "founder chat 2026-11-28: 'Accept both' (T-Bar Row is a plate-loaded station; docs/plans/2026-11-28-media-two-new-two-retag.md)"
+    },
+    {
       "id": "E029",
       "gif": "0489",
       "equipment_checked": true
@@ -454,6 +460,12 @@
       "equipment_checked": true
     },
     {
+      "id": "E120",
+      "gif": "0856",
+      "equipment_checked": true,
+      "released_by": "founder chat 2026-11-28: 'Accept both' (Svend Press uses a weight plate, counted as dumbbells; docs/plans/2026-11-28-media-two-new-two-retag.md)"
+    },
+    {
       "id": "E123",
       "gif": "1326",
       "equipment_checked": true
@@ -708,16 +720,8 @@
   ],
   "held": [
     {
-      "id": "E027",
-      "gif": "0606"
-    },
-    {
       "id": "E095",
       "gif": "0592"
-    },
-    {
-      "id": "E120",
-      "gif": "0856"
     },
     {
       "id": "E121",

@@ -105,11 +105,11 @@ void main() {
       expect(tableViolations(table0, map0, lib0), isEmpty);
     });
 
-    test('the table has the G/N shape (621 rows on 620 files: 617 on 616 from M1 plus the four Batch C2b twins) plus the old rows: every file is referenced, all active, nothing held back', () {
+    test('the table has the G/N shape (623 rows on 622 files: 617 on 616 from M1, the four Batch C2b twins and the two library v30 rows) plus the old rows: every file is referenced, all active, nothing held back', () {
       final newRows = rows().keys.where((k) => !oldId.hasMatch(k)).toList();
       final newSlugs = {for (final k in newRows) slugOf(k)};
-      expect(newRows.length, 621, reason: 'the G/N rows: M1 base 617 plus the four Batch C2b twins (G1368 G1489 G2567 G0474)');
-      expect(newSlugs.length, 620);
+      expect(newRows.length, 623, reason: 'the G/N rows: M1 base 617, the four Batch C2b twins (G1368 G1489 G2567 G0474) and library v30 (G0592 G0979)');
+      expect(newSlugs.length, 622);
       expect(files().keys.toSet(), rows().values.toSet(), reason: 'every file is referenced by a row and every row names a file');
       expect(files().values.every((f) => (f as Json)['status'] == 'active'), isTrue);
       final eCount = rows().keys.where(oldId.hasMatch).length;
@@ -520,8 +520,8 @@ void main() {
     });
 
     test('(P3) a held pair whose record entry is gone', () {
-      ((check['held'] as Json)['rows'] as List).remove('E027');
-      expectRule('P3', has: 'held E027');
+      ((check['held'] as Json)['rows'] as List).remove('E095');
+      expectRule('P3', has: 'held E095');
     });
 
     // Batch C2b (OI-462) removed the last five removal-slated rows (E084 E111 E162 E169 E211), so the bucket ends EMPTY and both
@@ -631,14 +631,14 @@ void main() {
       expectRule('P1', has: 'E109');
     });
 
-    // (P7) releasing a held or retag-decided pair needs a recorded decision. E027 is held for a different kit (the picture is
-    // a plate-loaded T-bar station); E230 is the founder's decided retag, released into `entries` by Batch C2c (OI-474) with its
+    // (P7) releasing a held or retag-decided pair needs a recorded decision. E095 is held for a different kit (the picture is a
+    // curl machine; library v30 released E027, the earlier example here); E230 is the founder's decided retag, released into `entries` by Batch C2c (OI-474) with its
     // decision recorded in `released_by` (the input keeps `retag_waits` as an empty list).
     List<String> p7() => violations().where((s) => s.startsWith('(P7)')).toList();
 
     test('(P7) a held pair released into entries with no decision', () {
-      bucket('entries').add(take('held', 'E027')..['equipment_checked'] = true);
-      expectRule('P7', has: 'entry E027');
+      bucket('entries').add(take('held', 'E095')..['equipment_checked'] = true);
+      expectRule('P7', has: 'entry E095');
     });
 
     test('(P7) the decided retag, now in entries, needs its recorded decision: without released_by it is a violation', () {
@@ -654,17 +654,17 @@ void main() {
     });
 
     test('(P7) mirror: the same release WITH a released_by decision is not a P7 violation', () {
-      bucket('entries').add(take('held', 'E027')
+      bucket('entries').add(take('held', 'E095')
         ..['equipment_checked'] = true
         ..['released_by'] = 'founder 2026-11-02: accept the picture and retag');
       expect(p7(), isEmpty);
     });
 
     test('(P7) mirror: a blank released_by is no decision', () {
-      bucket('entries').add(take('held', 'E027')
+      bucket('entries').add(take('held', 'E095')
         ..['equipment_checked'] = true
         ..['released_by'] = '  ');
-      expectRule('P7', has: 'entry E027');
+      expectRule('P7', has: 'entry E095');
     });
 
     test('(P7) mirror: an ordinary entry needs no released_by', () {

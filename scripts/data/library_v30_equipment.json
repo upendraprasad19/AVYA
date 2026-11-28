@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "batch": "library v30, OI-443",
+    "plan": "docs/plans/2026-11-28-media-two-new-two-retag.md",
+    "note": "Kept-row record for the cloud seed generator: the equipment_needed cloud column of E027 T-Bar Row and E120 Svend Press. `before` (read by node from the pre-v30 library) is what migration 183 gave them; the inline rollback restores it. The library is written by the importer from the two retag records."
+  },
+  "rows": [
+    {
+      "id": "E027",
+      "before": [
+        "barbell"
+      ],
+      "after": [
+        "machines"
+      ]
+    },
+    {
+      "id": "E120",
+      "before": [
+        "barbell"
+      ],
+      "after": [
+        "dumbbells"
+      ]
+    }
+  ]
+}

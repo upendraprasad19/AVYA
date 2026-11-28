@@ -47,6 +47,13 @@ const _namesGlob = 'scripts/data/library_s1b3_name_aliases.json';
 const _overlayCopyGlob = 'scripts/data/library_overlay_copy_v27.json';
 const _f2PatternGlob = 'scripts/data/library_f2_movement_pattern.json';
 const _lungeAliasGlob = 'scripts/data/library_v28_lunge_alias.json';
+// Library v30 (OI-443): the E027 / E120 retag records and the two cloud records of the seed migration.
+const _v30Globs = [
+  'scripts/data/library_e027_retag.json',
+  'scripts/data/library_e120_retag.json',
+  'scripts/data/library_v30_equipment.json',
+  'scripts/data/library_v30_t_bar_cues.json',
+];
 const _assetsGlob = 'assets/**';
 const _scriptsGlob = 'scripts/**';
 
@@ -170,6 +177,21 @@ void main() {
       expect(tier('scripts/add_library_batch_c_v15.js'), 'feature');
       expect(tier('scripts/data/library_e230_retag_other.json'), 'feature');
     });
+  });
+
+  group('1d2. the library v30 records', () {
+    for (final glob in _v30Globs) {
+      test('$glob is account by its own rule above scripts/**, in both engines', () {
+        expect(File(glob).existsSync(), isTrue, reason: 'positive control');
+        expect(tier(glob), 'account');
+        expect(ruleFor(glob)?.glob, glob);
+        int index(String g) => reg.rules.indexWhere((r) => r.glob == g);
+        expect(index(glob), lessThan(index(_scriptsGlob)));
+        final rule = reviewGate.parseRules(yaml).firstWhere((r) => reviewGate.globToRegExp(r.glob).hasMatch(glob));
+        expect(rule.tier, 'account');
+        expect(tier(glob.replaceFirst('.json', '_other.json')), 'feature', reason: 'mirror: a look-alike stays feature');
+      });
+    }
   });
 
   group('1e. the S1a core-levels record', () {

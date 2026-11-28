@@ -73,8 +73,10 @@ const _identicalLive = {
 /// Maintain rows at 30 / 45 minutes; every count above is unchanged except the focus block's main lifts, 29,012 -> 29,010),
 /// and on 421cd2d2 for generator-killswitch-3a3c (the finisher built unreserved through `CardioFinisher.debugReserve`
 /// instead of the deleted 3C key: only the `finisher` maps moved, every count above unchanged; plan §6).
-const _onDigest = '07aa902ae3b6a0265f919cab0b3447451bfdb7ed2db8b5d71ed4668b6c12a309';
-const _focusDigest = '56672a99b205ccc1e8d936db7b5116cd96c686f60b04af9620979aec96bd20a8';
+/// Library v30 (OI-443, 2026-11-28; library data only, no plan-engine code change): both digests re-recorded (were 07aa902a... and 56672a99...), week-1 mains
+/// at a range bound 3601 -> 3591, and the 88 build / strength hashes in the baseline whose plans moved.
+const _onDigest = '0c59a6830288b32e83b987f6fea67a14ab759fb4343b568608895abe3ca4bf79';
+const _focusDigest = '9ced009106fd9acb4dddeb37f35656f94ccd121c01b41e6bfaa0743f8d92857b';
 const _baselinePath = 'test/fixtures/goal_training_gate_baseline.json';
 
 /// The goal's week-1 main-lift table, restated from the plan (§2) in the oracle's own words: Cut intermediate /
@@ -307,7 +309,7 @@ void main() {
     expect(identical(on), _identicalAccepted, reason: 'd63');
     expect(repMiss, isEmpty);
     // Measured 2026-11-15: week-1 main lifts, those at a range bound (d58), accessories (Cut and Maintain).
-    expect((mains, mainsAtBound, accessories), (14547, 3601, 12360));
+    expect((mains, mainsAtBound, accessories), (14547, 3591, 12360));
     expect(zeros, isEmpty);
     expect(maxOver(on), lessThanOrEqualTo(offMaxOver));
     expect(onDigest, _onDigest);

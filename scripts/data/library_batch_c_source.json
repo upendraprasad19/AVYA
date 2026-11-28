@@ -6243,9 +6243,25 @@
           "advanced"
         ],
         "confidence": "high"
+      },
+      "G0592": {
+        "name": "Machine Preacher Curl",
+        "equipment_needed": [
+          "machines"
+        ],
+        "core_levels": [],
+        "confidence": "high"
+      },
+      "G0979": {
+        "name": "Band Pallof Press",
+        "equipment_needed": [
+          "resistance band"
+        ],
+        "core_levels": [],
+        "confidence": "high"
       }
     },
-    "inputs_sha256": "a00d2d3fdad7f20195a2473cc82fa4c8a45b78e75b56f2be04c0ebb5d62ca290",
+    "inputs_sha256": "dc5cac416099ef3ff641dd5e9142b5de62b4734c4df40f28c4d0dbc610a0f22b",
     "alias_applied": {
       "G0844": [
         "weight plate"
@@ -6748,6 +6764,10 @@
       "G0474": {
         "seen": "Whole animation read (gif 0474, 12 frames): a man hangs from a bar with straight legs, raises the straight legs until the feet reach the bar with the torso curled and abs lit, then lowers. The folder says Hip Raise, but the picture shows the feet at the bar: toes to bar. Name and cues agree; the row stays Toes to Bar.",
         "action": "unchanged"
+      },
+      "G0979": {
+        "seen": "Standing side on, both hands pressing straight forward at chest height on a single cord from one side, core lit. The folder calls it a band horizontal Pallof press; the row drops the word Horizontal.",
+        "action": "unchanged"
       }
     },
     "identity_checked": {
@@ -6874,19 +6894,19 @@
       "G3012": "Scapula dip is a scapular depression drill, not a pressing dip, so it does not share the dip family pressing pattern."
     },
     "derived": {
-      "rows": 717,
+      "rows": 719,
       "held": {
         "token": 13,
         "name_collision": 0,
         "low_confidence": 53,
         "picture": 9
       },
-      "shipped": 642,
+      "shipped": 644,
       "core": {
         "beginner": 62,
-        "intermediate": 64,
-        "advanced": 54,
-        "rows": 100
+        "intermediate": 65,
+        "advanced": 55,
+        "rows": 101
       }
     }
   },
@@ -49277,7 +49297,11 @@
       "indian_alternative": "",
       "variant_family": "row",
       "discipline": "strength",
-      "core_levels": [],
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "same_movement_as": "E027",
       "skill_track": null,
       "skill_step": null,
       "regression_to": null,
@@ -57520,6 +57544,145 @@
       "note": "Loaded version of E059 Russian Twist (OI-148, approved 2026-11-08). Feet stay down: Legs Up Weighted Russian Twist (G0845) is a different variant. No art yet.",
       "changes": {},
       "same_movement_as": "E059"
+    },
+    {
+      "id": "G0592",
+      "name": "Machine Preacher Curl",
+      "category": "pull",
+      "movement_pattern": [
+        "elbow_flexion"
+      ],
+      "exercise_type": [
+        "isolation"
+      ],
+      "primary_muscles": [
+        "Biceps"
+      ],
+      "secondary_muscles": [
+        "Brachialis",
+        "Forearms"
+      ],
+      "target_focus": [
+        "Biceps (Short Head)"
+      ],
+      "equipment_needed": [
+        "machines"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "intermediate",
+      "suitable_for": [
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 3,
+      "default_reps": "10-12",
+      "rep_range": "10-12",
+      "default_rest_secs": 60,
+      "tempo": "2-1-2-0",
+      "met_value": 3.5,
+      "cns_demand": 1,
+      "is_bilateral": true,
+      "injury_contraindications": [
+        "elbow"
+      ],
+      "is_foundational": false,
+      "priority_tier": 3,
+      "breathing_cue": "Exhale curling up, inhale lowering",
+      "coaching_cues": [
+        "Set the seat so your upper arms rest flat on the pad",
+        "Hold the handles with your palms up",
+        "Curl without lifting your elbows",
+        "Lower slowly, stopping just before your arms are fully straight"
+      ],
+      "common_mistakes": [
+        "Lifting your elbows",
+        "Dropping the weight and snapping your elbows straight",
+        "Shrugging because the seat is poorly adjusted"
+      ],
+      "pro_tip": "Stop just short of lockout to spare the elbow tendon.",
+      "indian_alternative": "",
+      "variant_family": "preacher_curl",
+      "discipline": "strength",
+      "core_levels": [],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "well_equipped_gym",
+      "confidence": "high",
+      "note": "Seated on a curl machine, both hands on the handles, upper arms on the pad.",
+      "changes": {}
+    },
+    {
+      "id": "G0979",
+      "name": "Band Pallof Press",
+      "category": "core",
+      "movement_pattern": [
+        "core"
+      ],
+      "exercise_type": [
+        "isolation"
+      ],
+      "primary_muscles": [
+        "Core",
+        "Obliques"
+      ],
+      "secondary_muscles": [
+        "Front Delts"
+      ],
+      "target_focus": [
+        "Core/Obliques"
+      ],
+      "equipment_needed": [
+        "resistance band"
+      ],
+      "logging_type": "weight_reps",
+      "difficulty_level": "beginner",
+      "suitable_for": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ],
+      "default_sets": 3,
+      "default_reps": "10-12 each side",
+      "rep_range": "10-12",
+      "default_rest_secs": 60,
+      "tempo": "2-1-2-0",
+      "met_value": 3.5,
+      "cns_demand": 1,
+      "is_bilateral": false,
+      "injury_contraindications": [],
+      "is_foundational": false,
+      "priority_tier": 3,
+      "breathing_cue": "Exhale pressing out",
+      "coaching_cues": [
+        "Stand sideways to the anchor with the band at chest height",
+        "Brace your core",
+        "Press straight forward without turning",
+        "Pause for one second, return slowly, and repeat on both sides"
+      ],
+      "common_mistakes": [
+        "Twisting toward the anchor",
+        "Leaning away",
+        "Shrugging or rushing"
+      ],
+      "pro_tip": "Step further from the anchor for more tension.",
+      "indian_alternative": "",
+      "variant_family": "anti_rotation",
+      "discipline": "strength",
+      "core_levels": [],
+      "skill_track": null,
+      "skill_step": null,
+      "regression_to": null,
+      "progression_to": null,
+      "requires_coaching": false,
+      "high_impact": false,
+      "gym_availability": "home",
+      "confidence": "high",
+      "note": "Standing side on to the anchor, hands pressing forward at chest height.",
+      "changes": {}
     }
   ]
 }
