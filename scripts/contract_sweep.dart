@@ -21,14 +21,19 @@
 
 import 'dart:io';
 import 'contract_sweep_lib.dart';
+import 'regression_catalog_lib.dart' show applySuiteZone;
 
 const _tag = '[contract-sweep]';
 const _defaultRange = 'origin/main...HEAD';
 
-Map<String, String> _spawnEnv() => Map<String, String>.from(Platform.environment)
-  ..removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'))
-  ..['TZ'] = 'Asia/Kolkata'
-  ..['CONTRACT_SWEEP_NESTED'] = '1';
+Map<String, String> _spawnEnv() {
+  final env = Map<String, String>.from(Platform.environment)
+    ..removeWhere((k, _) => k.toUpperCase().startsWith('GIT_'))
+    ..['CONTRACT_SWEEP_NESTED'] = '1';
+  // India time off Windows; the machine's own zone on Windows (diagnose d0b7e4).
+  applySuiteZone(env, isWindows: Platform.isWindows);
+  return env;
+}
 
 String? _arg(List<String> args, String flag) {
   final i = args.indexOf(flag);

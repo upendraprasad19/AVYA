@@ -10,6 +10,8 @@
 // with no `main()` would be swept into that loop and fail as a bogus gate.
 // See test/scripts/regression_catalog_lib_test.dart.
 
+import 'dart:io' show Platform;
+
 /// Extracts every distinct test-file path referenced by an INDEX.md row
 /// dated on/after [cutoff].
 ///
@@ -203,12 +205,31 @@ Map<String, String> scrubbedChildEnvironment(Map<String, String> parent) {
   return env;
 }
 
-/// The zone the catalog's `flutter test` child runs in. CI pins `TZ: Asia/Kolkata` at
+/// The zone a gate's `flutter test` child runs in, off Windows. CI pins `TZ: Asia/Kolkata` at
 /// workflow level and pre-push pins it for its own suite; this is the same zone.
 const String catalogTestTimeZone = 'Asia/Kolkata';
 
+/// Sets the zone of a gate's `flutter test` child in [env] (the catalog walk below and
+/// `scripts/contract_sweep.dart`).
+///
+/// Off Windows: `TZ` is pinned to [catalogTestTimeZone] (OI-459).
+///
+/// On Windows: every spelling of `TZ` is REMOVED and the child runs in the machine's own
+/// zone (diagnose d0b7e4). The C runtime Dart uses there cannot read an IANA name:
+/// measured 2026-11-28 on an India-time machine, no `TZ` gave a +330 minute offset and
+/// `TZ=Asia/Kolkata` gave 0, so the pin ran the tests in UTC and failed date tests on a
+/// clean tree. A Windows machine that is not on India time runs them in its own zone.
+void applySuiteZone(Map<String, String> env, {required bool isWindows}) {
+  if (isWindows) {
+    env.removeWhere((k, _) => k.toUpperCase() == 'TZ');
+  } else {
+    env['TZ'] = catalogTestTimeZone;
+  }
+}
+
 /// The environment for the catalog walk's `flutter test` child: the canonical scrub
-/// ([scrubbedChildEnvironment]) PLUS `TZ` pinned to [catalogTestTimeZone] (OI-459).
+/// ([scrubbedChildEnvironment]) PLUS the zone rule of [applySuiteZone]. [isWindows]
+/// defaults to this machine; tests pass it so both branches run on every platform.
 ///
 /// Why the pin lives HERE and not in `safe_commit.sh` / `land_pr.sh`: the walk runs from
 /// the pre-commit hook on a merge commit, and the hook fires for EVERY way of making one
@@ -221,9 +242,9 @@ const String catalogTestTimeZone = 'Asia/Kolkata';
 /// landing failed 6 tests that way; the same files passed under `TZ=Asia/Kolkata`).
 /// [scrubbedChildEnvironment] itself must keep passing `TZ` through unchanged: other
 /// callers (git_safety_hook_integration_test, test/helpers/spawn.dart) share it.
-Map<String, String> catalogChildEnvironment(Map<String, String> parent) {
+Map<String, String> catalogChildEnvironment(Map<String, String> parent, {bool? isWindows}) {
   final env = scrubbedChildEnvironment(parent);
-  env['TZ'] = catalogTestTimeZone;
+  applySuiteZone(env, isWindows: isWindows ?? Platform.isWindows);
   return env;
 }
 

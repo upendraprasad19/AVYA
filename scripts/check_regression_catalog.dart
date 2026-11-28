@@ -77,8 +77,8 @@ void main() async {
       // `workingDirectory:` and `-C <path>`, so any test building its own git repo
       // gets pointed at the REAL repo — mid-merge — and fails on unrelated state.
       // See scrubbedChildEnvironment's doc comment for the measured evidence.
-      // catalogChildEnvironment = that scrub + TZ pinned to Asia/Kolkata (OI-459): the VPS is
-      // UTC and the suite's date-boundary tests assume IST.
+      // catalogChildEnvironment = that scrub + the zone rule: TZ pinned to Asia/Kolkata off
+      // Windows (OI-459, the VPS is UTC), no TZ at all on Windows (d0b7e4, a pin reads as UTC).
       environment: catalogChildEnvironment(Platform.environment),
       includeParentEnvironment: false,
       // Windows: Dart's Process.run cannot resolve `flutter.bat` without a shell,

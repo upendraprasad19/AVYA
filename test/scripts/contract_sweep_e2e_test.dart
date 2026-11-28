@@ -18,7 +18,7 @@
 // includeParentEnvironment: false, and reports each child's exit code, stdout and
 // stderr under a failing test. Run inside a git hook, a leaked GIT_DIR overrides
 // `workingDirectory:` and would point the fixture's `git branch -D` at the REAL repo
-// (feedback_mistake_git_hook_env_leak). The sweep (scripts/contract_sweep.dart:31)
+// (feedback_mistake_git_hook_env_leak). The sweep (scripts/contract_sweep.dart)
 // sets CONTRACT_SWEEP_NESTED=1 on the `flutter test` it spawns and selects THIS file
 // whenever a push changes docs/sot_registry.yaml, so an unscrubbed child inherited the
 // recursion guard and the runner under test skipped: 5 of 7 tests failed (class 2.56,
@@ -54,7 +54,8 @@ class _Repo {
   late String record; // where the stub writes its argv
 }
 
-/// Stub `flutter`: records its argv and exits with SWEEP_STUB_EXIT.
+/// Stub `flutter`: records its argv (and, in `<record>.tz`, the `TZ` it was handed, as
+/// `[value]`, empty brackets when unset) and exits with SWEEP_STUB_EXIT.
 /// Windows -> flutter.bat (cmd.exe cannot run an extensionless POSIX stub);
 /// elsewhere -> a chmod +x sh script.
 String _writeStub(String dir) {
@@ -62,12 +63,14 @@ String _writeStub(String dir) {
     final f = File('$dir/flutter.bat')
       ..writeAsStringSync('@echo off\r\n'
           'echo %* > "%SWEEP_RECORD%"\r\n'
+          'echo [%TZ%]> "%SWEEP_RECORD%.tz"\r\n'
           'exit /b %SWEEP_STUB_EXIT%\r\n');
     return f.path;
   }
   final f = File('$dir/flutter')
     ..writeAsStringSync('#!/bin/sh\n'
         'echo "\$@" > "\$SWEEP_RECORD"\n'
+        'echo "[\$TZ]" > "\$SWEEP_RECORD.tz"\n'
         'exit "\$SWEEP_STUB_EXIT"\n');
   runSpawn('chmod', ['+x', f.path], why: 'sweep fixture: chmod +x the stub flutter');
   return f.path;
@@ -166,6 +169,23 @@ concepts:
     expect(argv, contains('test/contracts/a_registry_test.dart'));
     expect(argv, contains('--exclude-tags golden'));
     expect(res.stdout, contains('unmapped lib/lonely.dart'));
+  });
+  // The zone the sweep hands its `flutter test` child, observed through the real spawn
+  // (d0b7e4, OI-268). On Windows a TZ naming Asia/Kolkata reads as UTC in Dart, so the
+  // child must get none; elsewhere it is pinned. What a Dart child with no TZ reads is
+  // covered in regression_catalog_lib_test.dart.
+  test('the flutter child gets India time off Windows and no TZ on Windows, whatever the parent had', () {
+    for (final parentTz in <String>['UTC', 'Asia/Kolkata']) {
+      final res = run([], parent: {
+        for (final e in Platform.environment.entries)
+          if (e.key.toUpperCase() != 'TZ') e.key: e.value,
+        'TZ': parentTz,
+      });
+      expect(res.exitCode, 0, reason: '${res.stdout}${res.stderr}');
+      expect(File('${r.record}.tz').readAsStringSync().trim(),
+          Platform.isWindows ? '[]' : '[Asia/Kolkata]',
+          reason: 'parent TZ: $parentTz');
+    }
   });
   test('RED PATH: a failing flutter run fails the sweep', () {
     final res = run([], stubExit: '1');
