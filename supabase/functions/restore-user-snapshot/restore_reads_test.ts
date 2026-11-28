@@ -21,6 +21,8 @@ import { createPageBudget, PAGED_READ_NAMES, TOTAL_PAGE_BUDGET } from "./paged_r
 import {
   assembleTables,
   DEFAULT_READ_CONCURRENCY,
+  DERIVED_PLAN_READ,
+  deriveWorkoutPlan,
   parseReadConcurrency,
   READS,
   runLimited,
@@ -244,4 +246,79 @@ Deno.test("parseReadConcurrency: the clamp table", () => {
   ];
   for (const [raw, want] of table) assertEquals(parseReadConcurrency(raw), want, String(raw));
   assertEquals(DEFAULT_READ_CONCURRENCY, 3);
+});
+
+// ── OI-530 Landing A: the plan bundle is read once (docs/plans/oi530-landing-a-one-plan-read.md) ──
+// Every test above runs the DEFAULT `singlePlanRead: false` (the pre-Landing-A code, which index.ts
+// still runs when RESTORE_SINGLE_PLAN_READ_OFF is "true"): those goldens ARE the rollback mode.
+
+async function assembleSingle(limit: number, latency?: Record<string, number>) {
+  const db = makeFakeDb(restoreDataset(), { latency });
+  const lines: string[] = [];
+  const out = await assembleTables(db, ME, createPageBudget(), limit, {
+    authMs: 12.4,
+    requestId: "req1",
+    log: (l) => lines.push(l),
+    singlePlanRead: true,
+  });
+  return { ...out, db, lines };
+}
+
+// What the live PostgREST answers for the skipped read, from the golden's user_progress row (the
+// fake ignores projections, so the golden's own `workout_plan` slot carries the whole row).
+function expectedSingleTables(): Record<string, unknown> {
+  const t = structuredClone(golden.tables) as Record<string, unknown>;
+  const row = (t.user_progress as Record<string, unknown>[])[0];
+  const planJson = row.plan_json;
+  delete row.plan_json;
+  t.workout_plan = [{ plan_json: planJson }];
+  return t;
+}
+
+for (const limit of [1, 3]) {
+  Deno.test(`Landing A limit=${limit}: the bundle is the golden with exactly two changes, in the golden's key order`, async () => {
+    const { tables } = await assembleSingle(limit, skewedLatency());
+    assertEquals(JSON.stringify(tables), JSON.stringify(expectedSingleTables()));
+    assertEquals(Object.keys(tables), Object.keys(golden.tables));
+  });
+
+  Deno.test(`Landing A limit=${limit}: the requests are the golden's minus the one select("plan_json") chain`, async () => {
+    const { db } = await assembleSingle(limit, skewedLatency());
+    const expected = structuredClone(golden.calls);
+    const planChain = expected.user_progress.findIndex((c) => c.includes('["select","plan_json"]'));
+    assert(planChain >= 0, "the golden must carry the plan_json chain this landing removes");
+    expected.user_progress.splice(planChain, 1);
+    assertEquals(canonicalCalls(db.calls), expected);
+  });
+}
+
+Deno.test("Landing A: the freezes projection still carries its own row, untouched by the strip", async () => {
+  const { tables } = await assembleSingle(3);
+  assertEquals(JSON.stringify(tables.freezes), JSON.stringify(golden.tables.freezes));
+});
+
+Deno.test("Landing A: the timing line has no workout_plan_ms (no request was made)", async () => {
+  const { lines } = await assembleSingle(3);
+  const names = [...lines[0].matchAll(/ ([a-z_]+)_ms=\d+/g)].map((m) => m[1]).filter((n) => n !== "auth" && n !== "reads");
+  assertEquals(names, READS.map(([n]) => n).filter((n) => n !== DERIVED_PLAN_READ));
+});
+
+Deno.test("deriveWorkoutPlan: the live shapes of select(plan_json).limit(1), and no input mutated", () => {
+  const cases: [unknown, unknown, unknown][] = [
+    // [user_progress in, workout_plan out, user_progress out]
+    [[], [], []],
+    [undefined, [], undefined],
+    [[{ user_id: "u", plan_json: null }], [{ plan_json: null }], [{ user_id: "u" }]],
+    [[{ user_id: "u" }], [{ plan_json: null }], [{ user_id: "u" }]],
+    [[{ user_id: "u", plan_json: { a: 1 }, x: 2 }], [{ plan_json: { a: 1 } }], [{ user_id: "u", x: 2 }]],
+  ];
+  for (const [up, wp, upOut] of cases) {
+    const input: Record<string, unknown> = { a: 1, user_progress: up, workout_plan: null, z: 2 };
+    const before = JSON.stringify(input);
+    const out = deriveWorkoutPlan(input);
+    assertEquals(JSON.stringify(input), before, "input must not be mutated");
+    assertEquals(out.workout_plan, wp);
+    assertEquals(out.user_progress, upOut);
+    assertEquals(Object.keys(out), ["a", "user_progress", "workout_plan", "z"]);
+  }
 });

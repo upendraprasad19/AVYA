@@ -1718,7 +1718,11 @@ class SyncService {
   /// day-swapper + sync-load Task 20 kill switch: `true` reverts
   /// [restoreLightweightAlways] to today's verbatim two-fetch path (each of
   /// _restoreUserProgress / _restoreWorkoutPlan does its own network
-  /// `user_progress` read) — CLAUDE.md §4.6, old path reachable.
+  /// `user_progress` read) — CLAUDE.md §4.6, old path reachable. OI-530
+  /// Landing A (docs/plans/oi530-landing-a-one-plan-read.md): the same switch,
+  /// with the same meaning, also reverts the two legacy full-restore paths
+  /// ([restoreFromCloud], [restoreFromCloudForUser] step A); each reads it once
+  /// per call.
   @visibleForTesting
   static const String kDisableRestoreSinglePlanFetchKey =
       'disable_restore_single_plan_fetch';
@@ -1811,6 +1815,45 @@ class SyncService {
         await _reportSyncFailure(opType: 'restore_lightweight_always', error: e);
       } catch (_) {}
     }
+  }
+
+  /// OI-530 Landing A (docs/plans/oi530-landing-a-one-plan-read.md): the
+  /// `workout_plan` and `user_progress` restore ops of the two LEGACY full
+  /// restores ([restoreFromCloud], [restoreFromCloudForUser] step A), as thunks
+  /// the caller hands to [_safeRestoreOp] at the same points as before. They
+  /// share ONE `user_progress` read (the row carries the whole `plan_json`
+  /// bundle, often 0.3-1 MB), started by whichever thunk runs first. Unlike
+  /// [_fetchUserProgressRowForRestore] the read is STRICT: a failure fails BOTH
+  /// ops through [_safeRestoreOp] (`restore_workout_plan` +
+  /// `restore_user_progress`, both streak-critical), so the restore-settled
+  /// marker stays closed exactly as when each op's own read failed. With
+  /// [kDisableRestoreSinglePlanFetchKey] (read once per call) each thunk runs
+  /// today's own-read op verbatim.
+  ({Future<void> Function() plan, Future<void> Function() progress})
+      _legacyPlanAndProgressRestores(String userId) {
+    if (_restoreSinglePlanFetchDisabled) {
+      return (
+        plan: () => _restoreWorkoutPlan(userId),
+        progress: () => _restoreUserProgress(userId),
+      );
+    }
+    // A PostgREST builder sends a NEW request every time it is awaited or
+    // `.then`-ed, so the builder itself must never be cached: the async
+    // closure turns it into one real Future, awaited by both thunks.
+    Future<List>? shared;
+    Future<List> rows() => shared ??= () async {
+          return await _supabase.client
+              .from('user_progress')
+              .select()
+              .eq('user_id', userId)
+              .limit(1);
+        }();
+    return (
+      plan: () =>
+          rows().then((r) => _restoreWorkoutPlan(userId, preFetched: r)),
+      progress: () =>
+          rows().then((r) => _restoreUserProgress(userId, preFetched: r)),
+    );
   }
 
   /// The ONE `user_progress` select [restoreLightweightAlways] shares
@@ -1940,7 +1983,9 @@ class SyncService {
       // _restoreScheduledWorkouts so cloud-authoritative status='completed'
       // is the LAST writer to schedule_<date> keys. See
       // restoreFromCloudForUser for the full rationale.
-      await _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId));
+      // OI-530 Landing A: workout_plan and user_progress share one read.
+      final planAndProgress = _legacyPlanAndProgressRestores(userId);
+      await _safeRestoreOp('workout_plan', planAndProgress.plan());
 
       await Future.wait(
         [
@@ -1955,7 +2000,7 @@ class SyncService {
               ceiling: _nutritionRestoreCeiling),
           _safeRestoreOp('measurements', _restoreMeasurements(userId, since)),
           _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
-          _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+          _safeRestoreOp('user_progress', planAndProgress.progress()),
           _safeRestoreOp('water_logs', _restoreWaterLogs(userId, since)),
           _safeRestoreOp('sleep_logs', _restoreSleepLogs(userId, since)),
           _safeRestoreOp('readiness_daily', _restoreReadiness(userId, since)), // ⑥ 6-C
@@ -2237,10 +2282,12 @@ class SyncService {
       if (restoreAbortedFor(userId)) return RestoreResult.cancelled();
       restoreProgressLabel.value = 'Loading profile & plan';
       final swA = Stopwatch()..start();
+      // OI-530 Landing A: workout_plan and user_progress share one read.
+      final planAndProgress = _legacyPlanAndProgressRestores(userId);
       await Future.wait(
         [
           _safeRestoreOp('user_profile', _restoreUserProfile(userId)),
-          _safeRestoreOp('user_progress', _restoreUserProgress(userId)),
+          _safeRestoreOp('user_progress', planAndProgress.progress()),
           _safeRestoreOp('custom_exercises', _restoreCustomExercises(userId)),
           _safeRestoreOp('custom_foods', _restoreCustomFoods(userId)),
           _safeRestoreOp('workout_templates', _restoreWorkoutTemplates(userId)),
@@ -2254,7 +2301,7 @@ class SyncService {
           // race it clobbered the completed status with stale 'planned'.
           // Sequential ordering (A before B) guarantees the live table
           // is the LAST writer and therefore wins.
-          _safeRestoreOp('workout_plan', _restoreWorkoutPlan(userId)),
+          _safeRestoreOp('workout_plan', planAndProgress.plan()),
         ],
         eagerError: false,
       );

@@ -136,9 +136,12 @@ serve(async (req: Request) => {
     // (paged_reads.ts: TOTAL_PAGE_BUDGET, charged per page).
     const budget = createPageBudget();
     const limit = parseReadConcurrency(Deno.env.get("RESTORE_READ_CONCURRENCY"));
+    // OI-530 Landing A: the plan bundle is read once (from the user_progress row) unless the
+    // rollback secret RESTORE_SINGLE_PLAN_READ_OFF is exactly "true" (read per request).
     const { tables } = await assembleTables(db, vUid, budget, limit, {
       authMs: performance.now() - authStarted,
       requestId,
+      singlePlanRead: Deno.env.get("RESTORE_SINGLE_PLAN_READ_OFF") !== "true",
     });
 
     // Table names and row COUNTS only (never a row value): the live behaviour of the paged reads
