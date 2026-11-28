@@ -166,7 +166,7 @@ void main() {
       expect(paywall, findsNothing);
     });
 
-    testWidgets('tapping GO PRO opens the paywall with the Unlimited Progress '
+    testWidgets('tapping GO PRO opens the paywall with the No-Limit Progress '
         'Photos letterhead', (tester) async {
       PurchaseMode.debugOverrideForTests = PurchaseMode.razorpay;
       await tapAddWithUsedSlot(tester);

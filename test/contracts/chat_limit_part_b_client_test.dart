@@ -235,6 +235,8 @@ void main() {
 
     test('no user-visible "Unlimited" on the paywall surfaces', () {
       for (final path in [
+        // Holds the progress-photo paywall label and subtitle.
+        'lib/core/copy/progress_photo_copy.dart',
         'lib/shared/widgets/paywall_sheet.dart',
         'lib/shared/widgets/paywall_sheet_phase_variant.dart',
         'lib/features/ai_coach/screens/ai_coach/input_bar.dart',
