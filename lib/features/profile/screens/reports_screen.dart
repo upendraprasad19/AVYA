@@ -31,6 +31,89 @@ import 'package:icanbefitter/shared/widgets/empty_state.dart';
 import '../providers/profile_provider.dart';
 import '../services/weekly_report_refresh_policy.dart';
 
+/// Whether the Weight Trend card draws the date label at position [idx] (the last
+/// position is [last]; [interval] is the label step). The chart library adds a
+/// label at the LAST point on top of the every-step ones, so a step label closer
+/// than one full step to it is skipped: the newest date wins. A half-step rule
+/// still overlapped with 10, 12, 19 or 28 weigh-ins on a 360 dp phone.
+@visibleForTesting
+bool weightTrendKeepsDateLabel(int idx, int last, double interval) =>
+    idx == last || last - idx >= interval;
+
+/// Whether the Weight Trend card draws the weight label at [value]. Ticks
+/// (multiples of [step]) are always drawn. The chart library also labels the
+/// axis [min] and [max]: such an end label is skipped only when a drawn tick is
+/// within half a step of it, where the two crowd or print the same rounded text
+/// ("74" twice). Elsewhere it stays, or the axis can show a single number.
+@visibleForTesting
+bool weightTrendKeepsWeightLabel(
+    double value, double min, double max, double step) {
+  const eps = 1e-6;
+  final rem = value % step;
+  if (rem <= eps || step - rem <= eps) return true;
+  final below = (value / step).floorToDouble() * step;
+  for (final tick in [below, below + step]) {
+    final drawn = tick >= min - eps && tick <= max + eps;
+    if (drawn && (value - tick).abs() <= step / 2 + eps) return false;
+  }
+  return true;
+}
+
+/// The Weight Trend card's axis labels (extracted so a test can render them).
+@visibleForTesting
+FlTitlesData weightTrendTitlesData(List<Map<String, dynamic>> entries) {
+  final dates = <int, String>{
+    for (var i = 0; i < entries.length; i++) i: entries[i]['date'] as String? ?? '',
+  };
+  final xInterval = (entries.length / 5).clamp(1, 100).roundToDouble();
+  final last = entries.length - 1;
+  return FlTitlesData(
+    leftTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 40,
+        getTitlesWidget: (value, meta) {
+          final step = meta.appliedInterval;
+          if (!weightTrendKeepsWeightLabel(value, meta.min, meta.max, step)) {
+            return const SizedBox();
+          }
+          return Text(
+            // A step under 1 kg would print the same whole number on two ticks.
+            value.toStringAsFixed(step >= 1 ? 0 : 1),
+            style: AppTypography.monoXs.copyWith(color: AppColors.textDim),
+          );
+        },
+      ),
+    ),
+    bottomTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 22,
+        interval: xInterval,
+        getTitlesWidget: (value, meta) {
+          final idx = value.toInt();
+          if (idx < 0 || idx >= entries.length) return const SizedBox();
+          if (!weightTrendKeepsDateLabel(idx, last, xInterval)) {
+            return const SizedBox();
+          }
+          final d = dates[idx] ?? '';
+          // Show abbreviated date: "3/12" or "12 Mar"
+          final parts = d.split('-');
+          if (parts.length == 3) {
+            return Text(
+              '${int.tryParse(parts[2]) ?? ""}/${int.tryParse(parts[1]) ?? ""}',
+              style: AppTypography.monoXs.copyWith(fontSize: 8, color: AppColors.textDim),
+            );
+          }
+          return const SizedBox();
+        },
+      ),
+    ),
+    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+  );
+}
+
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -791,43 +874,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             strokeWidth: 0.5,
           ),
         ),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 40,
-              getTitlesWidget: (value, meta) {
-                return Text(
-                  value.toStringAsFixed(0),
-                  style: AppTypography.monoXs.copyWith(color: AppColors.textDim),
-                );
-              },
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 22,
-              interval: (entries.length / 5).clamp(1, 100).roundToDouble(),
-              getTitlesWidget: (value, meta) {
-                final idx = value.toInt();
-                if (idx < 0 || idx >= entries.length) return const SizedBox();
-                final d = dates[idx] ?? '';
-                // Show abbreviated date: "3/12" or "12 Mar"
-                final parts = d.split('-');
-                if (parts.length == 3) {
-                  return Text(
-                    '${int.tryParse(parts[2]) ?? ""}/${int.tryParse(parts[1]) ?? ""}',
-                    style: AppTypography.monoXs.copyWith(fontSize: 8, color: AppColors.textDim),
-                  );
-                }
-                return const SizedBox();
-              },
-            ),
-          ),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
+        titlesData: weightTrendTitlesData(entries),
         borderData: FlBorderData(show: false),
         minY: minY,
         maxY: maxY,

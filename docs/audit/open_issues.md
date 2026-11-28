@@ -5943,6 +5943,8 @@ Past `user_daily_snapshots` stay (nothing reads a past day's `coach_notices`). D
 
 **Done when.** `_findSubstitute` skips any candidate whose `injury_contraindications` contains a canonical token for the injury (`InjuryVocab.normalize` of the body part, with the muscle test kept as a second filter). A behavioural test builds a library where the first muscle-safe candidate is tagged for the injury and asserts the planner returns the next untagged row, plus a positive control with no tag. The Edge Function tool's own description of what it swaps is checked for the same claim. Mutation: remove the tag check and the test reddens.
 
+**Also: no equipment check (added 2026-11-28, PR #349 B-pass, older than that PR).** `_findSubstitute` never asks whether the user's equipment can do the candidate, while `swapExerciseInDay` does: the preview can offer a replacement that Confirm then refuses with `equipment_unavailable`. Done when also covers this: candidates are filtered by the same `canOfferInPicker` rule the swap applies, with a behavioural test.
+
 ## OI-405 — deploy_via_api.js leaves a dirty tree after EVERY deploy: the payload-archive prune deletes tracked files and adds untracked ones, and the archive policy contradicts itself (disposable per the tool header, deploy record per OI-142)
 
 - **Status**: OPEN

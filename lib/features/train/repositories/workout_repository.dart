@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:icanbefitter/core/copy/wardroom_copy.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/streak_progress_service.dart';
@@ -19,6 +20,7 @@ import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/core/utils/gap_policy.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/schedule_day_eligibility.dart';
+import 'package:icanbefitter/shared/repositories/exercise_repository.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import 'package:uuid/uuid.dart';
 
@@ -1525,17 +1527,30 @@ class WorkoutRepository {
     required int? defaultDurationSeconds,
     required bool submittedToLibrary,
   }) async {
-    // Duplicate-name guard — scan customBox for an existing entry with the
-    // same deterministic ID (different keys, same logical exercise).
+    // Duplicate-name guard: ONE NAME ONCE (founder 2026-11-25, OI-348 walk A16). Logs are
+    // keyed by the exercise name (`exlogKey`), so a second exercise with a taken name would
+    // share the first one's history and the pickers would show two rows that look the same.
+    // Taken = `isNameTaken`: the exercise list holds it as a name or an older name, OR one
+    // of the user's own exercises carries it (any id scheme: an older row's id is not this
+    // v5 id). Case, repeated spaces and curly apostrophes are ignored.
     final customBox = _hive.customBox;
-    for (final k in customBox.keys) {
-      final v = customBox.get(k);
-      if (v is Map && v['id'] == id) {
-        throw CreateCustomExerciseException(
-          'duplicate_name',
-          'A custom exercise named "$trimmed" already exists.',
-        );
+    var taken = ExerciseRepository.instance.isNameTaken(trimmed);
+    if (!taken) {
+      // The raw id scan over every row, as before: one id must never name two rows.
+      for (final k in customBox.keys) {
+        final v = customBox.get(k);
+        if (v is Map && v['id'] == id) {
+          taken = true;
+          break;
+        }
       }
+    }
+    if (taken) {
+      throw CreateCustomExerciseException(
+        'duplicate_name',
+        WardroomCopy.customExerciseNameTakenTemplate
+            .replaceAll('{exercise}', trimmed),
+      );
     }
 
     // Two creates can land in the same millisecond; never reuse a key, or the

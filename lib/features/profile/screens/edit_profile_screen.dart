@@ -10,7 +10,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:icanbefitter/core/services/error_telemetry.dart';
 import 'package:icanbefitter/core/services/hive_service.dart';
 import 'package:icanbefitter/core/services/migrated_key.dart';
+import 'package:icanbefitter/core/services/hive_user_session.dart';
 import 'package:icanbefitter/core/services/supabase_service.dart';
+import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/services/subscription_service.dart';
 import 'package:icanbefitter/core/constants/diet_strategies.dart';
 import 'package:icanbefitter/core/constants/food_types.dart';
@@ -138,6 +140,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   TimeOfDay? _preferredWorkoutTime; // stored as 'HH:MM' string in Hive/Supabase
   late final TextEditingController _bodyFatController;
   String? _bodyFatAssessedAt;
+  // What the form last took from the profile for the body-fat field and its
+  // assessed date. Save writes either key only when the form's value differs, so
+  // an untouched form never writes an older value over a result stored while it
+  // was open.
+  String _seededBfText = '';
+  String? _seededBfAssessedAt;
+  ProviderSubscription<Map<String, dynamic>>? _bodyFatSub;
   bool _isAssessingBf = false;
   bool _isSaving = false;
   Map<String, dynamic> _profileAtOpen = const <String, dynamic>{};
@@ -354,10 +363,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _injuries = ['none'];
     }
     final bfPercent = profile['body_fat_percent'];
-    _bodyFatController = TextEditingController(
-      text: bfPercent != null ? bfPercent.toString() : '',
-    );
+    _seededBfText = bfPercent != null ? bfPercent.toString() : '';
+    _bodyFatController = TextEditingController(text: _seededBfText);
     _bodyFatAssessedAt = profile['body_fat_assessed_at'] as String?;
+    _seededBfAssessedAt = _bodyFatAssessedAt;
+    _bodyFatSub = ref.listenManual<Map<String, dynamic>>(
+      userProfileProvider,
+      (prev, next) {
+        if (mounted) _followStoredBodyFat(next);
+      },
+    );
 
     // Date of birth: stored as "YYYY-MM-DD" string. Parse if present.
     final dobStr = (profile['date_of_birth'] as String?)?.trim() ?? '';
@@ -470,6 +485,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   void dispose() {
     _nameHealSub?.close();
+    _bodyFatSub?.close();
     _nameController.dispose();
     _heightController.dispose();
     _weightController.dispose();
@@ -1829,8 +1845,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   String _formatDate(String iso) {
-    final dt = DateTime.tryParse(iso);
-    if (dt == null) return iso;
+    final parsed = DateTime.tryParse(iso);
+    if (parsed == null) return iso;
+    // The server sends UTC instants; the day shown is the IST one.
+    final dt = istDateOf(parsed);
     final months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
@@ -1849,6 +1867,29 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
+  /// A body-fat result can be stored while this form is open (an assessment
+  /// started on an earlier copy of the screen). A field the user has not edited
+  /// then shows the stored value and date.
+  void _followStoredBodyFat(Map<String, dynamic> profile) {
+    if (_bodyFatController.text != _seededBfText) return; // the user's own edit
+    final text = profile['body_fat_percent']?.toString() ?? '';
+    final assessedAt = profile['body_fat_assessed_at'] as String?;
+    if (text == _seededBfText && assessedAt == _seededBfAssessedAt) return;
+    _showStoredBodyFat(profile);
+  }
+
+  /// The body-fat field and its date take what [profile] stores.
+  void _showStoredBodyFat(Map<String, dynamic> profile) {
+    final text = profile['body_fat_percent']?.toString() ?? '';
+    final assessedAt = profile['body_fat_assessed_at'] as String?;
+    setState(() {
+      _seededBfText = text;
+      _seededBfAssessedAt = assessedAt;
+      _bodyFatController.text = text;
+      _bodyFatAssessedAt = assessedAt;
+    });
+  }
+
   Future<void> _runBfAssessment() async {
     final picker = ImagePicker();
     final XFile? file = await picker.pickImage(
@@ -1860,12 +1901,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (file == null || !mounted) return;
 
     setState(() => _isAssessingBf = true);
+    // After the photo is read, every provider call goes through the app-wide
+    // container: the result must be stored even if this screen closes while the
+    // AI call runs.
+    final container = ProviderScope.containerOf(context, listen: false);
+    // Whose local profile is open: that is where the result will be written.
+    final ownerAtStart = HiveUserSession.currentOwnerFullId;
 
     try {
       final bytes = await file.readAsBytes();
+      // Left before the photo was sent: nothing has been used yet.
+      if (!mounted) return;
       final base64Image = base64Encode(bytes);
 
-      final profile = ref.read(userProfileProvider);
+      final profile = container.read(userProfileProvider);
+      // From the store the save compares against: a restore or a healer writes
+      // it without telling the provider.
+      final bodyFatAtStart =
+          UserRepository.instance.getProfile()?['body_fat_percent'];
       final weightKg =
           (profile['current_weight_kg'] as num?)?.toDouble() ?? 70.0;
       final heightCm = (profile['height_cm'] as num?)?.toDouble() ?? 170.0;
@@ -1900,25 +1953,36 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         return;
       }
 
-      if (!mounted) return;
       final bfLow = (data['bf_low'] as num).toDouble();
       final bfHigh = (data['bf_high'] as num).toDouble();
       final bfMid = ((bfLow + bfHigh) / 2).roundToDouble();
       final assessedAt = data['assessed_at'] as String;
 
-      setState(() {
-        _bodyFatController.text = bfMid.toStringAsFixed(1);
-        _bodyFatAssessedAt = assessedAt;
-      });
+      // Shown before the save: if the save throws, SAVE still carries it.
+      if (mounted && HiveUserSession.currentOwnerFullId == ownerAtStart) {
+        setState(() {
+          _bodyFatController.text = bfMid.toStringAsFixed(1);
+          _bodyFatAssessedAt = assessedAt;
+        });
+      }
 
-      // Immediately persist so it's not lost if user closes without saving
-      await ref.read(userProfileProvider.notifier).updateProfile({
-        'body_fat_percent': bfMid,
-        'body_fat_assessed_at': assessedAt,
-        'body_fat_range': '${bfLow.round()}-${bfHigh.round()}%',
-      });
+      // Store it even when the screen has closed (see saveBodyFatAssessment).
+      final saved = await saveBodyFatAssessment(
+        container: container,
+        ownerAtStart: ownerAtStart,
+        ownerNow: () => HiveUserSession.currentOwnerFullId,
+        bodyFatAtStart: bodyFatAtStart,
+        updates: {
+          'body_fat_percent': bfMid,
+          'body_fat_assessed_at': assessedAt,
+          'body_fat_range': '${bfLow.round()}-${bfHigh.round()}%',
+        },
+      );
 
-      if (mounted) {
+      if (saved && mounted) {
+        // Stored: the form now holds what the profile holds.
+        _seededBfText = bfMid.toStringAsFixed(1);
+        _seededBfAssessedAt = assessedAt;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1928,8 +1992,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             backgroundColor: AppColors.green,
           ),
         );
+      } else if (!saved &&
+          mounted &&
+          HiveUserSession.currentOwnerFullId == ownerAtStart) {
+        // Not stored because a newer value is: the form goes back to it, or the
+        // next SAVE would write the refused result over it.
+        _showStoredBodyFat(UserRepository.instance.getProfile() ?? {});
+        _showError('Your newer body fat value was kept.');
       }
-    } catch (e) {
+    } catch (e, st) {
+      unawaited(ErrorTelemetry.recordNonFatal(e, st,
+          reason: 'body_fat_assessment'));
       _showError('Assessment failed. Please try again.');
     } finally {
       if (mounted) setState(() => _isAssessingBf = false);
@@ -2038,6 +2111,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
 
     setState(() => _isSaving = true);
+    // The screen can be closed while this Save awaits (the profile write, the "Reschedule
+    // Workouts?" dialog, the plan regeneration: 10+ s on a slow phone), and a closed screen's
+    // `ref` throws. Every provider call below that follows an await goes through the app-wide
+    // container instead, so a closed screen never half-finishes a Save (2026-11-25, A20).
+    final container = ProviderScope.containerOf(context, listen: false);
 
     try {
       // Derive activity_level from lifestyle + training days (more accurate
@@ -2083,9 +2161,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'date_of_birth': ?dobIso,
         'wake_up_time': ?wakeIso,
         'preferred_workout_time': ?pwtIso,
-        if (_bodyFatController.text.isNotEmpty)
+        if (_bodyFatController.text.isNotEmpty &&
+            _bodyFatController.text != _seededBfText)
           'body_fat_percent': double.tryParse(_bodyFatController.text),
-        if (_bodyFatAssessedAt != null)
+        if (_bodyFatAssessedAt != null &&
+            _bodyFatAssessedAt != _seededBfAssessedAt)
           'body_fat_assessed_at': _bodyFatAssessedAt,
         if (_sessionDuration != null)
           'session_duration_minutes': _sessionDuration,
@@ -2125,11 +2205,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         }
       }
 
-      await ref.read(userProfileProvider.notifier).updateProfile(updates);
-      await ref.read(userProfileProvider.notifier).recalculateTargets();
+      await container.read(userProfileProvider.notifier).updateProfile(updates);
+      await container.read(userProfileProvider.notifier).recalculateTargets();
       // goal-change-targets B3: what this Save did to the targets (null = nothing to say).
       final targetImpact =
-          targetImpactFor(_profileAtOpen, ref.read(userProfileProvider));
+          targetImpactFor(_profileAtOpen, container.read(userProfileProvider));
       final savedPlanExists = UserRepository.instance.getSavedDietPlan() != null;
       var impactShown = false;
 
@@ -2172,12 +2252,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       // profile, stats, nutrition summary / daily / macro targets, and the
       // profile completeness nudge, which caches its tier-1/tier-2 count until
       // invalidated: observed 2026-04-17, bar stuck at 61% until a relaunch).
-      invalidateProfileDerivedSurfaces(ref.invalidate, source: 'edit_profile');
+      invalidateProfileDerivedSurfaces(container.invalidate, source: 'edit_profile');
       // Refresh home screen name/greeting — these are separate providers
       // in home_provider.dart that cache the name independently.
-      ref.invalidate(userFirstNameProvider);
-      ref.invalidate(userInitialProvider);
-      ref.invalidate(userGreetingProvider);
+      container.invalidate(userFirstNameProvider);
+      container.invalidate(userInitialProvider);
+      container.invalidate(userGreetingProvider);
 
       // Detect plan-affecting field changes and offer rescheduling.
       // Experience sets the weekly set band and the per-session cap the session
@@ -2212,7 +2292,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         originalEquipmentOwned: _originalEquipmentOwned,
       );
 
-      if (planChanged && WorkoutScheduleService.instance.hasPlan() && mounted) {
+      final rescheduleOwed =
+          planChanged && WorkoutScheduleService.instance.hasPlan();
+      if (rescheduleOwed && !mounted) {
+        // The screen closed before the question could be asked, so the plan keeps
+        // its old days, and the next Save sees no change to ask about. Recorded.
+        unawaited(
+            ErrorTelemetry.logEvent('profile_edit_reschedule_skipped_closed'));
+      }
+      if (rescheduleOwed && mounted) {
         final changes = <String>[];
         if (_daysPerWeek != _originalDaysPerWeek) {
           changes.add('$_originalDaysPerWeek → $_daysPerWeek days/week');
@@ -2331,6 +2419,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           ),
         );
 
+        if (shouldReschedule == true && !mounted) {
+          // The screen went while the question was open: same skip, recorded.
+          unawaited(
+              ErrorTelemetry.logEvent('profile_edit_reschedule_skipped_closed'));
+        }
         if (shouldReschedule == true && mounted) {
           final profile = ref.read(userProfileProvider);
           final experience = (profile['fitness_experience'] as String?) ?? 'intermediate';
@@ -2355,10 +2448,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
 
       // Refresh train plan providers after potential rescheduling.
-      ref.invalidate(currentPlanProvider);
-      ref.invalidate(todayWorkoutProvider);
-      ref.invalidate(calendarWeekProvider);
-      ref.invalidate(aiInsightProvider);  // F5 — refresh home insight after regen
+      container.invalidate(currentPlanProvider);
+      container.invalidate(todayWorkoutProvider);
+      container.invalidate(calendarWeekProvider);
+      container.invalidate(aiInsightProvider);  // F5 — refresh home insight after regen
 
       // Push updated profile to Supabase immediately (fire-and-forget).
       final userId = SupabaseService.instance.currentUser?.id;
@@ -2381,7 +2474,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             .refreshAfterProfileChange(
                 isPro: SubscriptionService.instance.isPro())
             .whenComplete(() {
-          if (mounted) ref.invalidate(predictionProvider);
+          // Through the container: a closed screen's card must refresh too.
+          try {
+            container.invalidate(predictionProvider);
+          } catch (e, st) {
+            unawaited(ErrorTelemetry.recordNonFatal(e, st,
+                reason: 'edit_profile_prediction_invalidate'));
+          }
         }));
       }
 
@@ -2426,6 +2525,38 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+}
+
+/// Stores an AI body-fat assessment, with or without the screen that asked for it.
+/// The server marks the month's one assessment as used and does not keep the
+/// result, so dropping it here (the screen closed while the AI call ran) lost it
+/// for 30 days. Writes nothing when the signed-in account changed meanwhile, or
+/// when the stored body fat is no longer what it was when the assessment started:
+/// a value saved since then is the newer one. Both are checked under the profile
+/// write lock.
+@visibleForTesting
+Future<bool> saveBodyFatAssessment({
+  required ProviderContainer container,
+  required String? ownerAtStart,
+  required String? Function() ownerNow,
+  required Object? bodyFatAtStart,
+  required Map<String, dynamic> updates,
+}) async {
+  double? number(Object? v) =>
+      v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
+  var superseded = false;
+  final wrote =
+      await container.read(userProfileProvider.notifier).updateProfileIf((current) {
+    superseded =
+        number(current['body_fat_percent']) != number(bodyFatAtStart);
+    return superseded ? null : updates;
+  }, stillOwner: () => ownerNow() == ownerAtStart);
+  if (!wrote) {
+    unawaited(ErrorTelemetry.logEvent(superseded
+        ? 'body_fat_assessment_superseded'
+        : 'body_fat_assessment_owner_changed'));
+  }
+  return wrote;
 }
 
 /// Pure helper extracted from `_EditProfileScreenState._save` (a2b-2,
