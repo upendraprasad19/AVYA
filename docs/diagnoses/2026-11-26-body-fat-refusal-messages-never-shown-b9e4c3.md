@@ -20,7 +20,7 @@ sot_registry_entry: not_applicable
 writers:
   - { file: lib/shared/repositories/user_repository.dart, method_or_widget: "assessBodyComposition (catch of FunctionException) and bodyCompositionRefusalOf", line: 1466 }
 readers:
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_runBfAssessment: on BodyCompositionAssessmentException (paywall, next allowed date, photo message)", line: 1929 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_runBfAssessment: on BodyCompositionAssessmentException (paywall, next allowed date, photo message)", line: 1940 }
 hive_key_prefix: none
 hive_key_formula: "not applicable: a refusal writes nothing"
 sync_methods: []

@@ -10,8 +10,8 @@ symptom: |
 concept: body_fat_assessment_persist
 sot_registry_entry: not_applicable
 writers:
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_runBfAssessment, through the new saveBodyFatAssessment (UserProfileNotifier.updateProfileIf)", line: 1886 }
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: the body_fat_percent / body_fat_assessed_at entries of the update map", line: 2145 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_runBfAssessment, through the new saveBodyFatAssessment (UserProfileNotifier.updateProfileIf)", line: 1893 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: the body_fat_percent / body_fat_assessed_at entries of the update map", line: 2164 }
 readers:
   - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "initState body-fat seed and _followStoredBodyFat", line: 366 }
   - { file: lib/features/profile/providers/profile_provider.dart, method_or_widget: "recalculateTargets (body fat into the targets)", line: 255 }
@@ -110,3 +110,22 @@ Tests: `test/profile/body_fat_assessment_save_test.dart` (the lock held across t
 "value saved while the call ran" screen test, and "a gateway error is not sent a second time".
 Mutation results (mutate/run/restore, restore verified by hash), 1 RED each: the newer-value
 guard removed; the owner check replaced with `true`; the one-send flag removed.
+
+## Second review of the fixes (2026-11-28): two gaps in the guard above
+
+1. **A refused result stayed in an open form.** The field is filled with the result before the
+   save (so that SAVE still carries it if the save throws). When the save was refused because a
+   newer value is stored, the form kept the refused result as an edit and the next SAVE wrote it.
+   The form now goes back to the stored value and date and says the newer value was kept.
+2. **The start value came from the provider.** The guard compares with the Hive profile, but the
+   start value was read from `userProfileProvider`, which a restore or a healer does not update.
+   A stale provider would have refused every result and spent the month for nothing. The start
+   value is now read from the repository (Hive).
+
+Kept as it is: with one send (`spendsQuotaPerCall`) the function's own 502 answers are no longer
+retried either. All of them return before the use is recorded, so nothing is spent and the user
+can try again. Retrying them would need the function to answer with a different status.
+
+Tests: "refused while the form is open ..." and "a store the provider has not seen does not
+refuse the result". Mutation results, 1 RED each: the form not reseeded; the start value taken
+from the provider.

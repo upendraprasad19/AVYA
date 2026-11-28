@@ -658,6 +658,42 @@ void main() {
   });
 
   testWidgets(
+      'AI Assess: refused while the form is open, the form shows the newer value '
+      'and SAVE keeps it', (tester) async {
+    await boot(tester, withBodyFat(), pro: true);
+    final reply = await startAssessment(tester, 200, result);
+    // A newer value lands in the store while this form stays open.
+    await tester.runAsync(() => ProfileWriteService.instance
+        .patchProfile(<String, dynamic>{'body_fat_percent': 15.0}));
+    await reply();
+
+    expect(bodyFatText(tester), '15.0');
+    expect(find.text('Your newer body fat value was kept.'), findsOneWidget);
+    await editCityAndSave(tester);
+    await settle(tester);
+    expect((await storedProfile(tester))['body_fat_percent'], 15.0);
+    // The messages' timers and the idle connection to the loopback server
+    // (15 s) run out before the test ends.
+    await tester.pump(const Duration(seconds: 20));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+      'AI Assess mirror: a store the provider has not seen does not refuse the '
+      'result', (tester) async {
+    await boot(tester, withBodyFat(), pro: true);
+    // A restore or a healer writes the box without telling the provider.
+    await tester.runAsync(() => ProfileWriteService.instance
+        .patchProfile(<String, dynamic>{'body_fat_percent': 24.0}));
+    final reply = await startAssessment(tester, 200, result);
+    await closeScreen(tester);
+    await reply();
+
+    expect((await storedProfile(tester))['body_fat_percent'], 18.0,
+        reason: 'events were $events');
+  });
+
+  testWidgets(
       'AI Assess mirror: another account signed in during the call gets nothing',
       (tester) async {
     await boot(tester, withBodyFat(), pro: true);

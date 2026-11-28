@@ -10,9 +10,9 @@ symptom: |
 concept: edit_profile_save_provider_calls
 sot_registry_entry: not_applicable
 writers:
-  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: updateProfile, recalculateTargets, the impact read, invalidateProfileDerivedSurfaces, the name providers, the plan providers (now through the app-wide ProviderContainer captured when the Save starts)", line: 2004 }
+  - { file: lib/features/profile/screens/edit_profile_screen.dart, method_or_widget: "_save: updateProfile, recalculateTargets, the impact read, invalidateProfileDerivedSurfaces, the name providers, the plan providers (now through the app-wide ProviderContainer captured when the Save starts)", line: 2022 }
 readers:
-  - { file: lib/features/profile/providers/profile_provider.dart, method_or_widget: "userProfileProvider notifier updateProfile (92) and recalculateTargets (242), and every provider the Save invalidates (macro targets, home greeting, current plan, today workout, calendar week, AI insight, prediction)", line: 92 }
+  - { file: lib/features/profile/providers/profile_provider.dart, method_or_widget: "userProfileProvider notifier updateProfile (93) and recalculateTargets (255), and every provider the Save invalidates (macro targets, home greeting, current plan, today workout, calendar week, AI insight, prediction)", line: 93 }
 hive_key_prefix: none
 hive_key_formula: "not applicable: the Save's writes are unchanged; only the handle used for provider calls after an await changed"
 sync_methods: []

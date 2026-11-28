@@ -2,6 +2,7 @@ import 'package:icanbefitter/core/utils/exercise_name_identity.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/features/train/repositories/workout_repository.dart';
 
+import '../../../core/services/auto_appended_custom.dart' show isLibraryRow;
 import '../../../core/services/hive_service.dart';
 
 /// One planned swap for a single date.
@@ -204,7 +205,9 @@ class InjurySwapPlanner {
 
   Map? _resolveLibraryEntry(String id) {
     final lib = HiveService.instance.exerciseBox.get(id);
-    if (lib is Map) return lib;
+    if (lib is Map && isLibraryRow(lib)) return lib;
+    // The user's own custom beats its community copy, which never updates
+    // (the same rule as swap_service.dart, diagnose e7c4a1).
     final cust = HiveService.instance.customBox.get(id);
     if (cust is Map) return cust;
     // Custom items keyed differently — scan for inner id match.
@@ -212,7 +215,7 @@ class InjurySwapPlanner {
       final v = HiveService.instance.customBox.get(k);
       if (v is Map && v['id'] == id) return v;
     }
-    return null;
+    return lib is Map ? lib : null;
   }
 
   /// Find an exercise in the library that:

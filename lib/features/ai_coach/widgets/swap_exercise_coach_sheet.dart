@@ -70,6 +70,9 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
   String? _selectedFrom;
   _SwapOption? _selectedTo;
   String _searchQuery = '';
+
+  /// Built once when the exercise to replace is picked, not on every keystroke.
+  List<_SwapOption> _options = const [];
   // e8f4a3 B-pass P3c — double-tap latch (see log_workout_sheet.dart): the
   // SWAP button stays live until the route pops and intent ids embed
   // millisecondsSinceEpoch, so a fast second tap submits a duplicate
@@ -163,11 +166,18 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
       addRow(Map<String, dynamic>.from(row), false,
           (row['id'] as String?) ?? (row['exercise_id'] as String?) ?? '');
     }
+    final community = options.length;
     for (final row in ExerciseRepository.instance.getCustomExercises()) {
       addRow(Map<String, dynamic>.from(row), true,
           (row['id'] as String?) ?? '');
     }
-    return options;
+    // One id, one row: the author's own custom stands for its community copy,
+    // or picking either one would tick both.
+    final ownIds = {for (final o in options.skip(community)) o.id};
+    return [
+      for (var i = 0; i < options.length; i++)
+        if (i >= community || !ownIds.contains(options[i].id)) options[i],
+    ];
   }
 
   void _confirm() {
@@ -294,11 +304,14 @@ class _CoachSwapSheetState extends ConsumerState<CoachSwapSheet> {
                   itemBuilder: (ctx, i) => _tile(
                     label: _today[i].name,
                     selected: false,
-                    onTap: () => setState(() => _selectedFrom = _today[i].id),
+                    onTap: () => setState(() {
+                      _selectedFrom = _today[i].id;
+                      _options = _substitutesFor(_today[i].id);
+                    }),
                   ),
                 )
               : Builder(builder: (ctx) {
-                  final all = _substitutesFor(_selectedFrom!);
+                  final all = _options;
                   final typed = _searchQuery.trim();
                   final query =
                       typed.isEmpty ? '' : exerciseDuplicateKey(typed);

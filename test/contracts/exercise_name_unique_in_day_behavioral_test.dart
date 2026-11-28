@@ -353,6 +353,56 @@ void main() {
     });
   });
 
+  // The planner reads the planned exercise's muscles, which its author can edit;
+  // the community copy keeps the old ones (diagnose e7c4a1).
+  group('InjurySwapPlanner: an own custom beside its community copy', () {
+    const sharedId = '0f0e0d0c-1111-4222-8333-999988887777';
+
+    Future<List<Object?>> planFor(
+        {required String communityMuscle, String? ownMuscle}) async {
+      final today = istDateStr(DateTime.now());
+      await HiveService.instance.exerciseBox.put(sharedId, {
+        'id': sharedId,
+        'name': 'My Move',
+        'source': 'community',
+        'category': 'legs',
+        'primary_muscles': [communityMuscle],
+      });
+      if (ownMuscle != null) await HiveService.instance.customBox.put('custom_exercise_78', {
+        'id': sharedId,
+        'type': 'exercise',
+        'name': 'My Move',
+        'category': 'legs',
+        'primary_muscles': [ownMuscle],
+      });
+      await HiveService.instance.exerciseBox.put('SAFE', {
+        'id': 'SAFE',
+        'name': 'Safe Move',
+        'category': 'legs',
+        'primary_muscles': ['calves'],
+      });
+      await putDay(today, [planned(sharedId, 'My Move')]);
+      final swaps = await InjurySwapPlanner.instance
+          .plan(bodyPart: 'knee', severity: 'moderate', daysAhead: 1);
+      return [for (final s in swaps) s.fromName];
+    }
+
+    test('the own muscles are the ones judged', () async {
+      expect(await planFor(communityMuscle: 'chest', ownMuscle: 'quads'),
+          ['My Move']);
+    });
+
+    test('mirror: with no own custom the community muscles are judged',
+        () async {
+      expect(await planFor(communityMuscle: 'quads'), ['My Move']);
+    });
+
+    test('mirror: a stale community muscle does not force a swap', () async {
+      expect(await planFor(communityMuscle: 'quads', ownMuscle: 'chest'),
+          isEmpty);
+    });
+  });
+
   group('InjurySwapPlanner', () {
     final planner = InjurySwapPlanner.instance;
     final today = istDateStr(DateTime.now());

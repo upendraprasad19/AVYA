@@ -75,7 +75,8 @@ void main() {
   /// Opens the sheet, picks today's exercise and returns the labels offered in
   /// its place.
   Future<void> openSubstitutes(WidgetTester tester, String tier,
-      Future<void> Function(Set<String> offered) check) async {
+      Future<void> Function(Set<String> offered) check,
+      {bool shared = false}) async {
     late Directory dir;
     late ProviderContainer container;
     await tester.runAsync(() async {
@@ -83,6 +84,22 @@ void main() {
       container = ProviderContainer();
       await HiveService.instance.exerciseBox.clear();
       await _seed(tier);
+      if (shared) {
+        const id = 'shared-id';
+        await HiveService.instance.exerciseBox.put(id, <String, dynamic>{
+          'id': id,
+          'name': 'Shared Move Test',
+          'source': 'community',
+          'equipment_needed': <String>['bodyweight'],
+        });
+        await HiveService.instance.customBox
+            .put('custom_exercise_9', <String, dynamic>{
+          'id': id,
+          'type': 'exercise',
+          'name': 'Shared Move Test',
+          'equipment_needed': <String>[],
+        });
+      }
     });
     // Tall enough that the lazy list builds every row.
     tester.view.physicalSize = const Size(900, 3000);
@@ -173,6 +190,28 @@ void main() {
       await tester.tap(find.text(_planned));
       await tester.pumpAndSettle();
       expect(shown('Floor Press Test'), 1, reason: 'BACK clears the search');
+    });
+  });
+
+  testWidgets('an own custom and its community copy are one row',
+      (tester) async {
+    await openSubstitutes(tester, 'full_gym', (offered) async {
+      expect(find.textContaining('Shared Move Test'), findsOneWidget);
+      expect(find.textContaining('Shared Move Test  ·CUSTOM'), findsOneWidget,
+          reason: 'the row kept is the author\'s own');
+    }, shared: true);
+  });
+
+  testWidgets('the search and the list fit a short phone with the keyboard open',
+      (tester) async {
+    await openSubstitutes(tester, 'full_gym', (offered) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(tester.getSize(find.byType(ListView)).height, greaterThan(40));
     });
   });
 

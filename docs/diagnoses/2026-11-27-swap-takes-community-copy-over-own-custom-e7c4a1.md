@@ -17,9 +17,10 @@ symptom: |
 concept: equipment_capability_floor
 sot_registry_entry: equipment_capability_floor
 writers:
-  - { file: lib/core/services/sync/sync_community.dart, method_or_widget: "the community pull into exerciseBox (rows marked source: community)", line: 492 }
+  - { file: lib/core/services/sync/sync_community.dart, method_or_widget: "the community pull into exerciseBox (rows marked source: community)", line: 524 }
 readers:
   - { file: lib/core/services/swap_service.dart, method_or_widget: "swapExerciseInDay: which row the target id resolves to", line: 683 }
+  - { file: lib/features/ai_coach/services/injury_swap_planner.dart, method_or_widget: "_resolveLibraryEntry: whose muscles are judged", line: 206 }
 hive_key_prefix: none
 hive_key_formula: "unchanged: exerciseBox[<id>] and customBox['custom_exercise_<n>'] with field id"
 sync_methods: []
@@ -74,3 +75,17 @@ the author's own one; the swap read the community one and applied the stricter l
 
 ## Fix
 Prefer the user's own exercise over a community copy, never over a library exercise.
+
+## Second review (2026-11-28): the injury planner had the same order
+
+`InjurySwapPlanner._resolveLibraryEntry` reads the planned exercise's muscles, and it also took
+the community row first. The author can edit a custom's muscles, and the pull never updates an
+existing community row, so the planner could judge old muscles. It now applies the same rule.
+The other id lookups that take the exercise box first (the confirm card, the swap preview,
+`log_set` name resolution and the coach's duplicate check) read only the name, and a custom's
+name cannot be edited, so they give the same answer either way.
+
+Tests: the planner group about an own custom beside its community copy (own muscles judged; a
+stale community muscle forces no swap; with no own custom the community muscles are judged).
+Mutations: the community row preferred again, 2 RED; the community row lost with no own custom,
+1 RED.

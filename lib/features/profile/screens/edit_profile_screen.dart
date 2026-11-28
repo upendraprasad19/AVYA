@@ -1875,6 +1875,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final text = profile['body_fat_percent']?.toString() ?? '';
     final assessedAt = profile['body_fat_assessed_at'] as String?;
     if (text == _seededBfText && assessedAt == _seededBfAssessedAt) return;
+    _showStoredBodyFat(profile);
+  }
+
+  /// The body-fat field and its date take what [profile] stores.
+  void _showStoredBodyFat(Map<String, dynamic> profile) {
+    final text = profile['body_fat_percent']?.toString() ?? '';
+    final assessedAt = profile['body_fat_assessed_at'] as String?;
     setState(() {
       _seededBfText = text;
       _seededBfAssessedAt = assessedAt;
@@ -1908,6 +1915,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final base64Image = base64Encode(bytes);
 
       final profile = container.read(userProfileProvider);
+      // From the store the save compares against: a restore or a healer writes
+      // it without telling the provider.
+      final bodyFatAtStart =
+          UserRepository.instance.getProfile()?['body_fat_percent'];
       final weightKg =
           (profile['current_weight_kg'] as num?)?.toDouble() ?? 70.0;
       final heightCm = (profile['height_cm'] as num?)?.toDouble() ?? 170.0;
@@ -1960,7 +1971,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         container: container,
         ownerAtStart: ownerAtStart,
         ownerNow: () => HiveUserSession.currentOwnerFullId,
-        bodyFatAtStart: profile['body_fat_percent'],
+        bodyFatAtStart: bodyFatAtStart,
         updates: {
           'body_fat_percent': bfMid,
           'body_fat_assessed_at': assessedAt,
@@ -1981,6 +1992,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             backgroundColor: AppColors.green,
           ),
         );
+      } else if (!saved &&
+          mounted &&
+          HiveUserSession.currentOwnerFullId == ownerAtStart) {
+        // Not stored because a newer value is: the form goes back to it, or the
+        // next SAVE would write the refused result over it.
+        _showStoredBodyFat(UserRepository.instance.getProfile() ?? {});
+        _showError('Your newer body fat value was kept.');
       }
     } catch (e, st) {
       unawaited(ErrorTelemetry.recordNonFatal(e, st,
