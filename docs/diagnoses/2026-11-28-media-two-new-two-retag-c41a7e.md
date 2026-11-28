@@ -78,3 +78,18 @@ coaching_cues) and **E120** (equipment_needed, equipment_tier, gym_availability)
 Two context-blind Sonnet rounds. Round 1 found the planned step order would have left both new rows without injury tags and
 media (the builders only see rows that already exist), the unit tests that stay red until the migration is applied, and missed
 pins. Round 2 simulated the corrected order on a copy and converged, with wrong script flags and further pins.
+
+## Mutations (rule 21)
+
+Run against commit 4dd76242, one at a time, each confirmed applied (exactly one match, bytes changed) and restored byte for
+byte (`git status --porcelain` clean afterwards). No compile errors. Counts are the runner's totals; in the cloud-seeded file
+two of them are the tests that stay red until the migration is applied.
+
+| Mutation | Tests red |
+|---|---|
+| `library_e120_retag.json` removed from `RETAG_FILES` | 4 (importer) |
+| generator reverts only the first column of a row | 1 beyond the 2 expected: `setUpAll` of the CLI group, the generator refusing E027, so that group does not run |
+| `Band Pallof Press` removed from the Dart safe pool | 2 |
+| G0592's `media_slug` key renamed in the library | 2 (v30 contract) |
+| `_exerciseLibraryVersion` left at 29 | 1 (v30 upgrade) |
+| one v30 record's tier glob removed from `blast_radius.yaml` | 1 |
