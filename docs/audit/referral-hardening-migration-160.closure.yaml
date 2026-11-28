@@ -1,0 +1,354 @@
+# Closure ledger - referral-hardening-migration-160 (migration 160: OI-344 items 1-5, referrer_summary, the 90 percent promo ceiling)
+# Gate 40. One terminal_state per finding; no `deferred:` key.
+# `commit:` on a closed_in_commit row names the batch commit that ADDS this file; find it with
+#   git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml
+# Rows R1-R9, N2, U2c, PX, EC are the units; BP-* are the B-pass records (2 seats: 1 P1, 2 P2, 13 P3), HP-* the hermes records (4 seats: 8 P2, 19 P3).
+# The old ledger docs/audit/referral-pay-on-conversion.closure.yaml re-points N1, N3, N4, N5 here and keeps N6, N7 and X7 (the aggregates' residual and the privacy-policy sentence) as the single rows that carry them.
+
+batch: referral-hardening-migration-160
+plan_review_record: docs/plan-reviews/referral-migration-160.md
+total_findings: 58
+closed_count: 58
+
+findings:
+  - id: R1
+    title: "migration 160 applied to project dedsavbjuwgarrhphgnl on the founder's go ('apply migration', 2026-10-17), applied_migrations.json entry, hash"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "live apply at 2026-10-17 00:51:32 UTC (cloud version 20261017005132) via MCP apply_migration; the stored file sha256 85a71a1a...8ca equals the file in git (Gate 39 PASS, Gate 14 PASS); post-apply catalog: relacl postgres + service_role only, six column ACLs, no table-level SELECT for anon or authenticated, promo CHECK 1..90, function md5s equal the sandbox apply (redeem b1973dd9, job 51d8a812, referrer_summary 162d3890). Self-attested apart from the md5 and sha comparisons, which are mechanical."
+
+  - id: R2
+    title: "N1 (stale credit, diagnose c5e9a3): the credit select carries AND rr.referee_id IS NOT NULL"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "docs/diagnoses/2026-10-16-referral-credit-select-stale-after-referee-deleted-c5e9a3.md; two-session case C14 in test/sql/referral_pay_on_conversion_concurrency_local.sh (a decoy trigger holds the reconcile open after it skipped the locked row, a second session deletes the referee and commits, a sequence proves the rendezvous happened); mutant c_no_predicate reddens C14 and nothing else; Dart job-body equality (159 body plus exactly one line); live Q8 documents that it is NOT a killer for this mutant. Self-attested mutation evidence."
+
+  - id: R3
+    title: "N3 (redeem lock wait, diagnose f2d6b8): redeem_referral_atomic retries the grant 3 times, 0.25 s apart, on lock_not_available only, re-checking the paid-plan refusal after each pause"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "docs/diagnoses/2026-10-16-redeem-referral-lock-wait-became-error-f2d6b8.md; concurrency C16a (ok on attempt 2 in 256 ms), C16b (55P03 after exactly 3 attempts, 505 ms, no audit row), C16c (22023 attempted once), C16d (a paid row lands during the wait: P0001 after one helper attempt); live Q7; mutants retry 1, no retry, WHEN OTHERS, final failure swallowed, sleep removed, sleep 2 s, sleep moved after the last attempt, re-validation removed all red."
+
+  - id: R4
+    title: "N4 (grants): REVOKE ALL on referral_redemptions from PUBLIC, anon, authenticated; GRANT SELECT on six columns to authenticated; the five payment-status columns are not client-readable"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "live verify Q1 to Q5 (the three real read shapes keep working under SET LOCAL ROLE authenticated; every hidden column and select * refuse with 42501; INSERT, UPDATE, DELETE and TRUNCATE are each refused BY PRIVILEGE; anon refuses everything; zero table-level privileges and the exact column set in information_schema.column_privileges), all ok on the LIVE project 2026-10-17; replica deletion case D6; the two app readers (referral_repository.hasRedeemed, sync_restore_completeness) name only granted columns (grep over lib/ clean)."
+
+  - id: R5
+    title: "the DO self-check aborts the apply if any client privilege survives (table, column, function EXECUTE of the three functions, referrer_summary security mode, STABLE and search_path)"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "concurrency C15, six scenarios, each names its own clause (a role holding GRANT OPTION hands a client role a privilege the owner's REVOKE cannot remove: table-level INSERT+SELECT, DELETE, MAINTAIN to anon, a column-level UPDATE, EXECUTE on the job, EXECUTE on redeem); applying 160 with --single-transaction fails with 'self-check failed' and leaves the database as it was; mutants table loop deleted, privilege array cut, role array cut, block removed all red. The live apply passed the check (no abort)."
+
+  - id: R6
+    title: "U2 server half: public.referrer_summary() jsonb {joined, subscribed, pending, credited, days_earned} for auth.uid() as referrer"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "live verify Q6a to Q6h and A10 on the live project (exact numbers for a fixture referrer, a legacy 158 credited row, zero rows -> zeros and days_earned 0, a referee-only user sees zeros, a NULL flag is 'not credited', 28000 without a user, anon refused with 42501, a hostile search_path with a shadow table does not redirect it); mutants referee_id = uid, subscribed counting the flag, days_earned without coalesce, EXECUTE left on PUBLIC or anon, guard removed all red."
+
+  - id: R7
+    title: "N5 / OI-344 item 4: promo_codes_discount_pct_check replaced 1..100 -> 1..90 in one ALTER placed last (founder decision 2026-10-16)"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "live verify Q9 (90 and 1 accepted; 91, 100 and 0 refused with 23514) and A11 (exactly one CHECK, 1..90) ok on the live project; the pre-apply count of live codes outside 1..90 was 0 (the three live codes are 30, 20 and 15 percent); Dart pin on the single-ALTER form and its position (mutant d_promo_first red)."
+
+  - id: R8
+    title: "the inline commented rollback block restores the 159 state"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "concurrency C17 EXTRACTS the commented block from the migration text, applies it over 159+160 and compares md5 of both function definitions, sorted relacl, column ACL count, the promo CHECK, referrer_summary and both function ACLs with a 159-only database; mutants rollback without REVOKE ALL, without MAINTAIN, with the wrong promo bound all red (C17); Dart pins d_rollback_no_revokeall, d_rollback_no_maintain. Not executed on the live project (by design)."
+
+  - id: R9
+    title: "live verify of migration 160 on the live project"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "test/sql/referral_pay_on_conversion_live_verify.sql run through execute_sql on 2026-10-17 as EIGHT aborting chunks (the tool rejected the single 91 KB request with 'Invalid or expired requestState'; about 12 KB and more fail, about 10 KB passes): 29 + 18 + 13 + 6 + 11 + 12 + 11 + 11 = 111 of 111 ok, 0 fail, 0 skipped; the assertions are the file's, the groups regrouped (Z was checked within its chunk only). Afterwards: 3 redemptions, 3 promo codes, no leftover fixture row, alert or subscription; the hourly job succeeded at 01:41, 02:41 and 03:41 UTC on the new body."
+
+  - id: N2
+    title: "N2 / OI-344 item 2: the credit batch is ORDER BY converted_at, id LIMIT 50, so stuck rows at the head use batch slots"
+    terminal_state: verified_clean
+    evidence: "Founder accepted the residual 2026-10-16 ('accept'): starvation needs 50 or more stuck rows at once (live 0), a stuck row raises the failed or the 10-day stalled alert, and the order is behaviourally pinned (C13, mutants ME and MF). Plan section 2.2. Migration 160 does not touch the order."
+
+  - id: U2c
+    title: "U2 client half (ReferralRepository.referrerSummary, the invite copy for the new rule, _applyCode moved onto ReferralRepository.redeem, the friend-facing disclosure): the client does not yet call referrer_summary()"
+    terminal_state: upstream_blocked
+    blocker: "Unit C (branch referral-unit-c-client, plan v4) is not started: it waits for the founder's go, the psychology-pass review of the copy and the founder's wording review. The server half is live (R6)."
+    reopen_when: "the Unit C PR is merged; OI-336 stays open until then and shipped app builds keep saying 'you both get 7 days PRO free' (three redemptions have ever existed)."
+
+  - id: PX
+    title: "PostgREST-level smoke of migration 160 with a real user JWT (the invite sheet, hasRedeemed and a restore through the API)"
+    terminal_state: blocked_on_user
+    reason: "Needs a signed-in session this environment does not have. The founder runs the invite sheet and a restore on a device or dev build and reports. hasRedeemed swallows errors, so a silent 42501 there would show only in telemetry. The SQL-level equivalent (SET LOCAL ROLE authenticated + request.jwt.claims) passed on the live project (R4, R6)."
+
+  - id: EC
+    title: "OI-342 economics residual: the 90 percent ceiling is above the break-even (monthly 76.7 percent, yearly 88.4 percent)"
+    terminal_state: verified_clean
+    evidence: "Founder decision 2026-10-17 in chat: the 90 percent ceiling is a permission, not a discount given; the founder sets each code's percentage and keeps codes below 76.7 percent, so no floor is built. Closed with OI-342 (docs/audit/closed_issues.md)."
+
+  - id: BP-A1
+    title: "seat A P3: the rollback re-grants seven privileges, not MAINTAIN (relacl arwdDxtm)"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "rollback GRANT list, Dart pin and replica now include MAINTAIN; C17 executes the rollback and diffs it."
+
+  - id: BP-A2
+    title: "seat A P3: the header says 'three app readers' but there are two"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "header says two (referral_repository.hasRedeemed, sync_restore_completeness); grep over lib/ names no other reader."
+
+  - id: BP-A3
+    title: "seat A P3: the promo ALTER took ACCESS EXCLUSIVE on promo_codes first and held it to commit"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "the ALTER moved to the end, after the self-check; Dart pin on the position (mutant d_promo_first red)."
+
+  - id: BP-A4
+    title: "seat A P3: the self-check never asserted the ACL of the two replaced functions or referrer_summary's security mode"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "self-check extended (has_function_privilege for both replaced functions, prosecdef, STABLE, proconfig); C15 scenarios 5 and 6."
+
+  - id: BP-A5
+    title: "seat A P3: the live promo values (30, 20, 15 percent) come only from the plan's catalog read"
+    terminal_state: verified_clean
+    evidence: "ADD CONSTRAINT validates existing rows, so a row above 90 could only abort the migration, never pass silently; the pre-apply live read found 0 codes outside 1..90 and the apply succeeded."
+
+  - id: BP-B1
+    title: "seat B P1: live-verify Q9 inserted into promo_codes without the NOT NULL valid_until, so a correct migration would have shown a red case on live while the replica was green"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "Q9 now inserts valid_until = current_date + 1; the replica promo_codes has the live shape (date NOT NULL); Q9 passed on the live project."
+
+  - id: BP-B2
+    title: "seat B P2: no case called referrer_summary() as a REFEREE, so an OR referee_id = uid mutant survived every behavioural case"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "case Q6g (the friend of r1 and of r2 see zeros); mutant red."
+
+  - id: BP-B3
+    title: "seat B P2: two registry statements said the 159 columns are readable by both parties"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "docs/sot_registry.yaml descriptions and the RLS note now say NOT client-readable since migration 160; the referrer reads aggregates via referrer_summary()."
+
+  - id: BP-B4
+    title: "seat B P3: MAINTAIN never exercised or restored (duplicate of A1)"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "replica grant, Q5a list and rollback include MAINTAIN."
+
+  - id: BP-B5
+    title: "seat B P3: C14 could pass vacuously if the rendezvous never happened"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "the decoy trigger calls nextval('rpoc_c14_seq') after the unlock and C14 asserts it; rpoc_c14_early ordering guard; mutant 'nowait' red."
+
+  - id: BP-B6
+    title: "seat B P3: C16b bounds let a sleep after the last attempt through, and a 3 s holder could race a loaded host"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "holder 6 s, upper bound 700 ms, holder released on the redeem being ASLEEP (pg_stat_activity wait_event PgSleep); mutant sleep-after-last red."
+
+  - id: BP-B7
+    title: "seat B P3: the Dart self-check pins were positive-only"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "whole-statement pins (IF v_bad <> '' THEN RAISE ..., the table-privilege IF, both column-loop bodies); negative pin forbidding aclexplode."
+
+  - id: BP-B8
+    title: "seat B P3: registry citations and line ranges pointed at 159 and past function ends; a plan file that does not exist was cited"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "entries re-pointed to the 160 lines and ranges tightened; the citation corrected."
+
+  - id: BP-B9
+    title: "seat B P3: ledger wording (N1 'credit sub-block', N4 'mutants g_* all red') did not match the harness"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "rows N1 and N4 of docs/audit/referral-pay-on-conversion.closure.yaml reworded to what the harness does and to the argued-equivalent survivor."
+
+  - id: BP-B10
+    title: "seat B P3: live-verify file header, Q3 TRUNCATE on a pre-160 database, Q6f search_path"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "header updated; TRUNCATE only attempted when the privilege is gone; Q6f restores the saved search_path."
+
+  - id: BP-B11
+    title: "seat B P3: docs stated the unapplied change in the present tense"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "the 160-PENDING-APPLY markers were carried until the live apply and removed in this commit (grep clean)."
+
+  - id: HP-A1
+    title: "hermes seat A P2: the inline rollback was never executed; the table-level GRANT leaves the six column-level SELECT entries"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "rollback starts with REVOKE ALL; C17 executes the extracted block and diffs it against a 159-only database."
+
+  - id: HP-A2
+    title: "hermes seat A P3: 'aborts the whole migration' overstated if the runner is not transactional"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "header states the transaction-wrapped and the statement-by-statement cases."
+
+  - id: HP-A3
+    title: "hermes seat A P3: after a successful retry the paid-plan refusal is not re-run"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "the retry re-checks the same predicate after every pause; C16d; mutant c_no_revalidate red."
+
+  - id: HP-A4
+    title: "hermes seat A P3: MAINTAIN exists only on PostgreSQL 17"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "documented in the header (live is 17.6; the check fails closed on an older server)."
+
+  - id: HP-B1
+    title: "hermes seat B P2: the 90 percent ceiling sits above the 76.7 percent break-even"
+    terminal_state: verified_clean
+    evidence: "Row EC: founder decision 2026-10-17, ceiling stays and no floor is built (OI-342 closed)."
+
+  - id: HP-B2
+    title: "hermes seat B P2: shipped invite copy says 'you both get 7 days' (pre-existing, commit 3874196f)"
+    terminal_state: upstream_blocked
+    blocker: "Unit C is not started (row U2c)."
+    reopen_when: "the Unit C PR is merged and replaces the invite copy."
+
+  - id: HP-B3
+    title: "hermes seat B P3: OI-336's data-source paragraph says the client reads the table"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "OI-336 rewritten to call referrer_summary() in this commit."
+
+  - id: HP-B4
+    title: "hermes seat B P3: a paying friend who deletes their account makes subscribed / pending drop (a deletion signal)"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "stated in the migration header, plan 2.4 and OI-336's residual paragraph; the privacy-policy sentence is the founder's (old-ledger row X7)."
+
+  - id: HP-C1
+    title: "hermes seat C P2: the table-level C15 scenario did not exercise the table loop"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "scenarios name their own clause; mutants table loop deleted, privilege array cut, role array cut red."
+
+  - id: HP-C2
+    title: "hermes seat C P3: the PUBLIC aclexplode clauses of the self-check were unreachable"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "removed; a Dart negative pin forbids aclexplode in the block; A10 keeps the aclexplode read."
+
+  - id: HP-C3
+    title: "hermes seat C P3: no fixture had a NULL referrer_rewarded"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "case Q6h; mutant s_pending_eq_false red."
+
+  - id: HP-C4
+    title: "hermes seat C P3: C16a's holder could release when attempt 1 merely started"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "the holder waits for the redeem to be ASLEEP (pg_stat_activity, snapshot cleared every poll)."
+
+  - id: HP-C5
+    title: "hermes seat C P3: concurrency script header drift"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "header corrected."
+
+  - id: HP-C6
+    title: "hermes seat C P3: the live-verify SUMMARY is a count nobody pins"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "a Dart test requires every migration-160 case id exactly once; the SUMMARY counts a NULL case as a failure (ok IS NOT TRUE)."
+
+  - id: HP-C7
+    title: "hermes seat C P3: the Dart test read the migration at collection time"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "an absent file is a clear failure of group 6 only."
+
+  - id: HP-C8
+    title: "hermes seat C P3: mutants killed only by Dart text pins (1..4 with the IF v_attempt = 3 test unchanged, a 0.30 s sleep, the lock_timeout lines)"
+    terminal_state: verified_clean
+    evidence: "behaviourally equivalent or bounded by an exact-text pin, written in diagnose f2d6b8; the promo ALTER position and lock_timeout order are pinned."
+
+  - id: HP-D1
+    title: "hermes seat D P2: three docs named the wrong party for the exposure"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "ADR-0021, payment.md and the registry now say the REFERRER could read when each named friend paid."
+
+  - id: HP-D2
+    title: "hermes seat D P2: ADR cited ledger N2 as an alert-counter race"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "N2 is the credit-batch ORDER residual."
+
+  - id: HP-D3
+    title: "hermes seat D P2: Gate 14, the parity test and the single full-suite red are expected until the ledger row exists"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "plan section 5 step 3 says so; the ledger row is in this commit (Gate 14 and Gate 39 PASS)."
+
+  - id: HP-D4
+    title: "hermes seat D P2: the apply commit needs its own review file and a tuning-history entry; the plan-review record lands in a later commit"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "docs/reviews/<hash>-review.md and the same-dated tuning-history entry are in this commit; the plan-review record lands in its own later commit."
+
+  - id: HP-D5
+    title: "hermes seat D P3: stale 159 line cites in the registry"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "re-pointed to 160."
+
+  - id: HP-D6
+    title: "hermes seat D P3: plan section 4 said no closes-oi: OI-344"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "the commit carries closes-oi: OI-344; OI-344 is archived in this commit."
+
+  - id: HP-D7
+    title: "hermes seat D P3: header 'four review rounds'; 'authenticated only' versus service_role"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "fixed before the apply (the header is hashed afterwards)."
+
+  - id: HP-D8
+    title: "hermes seat D P3: diagnose counts stale; pins to re-point"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "counts updated; redeem_referral_paid_referee_migration_pin_test.dart reads the latest definition (160, else 159)."
+
+  - id: HP-D9
+    title: "hermes seat D P3: no step removes the 160-PENDING-APPLY markers; the pitfall row names relacl but column privileges live in attacl"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "markers removed in this commit; the pitfall row names both."
+
+  - id: HP-D10
+    title: "hermes seat D P3: functions and migrations CLAUDE.md pass the 15 percent context-budget soft band"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "backups/context_artifact_sizes.json re-baselined with check_context_artifact_budget.dart --record in this commit."
+
+  - id: HP-D11
+    title: "hermes seat D P3: the rollback does not say it must be coordinated with the Unit C client release"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "COORDINATION note at the head of the rollback."
+
+  - id: M1
+    title: "mutation evidence for the new protections (CLAUDE.md 4.4 rule 21)"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "more than 50 mutants applied to copies of the migration and the tests, each confirmed applied (changed function md5 or catalog hash) and run: all red except two argued behaviourally equivalent (g_no_revoke_public: the table never had a PUBLIC grant; single-fault 'relation not schema-qualified' / 'SET search_path dropped': public precedes pg_temp), which are killed by exact Dart text pins; the compound search_path mutant is killed by Q6f. Self-attested."
+
+  - id: G1
+    title: "the pre-commit gate loop and the pre-push analyze on this batch"
+    terminal_state: closed_in_commit
+    commit: "referral-migration-160 (the commit that adds this file; find it with: git log --diff-filter=A --format=%h -- docs/audit/referral-hardening-migration-160.closure.yaml)"
+    verification: "every scripts/check_*.dart gate runs in the pre-commit hook of the commit that adds this file; CI on the PR (Analyze, Unit Tests, Deno, Audit Gates, Build Check) is the merge gate and safe_pr_merge.sh refuses a merge unless all five are green on the head SHA."

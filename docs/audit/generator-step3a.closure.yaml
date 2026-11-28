@@ -1,0 +1,65 @@
+# Closure ledger — Generator Unit 3A: training follows the goal (OI-487, generator half).
+# Plan docs/plans/2026-11-15-generator-step3a-goal-training.md, diagnose 675d02, founder d3 / d4 / d58-d65.
+# Gate 40 (validate_audit_closure.dart). One terminal_state per item; no `deferred:` key.
+
+batch: generator-step3a
+total_findings: 9
+closed_count: 9
+
+_commit: &feat "ab100469 (with d99dce41, f85e4af6, 912aeacd and the B-pass commit)"
+
+findings:
+  - id: C3A-1
+    title: "OI-487: Cut and Maintain train like Build (same reps, near-equal bands; identical in 92 of 576 profiles)"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "goal_training_gate_test: identical OFF 92, ON exactly the two d63 profiles; Build byte-identical"
+
+  - id: C3A-2
+    title: "S3 (d58 / d59): the goal's week-1 rep table for main lifts (archetype H / M), the range bound, accessories 10-15"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "goal_reps_behavioral_test (table, _applyWave end to end); the gate: 14,547 main lifts equal the table (3,601 at a bound), 12,360 accessories in 10-15"
+
+  - id: C3A-3
+    title: "S4 (d3 / d62): Maintain two-thirds of Build, Cut beginner below Build; caps unchanged"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "session_budget_test band pins; goal_reps_behavioral_test both tables; the gate: 0 plan-weeks newly at 0"
+
+  - id: C3A-4
+    title: "S2 / d4 / d60 / d64: the Strength focus is real (range floor; +30 s on H / M at 60+ minutes only), in a swap too"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "goal_reps_behavioral_test rest and pricing; swap_exercise_rest_follows_incoming_archetype_test (3A case); the gate's focus block: 29,010 main lifts (on the 2E tree; 29,012 before it) at their floor, rest per d64, 0 newly at 0"
+
+  - id: C3A-5
+    title: "S5: quad-first Glutes credit for 4-day Maintain (Hamstrings at 0 in 30 beginner plans otherwise)"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "goal_reps_behavioral_test predicate table; the gate's newly-at-0 count"
+
+  - id: C3A-6
+    title: "S6: kill switch disable_goal_training; OFF equals main; the switch overrides the focus"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "goal_training_kill_switch_golden_test (1,010 personas = main); the gate's 48-plan switch-over-focus check; deletion tracked by OI-514"
+    notes: "2026-11-17: the switch, goal_training_kill_switch_golden_test, its fixture and the 48-plan check were deleted with OI-514 (generator-killswitch-3a3c); the gate now compares against the frozen pre-3A baseline test/fixtures/goal_training_gate_baseline.json"
+
+  - id: C3A-7
+    title: "S8 / d65: the day floor left 8 rep30 day-weeks at 2 exercises under 3A's lower tops (session cap; rank-0 reservation)"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "day_floor_behavioral_test (cap trim, reservation-blocked seat; mutants RB, NOTRIM, LEDGER red); day_floor_gate_rep30 / pairs_p1 / pairs_p4: 0 thin, 0 lost, OFF digests = main"
+
+  - id: C3A-8
+    title: "Neighbouring oracles restated pre-3A bands and credit (budget gate, day-floor lib, 2C-a credit table, crafted fixtures)"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "each oracle carries 3A's rule in its own words; Fx(goalTraining:) for pre-3A fixtures; the gates re-run green"
+
+  - id: C3A-9
+    title: "Lead-first gate's opener rule read a new 2A lead (seated where the lower top refused it OFF) as a reorder"
+    terminal_state: closed_in_commit
+    commit: *feat
+    verification: "lead_first_gate_test: a reorder of two rows both worlds hold stays at 0; new openers counted and pinned"

@@ -1,0 +1,225 @@
+// lib/features/nutrition/services/diet_plan_pdf.dart
+//
+// The Diet Plan screen's PDF export document, moved out of
+// diet_plan_screen.dart unchanged (diet plan Unit 2a, 2026-11-14: the screen
+// crossed the 800-line ceiling, scripts/check_god_screen_max_lines.dart).
+// Pure: takes the plan's numbers and returns the PDF bytes; sharing and the
+// error snackbar stay on the screen.
+import 'dart:typed_data';
+
+import 'package:icanbefitter/core/constants/diet_strategies.dart';
+import 'package:icanbefitter/core/constants/diet_supplement_doses.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+
+import 'diet_plan_totals.dart';
+
+/// One food row of an exported meal.
+typedef DietPlanPdfItem = ({
+  String name,
+  String servingDesc,
+  int calories,
+  int protein,
+  int carbs,
+  int fat,
+});
+
+/// One exported meal.
+typedef DietPlanPdfMeal = ({String name, List<DietPlanPdfItem> items});
+
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// The PDF's sub-header line. Diet plan Unit 3a: a non-Balanced strategy
+/// adds `  |  Strategy: <label>`; null (Balanced, or the flag off) adds
+/// nothing, so the line is the pre-3a one.
+String dietPlanPdfSubheader({
+  required String date,
+  required String foodTypeLabel,
+  String? strategyLabel,
+}) =>
+    'Generated on $date  |  Food type: $foodTypeLabel'
+    '${strategyLabel == null ? '' : '  |  Strategy: $strategyLabel'}';
+
+/// The PDF's header lines under the title, in order (Unit 3b round 3
+/// finding 1): the sub-header, the targets line and, when the plan was built
+/// for another strategy than the targets (a legacy fallback, a vegan Keto
+/// user's Low carb plan), the screen's note line.
+List<String> dietPlanPdfHeaderLines({
+  required String date,
+  required String foodTypeLabel,
+  String? strategyLabel,
+  String? planNote,
+  required int calorieTarget,
+  required int proteinTarget,
+  required int carbTarget,
+  required int fatTarget,
+  required int fiberTarget,
+}) =>
+    [
+      dietPlanPdfSubheader(
+          date: date,
+          foodTypeLabel: foodTypeLabel,
+          strategyLabel: strategyLabel),
+      'Target: $calorieTarget kcal  |  Protein: ${proteinTarget}g  |  Carbs: ${carbTarget}g  |  Fat: ${fatTarget}g  |  Fiber: ${fiberTarget}g',
+      if (planNote != null) planNote,
+    ];
+
+/// The PDF's strategy label: the strategy the PLAN was built for (Unit 3b
+/// round 3 finding 1), null for Balanced.
+String? dietPlanPdfStrategyLabel(DietStrategy planStrategy) =>
+    planStrategy == DietStrategy.balanced ? null : planStrategy.label;
+
+/// The line under the meals (diet chart v3, docs/plan §4.1): what the plan
+/// provides, with the SAME targets the screen's totals row compares with
+/// ([caption] names their strategy when it is not the header's).
+String dietPlanPdfTotalLine({
+  required DietPlanTotals totals,
+  required int calorieTarget,
+  required int proteinTarget,
+  required int carbTarget,
+  required int fatTarget,
+  String? caption,
+}) =>
+    'Plan total: ${totals.calories} kcal  |  Protein: ${totals.protein}g  |  '
+    'Carbs: ${totals.carbs}g  |  Fat: ${totals.fat}g   '
+    '(target${caption == null ? '' : ' $caption'}: $calorieTarget kcal  |  '
+    '${proteinTarget}g  |  ${carbTarget}g  |  ${fatTarget}g)';
+
+Future<Uint8List> buildDietPlanPdf({
+  required List<DietPlanPdfMeal> meals,
+  required String foodTypeLabel,
+  // The strategy the PLAN was built for (Unit 3b; 3a used the targets');
+  // null (Balanced, or the flag off) adds nothing to the header.
+  String? strategyLabel,
+  // Unit 3b: the screen's note when the plan differs from the targets'
+  // strategy; null adds no line.
+  String? planNote,
+  required int calorieTarget,
+  required int proteinTarget,
+  required int carbTarget,
+  required int fatTarget,
+  required int fiberTarget,
+  required DateTime now,
+  // Unit 4a: the supplement card rows; null (Supplements off, or the flag
+  // off) adds nothing, so the document is the pre-Unit-4 one.
+  List<SupplementRow>? supplements,
+  // Diet chart v3: the plan-total line under the meals; null adds nothing.
+  String? planTotalLine,
+}) {
+  final dateStr = '${now.day} ${_months[now.month - 1]} ${now.year}';
+
+  final pdf = pw.Document();
+
+  final headerStyle = pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold);
+  final subHeaderStyle = pw.TextStyle(fontSize: 12, color: PdfColors.grey700);
+  final mealTitleStyle = pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold);
+  const cellStyle = pw.TextStyle(fontSize: 10);
+  final cellBoldStyle = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold);
+
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      header: (context) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text('ICANBEFITTER Diet Plan', style: headerStyle),
+          for (final line in dietPlanPdfHeaderLines(
+              date: dateStr,
+              foodTypeLabel: foodTypeLabel,
+              strategyLabel: strategyLabel,
+              planNote: planNote,
+              calorieTarget: calorieTarget,
+              proteinTarget: proteinTarget,
+              carbTarget: carbTarget,
+              fatTarget: fatTarget,
+              fiberTarget: fiberTarget)) ...[
+            pw.SizedBox(height: 4),
+            pw.Text(line, style: subHeaderStyle),
+          ],
+          pw.Divider(),
+        ],
+      ),
+      footer: (context) => pw.Container(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text(
+          'Generated by ICANBEFITTER  ·  www.icanbefitter.com',
+          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
+        ),
+      ),
+      build: (context) => [
+        ...meals.map((meal) {
+        final totalCals = meal.items.fold<int>(0, (s, i) => s + i.calories);
+        final totalProtein = meal.items.fold<int>(0, (s, i) => s + i.protein);
+
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.SizedBox(height: 10),
+            pw.Text('${meal.name}  ($totalCals kcal, ${totalProtein}g protein)',
+                style: mealTitleStyle),
+            pw.SizedBox(height: 6),
+            pw.TableHelper.fromTextArray(
+              headerStyle: cellBoldStyle,
+              cellStyle: cellStyle,
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+              cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              headers: ['Food', 'Serving', 'Kcal', 'Protein', 'Carbs', 'Fat'],
+              data: meal.items
+                  .map((item) => [
+                        item.name,
+                        item.servingDesc,
+                        '${item.calories}',
+                        '${item.protein}g',
+                        '${item.carbs}g',
+                        '${item.fat}g',
+                      ])
+                  .toList(),
+            ),
+            pw.SizedBox(height: 8),
+          ],
+        );
+        }),
+        if (planTotalLine != null) ...[
+          pw.SizedBox(height: 6),
+          pw.Text(planTotalLine, style: cellBoldStyle),
+        ],
+        if (supplements != null)
+          ..._supplementCardWidgets(
+              supplements, mealTitleStyle, cellStyle, cellBoldStyle),
+      ],
+    ),
+  );
+
+  return pdf.save();
+}
+
+/// The supplement card as PDF widgets: a title, a table of the rows and the
+/// footer lines. ASCII only (the PDF uses its default font).
+List<pw.Widget> _supplementCardWidgets(
+  List<SupplementRow> rows,
+  pw.TextStyle titleStyle,
+  pw.TextStyle cellStyle,
+  pw.TextStyle cellBoldStyle,
+) =>
+    [
+      pw.SizedBox(height: 14),
+      pw.Text('Your supplements', style: titleStyle),
+      pw.SizedBox(height: 6),
+      pw.TableHelper.fromTextArray(
+        headerStyle: cellBoldStyle,
+        cellStyle: cellStyle,
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+        cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        headers: kSupplementTableHeaders,
+        data: supplementTableData(rows),
+      ),
+      pw.SizedBox(height: 6),
+      for (final line in kSupplementCardFooter) ...[
+        pw.Text(line, style: cellStyle),
+        pw.SizedBox(height: 3),
+      ],
+    ];

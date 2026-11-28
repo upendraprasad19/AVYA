@@ -1,0 +1,205 @@
+_commit: &wip "claude/oi-pending-hold-weeks-1od97o (uncommitted)"
+batch: fob3-coach-hold-block
+date: 2026-08-21
+branch: claude/oi-pending-hold-weeks-1od97o
+blast_radius: account
+source: docs/audit/open_issues.md OI-60 (FOB-3) + docs/ship_dark_pending_review.yaml
+context: >
+  FOB-3 of OI-60. The coach snapshot sent current_week: 4 for every hold day at
+  every ordinal, and captain_manual.ts states "free locks at Phase I after 4
+  weeks". Composed with tier: free that reads as "final week of Phase I, upgrade
+  now" — a false milestone the model can regenerate weekly at the user who just
+  chose to stay. Nothing under supabase/functions/ read is_hold or hold_ordinal
+  at all. The fix is a facts-only `hold` block in the snapshot plus the
+  instruction in the static manual; the manual half is inert until an ai-proxy
+  redeploy.
+findings:
+
+  - id: FOB3-A
+    title: "the snapshot had no way to say a holder is holding"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/hold_snapshot_block_behavioral_test.dart
+    notes: >
+      New seam holdSnapshotBlock() on the read service, delegated on the facade
+      the snapshot builder already imports, emitted via a null-aware element so
+      a non-holder's snapshot gains no key. Facts only: ordinal, label,
+      week_start, is_deload, sessions_completed, sessions_total. Mutation-proven
+      on the label (hardcode H1 -> the H2 test reddens) and the session counts
+      (hardcode 0 -> the progress test reddens).
+
+  - id: FOB3-B
+    title: "the model was never taught what a hold is"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: supabase/functions/_shared/captain_manual_hold_test.ts
+    notes: >
+      A HOLD WEEKS section in captain_manual.ts: read snapshot.hold, quote
+      hold.label, IGNORE both projected week fields BY NAME (naming them is the
+      point — "read hold" alone leaves the false number in play), and NEVER say
+      final-week-of-Phase-I. The PRO-unlock line gains a holder caveat, because
+      "free locks at Phase I after 4 weeks" is true for an advancing user and
+      false for a holder, and sits ~17 lines above the new section where it
+      would otherwise be the premise the model reasons from.
+
+  - id: FOB3-C
+    title: "20 unescaped backticks would have boot-failed ai-proxy on the next deploy"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: supabase/functions/_shared/captain_manual_hold_test.ts
+    notes: >
+      CAPTAIN_MANUAL is one template literal. The section refers to
+      snapshot.hold, hold.label, hold.is_deload and so on, and the first draft
+      wrote those in unescaped backticks — which terminates the literal at line
+      126 and stops the module parsing. Per deploy-skill bug-class 6.5 that does
+      NOT fail loudly: ai-proxy 503s at boot while the previous bundle keeps
+      serving. Caught by reading the file's own existing escapes at 403-410.
+      Verified rather than assumed: the declaration was extracted and parsed by
+      a real JS engine (node v22) — 19831 chars, closing backtick at line 412,
+      zero unescaped ${. Deno is not installable in this container (the proxy
+      403s deno.land), so CI's deno-edge-functions type-check is the gate this
+      container cannot run, and importing the module is the first thing the new
+      Deno test does.
+
+  - id: FOB3-D
+    title: "the first keep-set test proved nothing — dropping 'hold' left it green"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/hold_snapshot_block_behavioral_test.dart
+    notes: >
+      Found by running the mutation rather than by reading the test. The trimmer
+      shrinks the LARGEST non-kept field each pass, so the two giant bloat
+      fields absorbed the whole overage and the ~110-char hold block was never
+      reached; removing 'hold' from the keep set changed nothing observable.
+      That is the Gate-44 shape inside a test written to prevent it. Replaced
+      with a case where the KEPT fields alone exceed the budget, forcing the
+      loop to reach `hold` as the only remaining non-kept field; it then reddens
+      with a 3-key block {ordinal, label, week_start}, and the test asserts the
+      key COUNT directly so a partial block cannot pass on a loose matcher. The
+      original realistic-bloat case is kept alongside as a no-regression check.
+
+  - id: FOB3-E
+    title: "the seam was read twice inside the map literal"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: lib/features/ai_coach/services/ai_snapshot_builder.dart
+    notes: >
+      The first draft called holdSnapshotBlock() once for the null check and
+      again for the value. Two reads of nowWall() in one snapshot build can
+      straddle IST midnight on the last request of a hold's final day, emitting
+      a block for a hold that the same snapshot's week fields say has ended.
+      Hoisted to a single local before the literal.
+
+  - id: FOB3-F
+    title: "ai-proxy redeploy — the manual half is inert until it happens"
+    terminal_state: blocked_on_user
+    reason: >
+      Founder must run the two §0 host-shell commands for `ai-proxy` from the
+      laptop, which holds the Supabase Management API token this container does
+      not. Exact commands + the anon-key boot-verify (503 = boot-broken) are in
+      docs/operations/FOUNDER_LAPTOP_HANDOFF.md §2-4.
+    notes: >
+      A CREDENTIAL blocker, not a decision. deploy_via_api.js needs a Supabase
+      Management API token and every source it accepts is absent from this
+      container (SUPABASE_ACCESS_TOKEN_FITNESS and SUPABASE_ACCESS_TOKEN unset,
+      ~/.supabase/fitness-app-token absent, supabase/.supabase/ gitignored so it
+      never came with the clone). The MCP deploy_edge_function fallback is
+      rejected rather than untried: ai-proxy carries nested _shared/tools/
+      imports and §0 records that path silently mangling them. Commands and
+      per-deploy verification are in docs/operations/FOUNDER_LAPTOP_HANDOFF.md
+      §2-4. Until then a holder's snapshot carries facts the model has not been
+      taught to read — better than today, not the finished behaviour.
+
+  - id: FOB3-G
+    title: "the two week fields were deliberately NOT suppressed"
+    terminal_state: verified_clean
+    evidence: >
+      Considered and rejected, recorded so it is not re-litigated. Blanking
+      progress.current_week / current_plan_summary.week for a holder trades a
+      wrong number for a missing one, and both are read by non-hold logic. OI-60's
+      own do_not also forbids the obvious replacement (4 + ordinal): it
+      manufactures the number the UI ruled dishonest and demotes a phase-2 holder
+      from program week 8 to 5 (diagnose c9f4a2). For a PROMPT the honest fix is
+      to name what to disregard, which the manual now does for both fields.
+
+  - id: FOB3-H
+    title: "FOB-4 cannot follow FOB-3 as a redeploy-only unit"
+    terminal_state: blocked_on_user
+    reason: >
+      Founder decision + authorization required before FOB-4 can be scoped: how
+      hold state crosses to the server (a user_progress column vs a derived RPC),
+      then an explicit per-action go for the live migration apply (§4.3, plan
+      approval ≠ apply approval). Not startable in this batch.
+    notes: >
+      Measured during this batch against the live schema, and it contradicts
+      FOB-4's own ledger why:. information_schema.columns in schema public holds
+      ZERO columns matching %hold%; user_progress carries no hold field of any
+      spelling (23 columns, read live); there is no workout_schedule table in
+      public at all — is_hold is written onto LOCAL schedule rows and never
+      crosses the wire. weekly-recap-ready and weekly-report therefore cannot
+      branch on a hold whatever is deployed to them. FOB-4 needs a MIGRATION
+      and its own live-apply authorization on top of the two redeploys. Recorded
+      on OI-60 next to the blocker list so it is not rediscovered mid-batch.
+
+  - id: FOB3-I
+    title: "the block's key SET was variable — 4 keys instead of 6 when HoldWeekInfo was missing"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: lib/core/services/workout_schedule_read_service.dart
+    notes: >
+      B-pass finding. week_start and is_deload were emitted behind
+      `if (info != null)`, so a block could carry 4 keys while looking complete.
+      That interacts badly with the very thing the keep-set entry protects
+      against: the trimmer halves a map BY INSERTION ORDER, so a 4-key block
+      degrades to {ordinal, label} rather than the 6-key contract the behavioral
+      test asserts. Made all-or-nothing — a missing HoldWeekInfo returns null.
+      Both alternatives are worse: a partial block that looks complete is
+      dishonest, and defaulting is_deload to false is a fabricated value, the
+      same class as the `body_fat ?? 18.0` this session's Hermes pass rejected.
+      Stated plainly: the branch is not behaviourally reachable today (both
+      reads derive from the same row stamps), so it has no test. It is a guard
+      for if that ever changes, not a fix for an observed failure.
+
+  - id: FOB3-J
+    title: "the seam inlined a SECOND `'H$ordinal'` literal, beside the one the util exists to own"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: lib/core/utils/hold_week_labels.dart
+    notes: >
+      B-pass finding, and the sharper one. `hold_week_labels.dart` exists
+      BECAUSE inlined hold-label string logic drifts — its own header records a
+      B-pass inverting an inlined ternary while all 16 tests stayed green. The
+      first draft of the snapshot seam then wrote its own `'H$ordinal'`, which
+      is that mistake again, in the batch whose job is to make the model quote
+      the SAME identity the user sees on screen. Added holdIdentityLabel() as
+      the one place the `H` prefix is spelled and composed all NINE sites from
+      it — the util's seven formatters, plan_header.dart, hold_chip_group.dart —
+      plus the seam. Not seven of nine with two named for later: the two widget
+      sites are one line each, and leaving them would have left the class open
+      while claiming it closed. Byte-identical output, proven by the existing
+      73-test hold set staying green, and mutation-proven both ways: respelling
+      the shared token to `W$ordinal` reddens 11 assertions across the screen
+      surfaces AND the snapshot; re-inlining a literal in the seam reddens 1.
+
+  - id: FOB3-K
+    title: "Gate 9 required a writer→reader test the concept did not have"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: test/contracts/hold_snapshot_block_writer_to_reader_test.dart
+    notes: >
+      Caught at the commit, not in review. Declaring hive.key_prefix on the new
+      concept put it in Gate 9's scope, which requires
+      <concept>_writer_to_reader_test.dart. The sibling hold_week_identity
+      sidesteps this by declaring an empty prefix; copying that would have been
+      gaming the gate, since this concept genuinely reads schedule_* rows.
+      Wrote the test instead, and it earns its place rather than duplicating the
+      behavioral file: it hand-writes CORRUPT rows the real writer cannot
+      produce, pinning the four drift shapes (renamed hold_ordinal, renamed
+      is_hold, is_hold with no ordinal, a hold week that is not today), the
+      exact 6-key set, and that the row's stamped `week` = 4 + ordinal never
+      reaches the block.
+      ⚠ Its own leak assertion was wrong on first run: at ordinal 2 the row
+      carries week 6 and sessions_total is ALSO 6, so values.contains(6) went
+      red on a coincidence. A matcher that cannot tell a leak from a collision
+      is not a leak test. Fixed with ordinal 5, where 9 is reachable only from
+      the stamp.

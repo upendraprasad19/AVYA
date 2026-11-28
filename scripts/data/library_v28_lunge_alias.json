@@ -1,0 +1,10 @@
+{
+  "_meta": {
+    "batch": "OI-523, library v28",
+    "plan": "docs/plans/2026-11-23-oi523-lunge-alias-v28.md (D1, D3)",
+    "note": "Kept-row record for the cloud seed generator: G3470 Forward Lunge's name_aliases cloud column. `before` is what the previous seed (176) gave it, `after` null is the library's shape for a row without an alias (the key is absent from the asset, the cloud value is NULL). The asset is written by the importer from the removals file (E144 has no alias_to); this record only lets the generator check the row and write the inline rollback, which restores `before`."
+  },
+  "rows": [
+    { "id": "G3470", "before": ["Reverse Lunge"], "after": null }
+  ]
+}

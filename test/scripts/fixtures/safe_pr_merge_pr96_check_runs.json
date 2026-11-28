@@ -1,0 +1,101 @@
+{
+  "total_count": 8,
+  "check_runs": [
+    {
+      "id": 113913915062,
+      "name": "Vercel Preview Comments",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "691d826bacba47c8872900055d60d7c9e8061c68",
+      "started_at": "2026-10-09T16:18:36Z",
+      "completed_at": "2026-10-09T16:18:36Z",
+      "app": {
+        "slug": "vercel"
+      }
+    },
+    {
+      "id": 113913896294,
+      "name": "Supabase Integration Tests",
+      "status": "completed",
+      "conclusion": "skipped",
+      "head_sha": "691d826bacba47c8872900055d60d7c9e8061c68",
+      "started_at": "2026-10-09T16:18:34Z",
+      "completed_at": "2026-10-09T16:18:33Z",
+      "app": {
+        "slug": "github-actions"
+      }
+    },
+    {
+      "id": 113913896175,
+      "name": "Plan-review record (>=account merge-to-main)",
+      "status": "completed",
+      "conclusion": "skipped",
+      "head_sha": "691d826bacba47c8872900055d60d7c9e8061c68",
+      "started_at": "2026-10-09T16:18:34Z",
+      "completed_at": "2026-10-09T16:18:33Z",
+      "app": {
+        "slug": "github-actions"
+      }
+    },
+    {
+      "id": 113913894934,
+      "name": "Build Check (APK)",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "691d826bacba47c8872900055d60d7c9e8061c68",
+      "started_at": "2026-10-09T16:18:35Z",
+      "completed_at": "2026-10-09T16:21:58Z",
+      "app": {
+        "slug": "github-actions"
+      }
+    },
+    {
+      "id": 113913894852,
+      "name": "Deno Edge-Function tests",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "691d826bacba47c8872900055d60d7c9e8061c68",
+      "started_at": "2026-10-09T16:18:36Z",
+      "completed_at": "2026-10-09T16:19:25Z",
+      "app": {
+        "slug": "github-actions"
+      }
+    },
+    {
+      "id": 113913894850,
+      "name": "Unit Tests",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "691d826bacba47c8872900055d60d7c9e8061c68",
+      "started_at": "2026-10-09T16:18:35Z",
+      "completed_at": "2026-10-09T16:31:36Z",
+      "app": {
+        "slug": "github-actions"
+      }
+    },
+    {
+      "id": 113913894809,
+      "name": "Audit Gates",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "691d826bacba47c8872900055d60d7c9e8061c68",
+      "started_at": "2026-10-09T16:18:36Z",
+      "completed_at": "2026-10-09T16:20:01Z",
+      "app": {
+        "slug": "github-actions"
+      }
+    },
+    {
+      "id": 113913894423,
+      "name": "Analyze",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "691d826bacba47c8872900055d60d7c9e8061c68",
+      "started_at": "2026-10-09T16:18:36Z",
+      "completed_at": "2026-10-09T16:20:05Z",
+      "app": {
+        "slug": "github-actions"
+      }
+    }
+  ]
+}

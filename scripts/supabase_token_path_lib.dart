@@ -1,0 +1,111 @@
+// scripts/supabase_token_path_lib.dart
+//
+// Dart twin of .claude/token_path.js: which Supabase Management-API token file to read.
+// Same candidate order, same git lookup (the MAIN worktree = first entry of
+// `git worktree list --porcelain`, with inherited GIT_* variables scrubbed), pinned against
+// each other by test/scripts/token_path_resolver_test.dart.
+//
+// Order: this tree's `.supabase/`, the main worktree's `.supabase/`, then the LEGACY
+// `supabase/.supabase/` paths. On the VPS the legacy file holds a REVOKED token (HTTP 401,
+// verified 2026-10-02); on the founder's Windows clone it is unverified, so it stays a
+// last-resort candidate and its use is reported via [TokenFile.legacy].
+library;
+
+import 'dart:io';
+
+const tokenFileName = 'supabase access token.txt';
+
+class TokenFile {
+  const TokenFile(this.path, {required this.legacy, this.primaryError});
+  final String path;
+  final bool legacy;
+
+  /// Set when the main worktree could not be located AND this looks like a linked worktree.
+  final String? primaryError;
+}
+
+/// The environment a `git` child gets: the git redirection variables are dropped (an inherited GIT_DIR answers about
+/// ANOTHER repo) and so are the Supabase secrets (a `git` child has no use for the service-role key or an access token,
+/// and a hook or a wrapper that logs a child environment must not be able to print them). [base] is for tests.
+Map<String, String> scrubbedGitEnv([Map<String, String>? base]) {
+  final env = Map<String, String>.from(base ?? Platform.environment);
+  // Names are compared upper-cased (Windows keeps the case an operator typed), and any variable that looks like a credential
+  // goes with them: the git commands run here are local and need none. The twin of `.claude/token_path.js`.
+  // The GIT_CONFIG_* family stays whole: git dies (exit 128) on a GIT_CONFIG_COUNT whose GIT_CONFIG_KEY_<n> is gone.
+  // Residual, accepted: it can carry a credential (an http extraheader in a VALUE, a token in an insteadOf KEY); both git
+  // commands run here are local, and a container may need an injected safe.directory.
+  const redirects = {'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'};
+  final secretName = RegExp(r'KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL');
+  env.removeWhere((k, _) {
+    final u = k.toUpperCase();
+    return redirects.contains(u) || u.startsWith('SUPABASE_') || (!u.startsWith('GIT_CONFIG_') && secretName.hasMatch(u));
+  });
+  return env;
+}
+
+String _join(List<String> parts) => parts.join(Platform.pathSeparator);
+
+/// The tree root: `git rev-parse --show-toplevel` from [fromDir] (falls back to [fromDir]).
+String repoRootFrom(String fromDir) {
+  try {
+    final r = Process.runSync('git', ['rev-parse', '--show-toplevel'],
+        workingDirectory: fromDir, environment: scrubbedGitEnv(), includeParentEnvironment: false);
+    final out = (r.stdout as String).trim();
+    if (r.exitCode == 0 && out.isNotEmpty) return Directory(out).absolute.path;
+  } catch (_) {}
+  return Directory(fromDir).absolute.path;
+}
+
+/// The MAIN worktree root, or null with [error] explaining why.
+({String? root, String? error}) primaryRoot(String repoRoot, {String git = 'git'}) {
+  try {
+    final r = Process.runSync(git, ['worktree', 'list', '--porcelain'],
+        workingDirectory: repoRoot, environment: scrubbedGitEnv(), includeParentEnvironment: false);
+    if (r.exitCode != 0) {
+      final msg = (r.stderr as String).trim().split('\n').first;
+      return (root: null, error: msg.length > 200 ? msg.substring(0, 200) : msg);
+    }
+    for (final line in (r.stdout as String).split(RegExp(r'\r?\n'))) {
+      if (line.startsWith('worktree ')) {
+        return (root: line.substring('worktree '.length).trim(), error: null);
+      }
+    }
+    return (root: null, error: 'git worktree list printed no worktree line');
+  } catch (e) {
+    return (root: null, error: e.toString());
+  }
+}
+
+/// Ordered candidates (existing or not); the LEGACY `supabase/.supabase` entries come last.
+/// `legacy` is decided from the slot a path was built for, never by parsing it back (a repo
+/// whose own directory is named `supabase` would fool that). [git] overrides the git executable
+/// (tests use it to prove the git-failed branch).
+List<({String path, bool legacy})> candidateEntries(String repoRoot, {String git = 'git'}) {
+  final root = Directory(repoRoot).absolute.path;
+  final primary = primaryRoot(root, git: git).root;
+  final hasOther = primary != null && Directory(primary).absolute.path != root;
+  final p = hasOther ? Directory(primary).absolute.path : null;
+  return [
+    (path: _join([root, '.supabase', tokenFileName]), legacy: false),
+    if (p != null) (path: _join([p, '.supabase', tokenFileName]), legacy: false),
+    (path: _join([root, 'supabase', '.supabase', tokenFileName]), legacy: true),
+    if (p != null) (path: _join([p, 'supabase', '.supabase', tokenFileName]), legacy: true),
+  ];
+}
+
+/// Ordered candidate token file paths (existing or not); the last ones are the LEGACY paths.
+List<String> candidateTokenFiles(String repoRoot, {String git = 'git'}) =>
+    [for (final e in candidateEntries(repoRoot, git: git)) e.path];
+
+/// First candidate that is a regular file, or null.
+TokenFile? resolveTokenFile(String repoRoot, {String git = 'git'}) {
+  final root = Directory(repoRoot).absolute.path;
+  final err = primaryRoot(root, git: git).error;
+  final linked = root.replaceAll(r'\', '/').contains('/.claude/worktrees/');
+  for (final e in candidateEntries(root, git: git)) {
+    if (File(e.path).existsSync()) {  // file-only: a token file, never a directory
+      return TokenFile(e.path, legacy: e.legacy, primaryError: linked ? err : null);
+    }
+  }
+  return null;
+}

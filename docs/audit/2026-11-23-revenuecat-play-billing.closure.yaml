@@ -1,0 +1,108 @@
+# Closure ledger - OI-519 Android PRO through RevenueCat + Google Play Billing (+51), branch oi519-revenuecat-plan, PR 334.
+# Gate 40. One terminal_state per unit; no `deferred:` key. Per-finding detail lives in the review files and the plan's
+# sections 14-28; this ledger closes the units, the review stages and the live steps.
+
+batch: 2026-11-23-revenuecat-play-billing
+plan_review_record: docs/plan-reviews/oi519-revenuecat-plan.md
+bpass_review: docs/reviews/f415470375b9-review.md
+total_findings: 17
+closed_count: 17
+
+findings:
+  - id: U0-U1-SCHEMA
+    title: "RevenueCat response shapes (docs) + migration 182 local proof (Play rows, defer queue)"
+    terminal_state: closed_in_commit
+    commit: "29136954"
+    verification: "test/sql/play_subscriptions_local.sh ALL PASSED; 7 mutants red (plan section 19)"
+
+  - id: L1-MIGRATION-182
+    title: "Migration 182 pre-apply review fixes and the live apply (founder go 2026-11-24)"
+    terminal_state: closed_in_commit
+    commit: "7705903a and 0f40b0ff"
+    verification: "plan sections 22-23: live functions match the file, grants service_role only, 0 Play rows; backups/applied_migrations.json updated"
+
+  - id: U2-MIRROR
+    title: "Shared RevenueCat mirror (_shared/revenuecat_mirror.ts)"
+    terminal_state: closed_in_commit
+    commit: "45eeadac"
+    verification: "revenuecat_mirror_test.ts green; 5 mutants red (plan section 20)"
+
+  - id: U3-FUNCTIONS
+    title: "revenuecat-webhook, revenuecat-sync, revenuecat-reconcile (not deployed)"
+    terminal_state: closed_in_commit
+    commit: "0f40b0ff"
+    verification: "72 Deno tests + 25 real-PostgREST checks; B-pass docs/reviews/ec073c981012-review.md accepted"
+
+  - id: U5-CLIENT
+    title: "Play paywall body, Play-aware Profile, delete warning, share QR (dark until a play_billing build)"
+    terminal_state: closed_in_commit
+    commit: "c521721d and ad057818"
+    verification: "paywall_play_body_behavioral_test.dart, play_billing_surfaces_behavioral_test.dart green; mutants in plan sections 25 and 27"
+
+  - id: U4-SERVER-READERS
+    title: "verify-subscription, expiry-reminder, redeem-referral, delete-account Play leg, admin, digest, bot"
+    terminal_state: closed_in_commit
+    commit: "ad057818"
+    verification: "Deno suites green; B-pass docs/reviews/667e533689bd-review.md accepted (27 mutants red)"
+
+  - id: U6-BUILD-DOCS
+    title: "/build-apk play_billing mode (resolve_purchase_mode.dart), versioncode record, docs, registry, cron draft"
+    terminal_state: closed_in_commit
+    commit: "ad057818"
+    verification: "test/scripts/resolve_purchase_mode_test.dart green; CI run 45345918116 green"
+
+  - id: C1-GATES-CI
+    title: "Local full suite + PR CI"
+    terminal_state: closed_in_commit
+    commit: "c9a8218b"
+    verification: "local full suite 16,587 passed (1 .opencode copy fixed); PR 334 CI green on c9a8218b and on 9b61851b (after the hermes fixes)"
+
+  - id: C2-BPASS
+    title: "B-pass rounds on 182 + U3 and on U4 + U5 + U6"
+    terminal_state: closed_in_commit
+    commit: "0f40b0ff and ad057818"
+    verification: "docs/reviews/ec073c981012-review.md and docs/reviews/667e533689bd-review.md, both verdict accepted"
+
+  - id: C3-HERMES
+    title: "Hermes pass (18 findings) + two B-pass rounds on its fixes (13 findings)"
+    terminal_state: closed_in_commit
+    commit: "1be99afb"
+    verification: "docs/audit/2026-11-24-hermes-oi519-play-billing.md and docs/reviews/f415470375b9-review.md accepted; 36 mutants red"
+
+  - id: L2-DEPLOY-AND-DRAFTS
+    title: "Deploy the 10 functions from merged main (switch OFF); apply the reconcile cron draft and the start_date draft"
+    terminal_state: closed_in_commit
+    commit: "4afa580d"
+    verification: "founder go 2026-11-24; 10 functions deployed from main 4afa580d (versions and verify_jwt read back, boot-verified); migrations 187 and 188 applied (live body md5 38bffd1f = file; cron jobid 49, first tick 200); plan section 29"
+
+  - id: L3-TEST-EVENT
+    title: "RevenueCat 'Send test event' + a real sandbox customer read"
+    terminal_state: closed_in_commit
+    commit: "4afa580d"
+    verification: "subscription_events id 1 TEST outcome switch_off (webhook URL, auth, ledger write); the real customer read (REVENUECAT_SECRET_KEY) moves to the first RESTORE or purchase on +51 (L6-L7); plan section 29"
+
+  - id: L4-SWITCH-ON
+    title: "Turn ENABLE_PLAY_BILLING_MIRROR on"
+    terminal_state: closed_in_commit
+    commit: "4afa580d"
+    verification: "ENABLE_PLAY_BILLING_MIRROR=true (digest read back); second test event id 2 outcome test; plan section 29"
+
+  - id: L5-BUILD
+    title: "Version bump to +51 and /build-apk --bundle --purchase-mode play_billing"
+    terminal_state: blocked_on_user
+    reason: "the founder initiates builds; needs the goog_ key in the laptop .env"
+
+  - id: L6-L7-PLAY-TESTING
+    title: "Upload to Play internal testing; license-tester purchase and the defer test"
+    terminal_state: blocked_on_user
+    reason: "founder actions in Play Console and on a device; the first RESTORE or purchase is also the REVENUECAT_SECRET_KEY read (plan section 29)"
+
+  - id: F1-YEARLY-PRICE
+    title: "Play Console yearly price to 3,499 INR"
+    terminal_state: blocked_on_user
+    reason: "founder action in Play Console"
+
+  - id: F2-GOOG-KEY
+    title: "RevenueCat public Google key (goog_...) in the laptop .env"
+    terminal_state: blocked_on_user
+    reason: "founder action; never pasted in chat"

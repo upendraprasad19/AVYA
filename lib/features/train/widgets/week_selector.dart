@@ -1,0 +1,890 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:icanbefitter/core/utils/hold_week_labels.dart';
+import 'package:icanbefitter/core/services/service_providers.dart';
+import 'package:icanbefitter/core/services/workout_schedule_read_service.dart';
+import 'package:icanbefitter/core/theme/colors.dart';
+import 'package:icanbefitter/core/theme/spacing.dart';
+import 'package:icanbefitter/core/theme/typography.dart';
+import 'package:icanbefitter/features/profile/providers/profile_provider.dart';
+import 'package:icanbefitter/features/train/providers/train_provider.dart';
+import 'package:icanbefitter/features/train/services/past_week_days.dart';
+import 'hold_chip_group.dart';
+
+/// Horizontal scrollable week tab bar — extended to 12 weeks (3 phases).
+///
+/// Phases II and III (weeks 5-12) are locked behind a PRO badge for
+/// free-tier users. Phase headers sit above each group of 4 chips.
+///
+/// Theme K (2026-05-23 / diagnose b9d2a8) — extends the strip LEFT
+/// with one _PhaseGroup per COMPLETED PAST phase. Past chips:
+///   - visually distinct (textDim border vs accent),
+///   - carry a `✓` glyph on the chip top-right when ≥1 day in that
+///     week has status='completed',
+///   - tappable → shows that historical week in the Train list itself
+///     (`onSelectPast`, rows from `schedule_*` Hive entries; no sheet).
+///
+/// Past-phase detection: DELEGATED, not done here. This widget calls
+/// `WorkoutScheduleReadService.pastPhaseBlocksForDisplay(currentPhase)`; the
+/// `workoutBox` walk, the `schedule_` prefix filter, the plan-start cutoff and
+/// the 28-day bucketing all live in that shared SoT, which
+/// `PhaseProgressReconciler` also feeds from (via the STRICT `pastPhaseBlocks()`
+/// — see diagnose c9e4b7 for why the two callers need different strictness).
+/// Re-walking the box here is what makes the two drift apart; pinned by
+/// week_selector_reads_current_phase_test.dart.
+///
+/// ⚠ Corrected 2026-08-09: this comment used to describe the walk as happening
+/// in this file. It has not since the 2026-06-02 refactor.
+/// The current phase (and locked previews of future phases II/III) keep the
+/// pre-fix behaviour.
+///
+/// The widget accepts the same public signature as before
+/// (`totalWeeks`, `selectedWeek`, `onSelect`) so all existing call-sites
+/// compile without change.
+class WeekSelector extends ConsumerStatefulWidget {
+  final int totalWeeks;
+  final int selectedWeek; // 1-indexed
+  /// The user's REAL current phase (`user_progress.current_phase`, surfaced as
+  /// `CurrentPlanData.phase`). Drives the phase labels so the strip never shows
+  /// a hardcoded "PHASE I" that collides with a completed past phase. Fix
+  /// 2026-06-02 (two-Phase-1 bug) — previously the forward groups were
+  /// hardcoded `PHASE I/II/III` and `_loadPastPhases` renumbered from 1, so a
+  /// completed phase was always labelled "PHASE I (DONE)" next to a current
+  /// "PHASE I". Both readers now derive from this single SoT.
+  final int currentPhase;
+  final ValueChanged<int> onSelect;
+
+  /// The past-phase week whose rows the Train list shows now (null: none). Its chip is the lit one.
+  final PastWeekSelection? pastSelection;
+
+  /// A past chip tap: the picked week, or null for a re-tap of the lit chip (clears the view).
+  final ValueChanged<PastWeekSelection?>? onSelectPast;
+
+  const WeekSelector({
+    super.key,
+    required this.totalWeeks,
+    required this.selectedWeek,
+    required this.currentPhase,
+    required this.onSelect,
+    this.pastSelection,
+    this.onSelectPast,
+  });
+
+  @override
+  ConsumerState<WeekSelector> createState() => _WeekSelectorState();
+}
+
+class _WeekSelectorState extends ConsumerState<WeekSelector> {
+  // Obs 3b (2026-06-05): auto-scroll the strip to the current phase on open +
+  // a contextual "TODAY →" pill that fades in only when the current phase is
+  // scrolled out of view (so the user never hunts for the live week).
+  final ScrollController _scrollCtrl = ScrollController();
+  final GlobalKey _currentPhaseKey = GlobalKey();
+  bool _showTodayPill = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToCurrent(animate: false); // open already positioned at "now"
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scrollToCurrent({bool animate = true}) {
+    final keyCtx = _currentPhaseKey.currentContext;
+    if (keyCtx == null) return;
+    Scrollable.ensureVisible(
+      keyCtx,
+      alignment: 0.0, // current phase's leading edge → viewport's leading edge
+      duration: animate ? const Duration(milliseconds: 350) : Duration.zero,
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _onScroll() {
+    if (!mounted) return;
+    final keyCtx = _currentPhaseKey.currentContext;
+    final selfObj = context.findRenderObject();
+    if (keyCtx == null || selfObj is! RenderBox) return;
+    final groupObj = keyCtx.findRenderObject();
+    if (groupObj is! RenderBox) return;
+    final left = groupObj.localToGlobal(Offset.zero, ancestor: selfObj).dx;
+    final right = left + groupObj.size.width;
+    // Current phase "visible" if a meaningful part sits inside the viewport.
+    final visible = right > 24 && left < selfObj.size.width - 24;
+    final shouldShow = !visible;
+    if (shouldShow != _showTodayPill) {
+      setState(() => _showTodayPill = shouldShow);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // APK Test #12 / Task C-2 — watch subscriptionInfoProvider so the
+    // PHASE II / III lock chips re-render the moment payment confirms.
+    final isPro = ref.watch(subscriptionInfoProvider).isPro;
+    final service = ref.read(workoutScheduleReadServiceProvider);
+    final planStart = service.getPlanStartDate();
+    // Obs 3a (2026-06-05): current/forward week chips that have a completed day
+    // — same "any completed day that week" rule as the past-phase chips.
+    final completedWeeks = service.completedWeekNumbers();
+
+    // Theme K — render completed past phases LEFT of the current phase.
+    // Source: the shared `pastPhaseBlocks()` SoT (the SAME bucketing the phase
+    // reconciler uses — no parallel reader to drift). currentPhase drives the
+    // numbering AND the gate (no past groups on Phase 1 — you can't have
+    // completed a phase yet).
+    // ...via the DISPLAY wrapper: the strict `pastPhaseBlocks()` keys "past"
+    // solely on `plan_start_date`, so an account whose `current_phase` advanced
+    // without `plan_start` moving with it rendered "PHASE II" as current with
+    // ZERO past groups behind it — no PHASE I anywhere (diagnose c9e4b7). The
+    // wrapper recovers those blocks for display without widening what
+    // `PhaseProgressReconciler` treats as past (it advances a counter that can
+    // never be walked back).
+    final pastPhases = _toPastPhases(
+      service.pastPhaseBlocksForDisplay(widget.currentPhase),
+      widget.currentPhase,
+      extendWeeks: service.pastPhaseDisplayRunsEnabled,
+    );
+
+    // Free-tier hold weeks. HoldStatusData.empty for a user who never held,
+    // so the strip renders exactly as it did pre-hold-display for them.
+    final holdStatus = ref.watch(holdStatusProvider);
+    final isHolding = holdStatus.holds.isNotEmpty;
+    // Unit 3D-b (d80): the "you are here" marker. During a hold only the
+    // current H chip is gold; a W chip lights only when the user picked it.
+    // `holdingToday` comes from the same provider the hold chip reads (round 2
+    // B-F4), so the two never disagree.
+    final selected = SelectedWeek(widget.selectedWeek,
+        picked: ref.watch(selectedWeekProvider).picked);
+    final holdingToday = holdStatus.todayHoldOrdinal != null;
+    // Two groups would otherwise both read "PHASE I"; the phase NAME
+    // disambiguates the training block from the holding block (locked mockup).
+    // Suffix only — the label itself is built at the _PhaseGroup call site so
+    // the first `_phaseRoman(widget.currentPhase)` in this file stays INSIDE
+    // the current-phase group, after the past-phase loop
+    // (`week_selector_past_phases_test.dart` pins that source order as its
+    // proxy for "past groups render LEFT of the current group").
+    final holdingNameSuffix = isHolding
+        ? ' · ${service.phaseName(widget.currentPhase).toUpperCase()}'
+        : '';
+
+    final strip = SingleChildScrollView(
+      controller: _scrollCtrl,
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Past phases LEFT of the current phase, oldest first.
+          for (final past in pastPhases) ...[
+            _PastPhaseGroup(
+              past: past,
+              selectedWeek: widget.pastSelection?.phaseNumber == past.phaseNumber
+                  ? widget.pastSelection?.weekInPhase
+                  : null,
+              onTap: (week) => _selectPast(past, week),
+            ),
+            const SizedBox(width: 16),
+          ],
+          // Current phase (always accessible — you're on it). Label derived
+          // from the real current_phase, not a hardcoded "PHASE I".
+          _PhaseGroup(
+            key: _currentPhaseKey,
+            label: 'PHASE ${_phaseRoman(widget.currentPhase)}'
+                '$holdingNameSuffix',
+            isPaywalled: false,
+            weekStart: 1,
+            weekEnd: 4,
+            selected: selected,
+            holdingToday: holdingToday,
+            planStart: planStart,
+            completedWeeks: completedWeeks,
+            onTap: widget.onSelect,
+          ),
+          // Hold weeks sit between the phase they extend and the next phase.
+          // Tapping one opens a read-only sheet — never `onSelect`, which is
+          // week-index-keyed and cannot address a hold (see HoldChipGroup).
+          if (isHolding) ...[
+            const SizedBox(width: 16),
+            HoldChipGroup(
+              phaseLabel: 'PHASE ${_phaseRoman(widget.currentPhase)}',
+              holds: holdStatus.holds,
+              todayHoldOrdinal: holdStatus.todayHoldOrdinal,
+              onTapHold: (hold) => _showHoldWeekSheet(context, hold),
+            ),
+          ],
+          const SizedBox(width: 16),
+          // Next phase preview (PRO-locked for free users).
+          _PhaseGroup(
+            label: 'PHASE ${_phaseRoman(widget.currentPhase + 1)}',
+            isPaywalled: !isPro,
+            weekStart: 5,
+            weekEnd: 8,
+            selected: selected,
+            holdingToday: false,
+            planStart: planStart,
+            completedWeeks: completedWeeks,
+            onTap: widget.onSelect,
+          ),
+          const SizedBox(width: 16),
+          _PhaseGroup(
+            label: 'PHASE ${_phaseRoman(widget.currentPhase + 2)}',
+            isPaywalled: !isPro,
+            weekStart: 9,
+            weekEnd: 12,
+            selected: selected,
+            holdingToday: false,
+            planStart: planStart,
+            completedWeeks: completedWeeks,
+            onTap: widget.onSelect,
+          ),
+        ],
+      ),
+    );
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        strip,
+        Positioned(
+          right: 8,
+          bottom: 2,
+          child: IgnorePointer(
+            ignoring: !_showTodayPill,
+            child: AnimatedOpacity(
+              opacity: _showTodayPill ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: GestureDetector(
+                onTap: _scrollToCurrent,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: BorderRadius.circular(AppRadius.sharp),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'TODAY',
+                        style: AppTypography.monoXs.copyWith(
+                          fontSize: 9,
+                          color: AppColors.bgDeep,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                      Icon(Icons.arrow_forward,
+                          size: 11, color: AppColors.bgDeep),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// A past chip tap (docs/plans/train-past-week-in-place.md D5): the Train list shows that week's rows in
+  /// place. The lit chip again clears the view. The dates are the chip's own rows' stored date strings.
+  void _selectPast(_PastPhase past, int weekInPhase) {
+    final cb = widget.onSelectPast;
+    if (cb == null) return;
+    final cur = widget.pastSelection;
+    if (cur != null &&
+        cur.phaseNumber == past.phaseNumber &&
+        cur.weekInPhase == weekInPhase) {
+      cb(null);
+      return;
+    }
+    cb(PastWeekSelection(
+      phaseNumber: past.phaseNumber,
+      weekInPhase: weekInPhase,
+      dates: [for (final e in past.entriesForWeek(weekInPhase)) e.dateKey],
+      phaseStart: past.startKey,
+    ));
+  }
+
+  void _showHoldWeekSheet(BuildContext context, HoldWeekInfo hold) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.card,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => HoldWeekSheet(hold: hold),
+    );
+  }
+}
+
+/// Maps the shared [PastPhaseBlock] list (the single bucketing SoT — see
+/// `WorkoutScheduleReadService.pastPhaseBlocks`) into the display model,
+/// numbering past phases by their REAL phase number ending at currentPhase-1.
+///
+/// You have completed exactly currentPhase-1 phases, so show at most that many
+/// (the most recent blocks) and number them up to currentPhase-1. When
+/// currentPhase == 1 there are no completed phases → render none, killing the
+/// phantom duplicate even before the data-heal advances the counter. Showing
+/// fewer than the raw block count also gracefully tolerates stale / duplicate
+/// schedule data without deleting anything. Fix 2026-06-02 (two-Phase-1 bug;
+/// previously numbered idx+1, always labelling the oldest block "PHASE I" and
+/// colliding with the hardcoded forward "PHASE I").
+///
+/// [extendWeeks] (OI-348 B3, the `disable_past_phase_display_runs` switch read
+/// once per build): a group gets one chip per week its rows span (min 4), so a
+/// row past day 28 is on a chip; off → always 4 chips (old behaviour).
+List<_PastPhase> _toPastPhases(List<PastPhaseBlock> blocks, int currentPhase,
+    {bool extendWeeks = false}) {
+  final showCount = (currentPhase - 1).clamp(0, blocks.length);
+  if (showCount == 0) return const [];
+  final shown = blocks.sublist(blocks.length - showCount);
+  final firstNumber = currentPhase - showCount; // e.g. cp=2,count=1 → 1
+  final result = <_PastPhase>[];
+  for (var i = 0; i < shown.length; i++) {
+    final entries = <_ScheduleEntry>[];
+    for (final map in shown[i].rows) {
+      final dateStr = map['date'] as String?;
+      if (dateStr == null) continue;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) continue;
+      entries.add(_ScheduleEntry(
+        key: 'schedule_$dateStr', // canonical key format ('schedule_' + dateStr)
+        date: date,
+        week: (map['week'] as int?) ?? 0,
+        type: (map['type'] as String?) ?? 'rest',
+        workoutName: (map['workout_name'] as String?) ?? '',
+        status: (map['status'] as String?) ?? 'planned',
+        completedAt: map['completed_at'] as String?,
+      ));
+    }
+    if (entries.isEmpty) continue;
+    entries.sort((a, b) => a.date.compareTo(b.date));
+    result.add(_PastPhase(
+      phaseNumber: firstNumber + i,
+      startDate: entries.first.date,
+      endDate: entries.last.date,
+      entries: entries,
+      weekCount: extendWeeks
+          ? pastPhaseWeekCount(entries.first.date, entries.last.date)
+          : 4,
+    ));
+  }
+  return result;
+}
+
+/// Chips a past group needs to put every row on one (min 4): the day
+/// difference of [start]/[end] as UTC calendar dates (DST-proof) / 7 + 1.
+@visibleForTesting
+int pastPhaseWeekCount(DateTime start, DateTime end) {
+  final weeks = pastPhaseWeekOf(start, end);
+  return weeks < 4 ? 4 : weeks;
+}
+
+/// The 1-based chip of [date] in a past group starting on [start], from the
+/// CALENDAR dates (UTC day difference), never from elapsed time: a 7 x 24 h
+/// window drifts by an hour across a DST change, and the chip count above
+/// uses calendar days, so the two must agree (B-pass, OI-348 B3). A date
+/// before [start] gives 0 or less.
+@visibleForTesting
+int pastPhaseWeekOf(DateTime start, DateTime date) {
+  final days = DateTime.utc(date.year, date.month, date.day)
+      .difference(DateTime.utc(start.year, start.month, start.day))
+      .inDays;
+  return (days / 7).floor() + 1;
+}
+
+/// Test view of what the strip renders for past phases (OI-348 B3): number,
+/// chip count and the dates of every row each group lists. Same code path as
+/// the widget ([_toPastPhases]); numbering deliberately NOT shared with
+/// `WorkoutScheduleReadService.phaseForDateDisplay`.
+@visibleForTesting
+List<
+        ({
+          int phaseNumber,
+          int weekCount,
+          List<DateTime> dates,
+          List<List<DateTime>> chips,
+          List<List<String>> chipStatuses,
+          List<bool> chipTicks,
+        })>
+    pastPhaseGroupsForTest(List<PastPhaseBlock> blocks, int currentPhase,
+            {required bool extendWeeks}) =>
+        [
+          for (final p
+              in _toPastPhases(blocks, currentPhase, extendWeeks: extendWeeks))
+            (
+              phaseNumber: p.phaseNumber,
+              weekCount: p.weekCount,
+              dates: [for (final e in p.entries) e.date],
+              // What each chip's sheet lists (entriesForWeek, W1..weekCount).
+              chips: [
+                for (var w = 1; w <= p.weekCount; w++)
+                  [for (final e in p.entriesForWeek(w)) e.date],
+              ],
+              chipStatuses: [
+                for (var w = 1; w <= p.weekCount; w++)
+                  [for (final e in p.entriesForWeek(w)) e.status],
+              ],
+              // The ✓ each chip draws (hasCompletedDayInWeek).
+              chipTicks: [
+                for (var w = 1; w <= p.weekCount; w++)
+                  p.hasCompletedDayInWeek(w),
+              ],
+            ),
+        ];
+
+class _ScheduleEntry {
+  final String key;
+  final DateTime date;
+  final int week; // 1-4 within the past phase
+  final String type; // workout | rest
+  final String workoutName;
+  final String status;
+  final String? completedAt;
+  /// The stored `yyyy-MM-dd` of this row (the key minus `schedule_`).
+  String get dateKey => key.substring('schedule_'.length);
+
+  const _ScheduleEntry({
+    required this.key,
+    required this.date,
+    required this.week,
+    required this.type,
+    required this.workoutName,
+    required this.status,
+    this.completedAt,
+  });
+}
+
+class _PastPhase {
+  final int phaseNumber;
+  final DateTime startDate;
+  final DateTime endDate;
+  final List<_ScheduleEntry> entries;
+
+  /// Chips in the group (4, or the weeks the rows span; OI-348 B3).
+  final int weekCount;
+  const _PastPhase({
+    required this.phaseNumber,
+    required this.startDate,
+    required this.endDate,
+    required this.entries,
+    this.weekCount = 4,
+  });
+
+  /// The raw stored date string of the group's first row (== [startDate], unparsed).
+  String get startKey => entries.first.dateKey;
+
+  // A row's chip is its CALENDAR week from [startDate] (pastPhaseWeekOf), the
+  // same arithmetic as [weekCount], so the two never disagree across DST.
+  bool hasCompletedDayInWeek(int weekInPhase) => entries.any((e) =>
+      e.status == 'completed' &&
+      pastPhaseWeekOf(startDate, e.date) == weekInPhase);
+
+  List<_ScheduleEntry> entriesForWeek(int weekInPhase) => entries
+      .where((e) => pastPhaseWeekOf(startDate, e.date) == weekInPhase)
+      .toList();
+}
+
+// ── Past phase group (label + week chips, visually muted) ─────────────────
+
+class _PastPhaseGroup extends StatelessWidget {
+  const _PastPhaseGroup(
+      {required this.past, required this.onTap, this.selectedWeek});
+  final _PastPhase past;
+  final ValueChanged<int> onTap;
+
+  /// The week of this group the Train list shows now (null: none of this group).
+  final int? selectedWeek;
+
+  @override
+  Widget build(BuildContext context) {
+    final romanLabel = _phaseRoman(past.phaseNumber);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Row(
+            children: [
+              Text(
+                'PHASE $romanLabel',
+                style: AppTypography.monoXs.copyWith(
+                  fontSize: 9,
+                  letterSpacing: 1.2,
+                  color: AppColors.textDim,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '(DONE)',
+                style: AppTypography.monoXs.copyWith(
+                  fontSize: 9,
+                  letterSpacing: 1.0,
+                  color: AppColors.ok,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Row(
+          children: [
+            for (var w = 1; w <= past.weekCount; w++)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: _PastWeekChip(
+                  key: ValueKey('past-${past.phaseNumber}-w$w'),
+                  weekInPhase: w,
+                  hasCompletedDay: past.hasCompletedDayInWeek(w),
+                  startKey: past.startKey,
+                  phaseNumber: past.phaseNumber,
+                  selected: selectedWeek == w,
+                  onTap: () => onTap(w),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PastWeekChip extends StatelessWidget {
+  const _PastWeekChip({
+    super.key,
+    required this.weekInPhase,
+    required this.hasCompletedDay,
+    required this.startKey,
+    required this.phaseNumber,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final int weekInPhase;
+  final bool hasCompletedDay;
+
+  /// The raw stored date of the group's first row; the range text is [pastWeekRangeLabel] of it.
+  final String startKey;
+  final int phaseNumber;
+
+  /// True while the Train list shows this week (gold, like a lit current chip).
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final range = pastWeekRangeLabel(startKey, weekInPhase);
+    final fg = selected ? AppColors.bgDeep : AppColors.textDim;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Phase ${_phaseRoman(phaseNumber)} week $weekInPhase, '
+          '${range.replaceAll('\u2013', ' to ')}',
+      // excludeSemantics drops the GestureDetector's own tap action, so the node
+      // carries it itself (a button a screen reader cannot press; same as
+      // food_type_chips.dart; the chip test pins the tap action).
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 48,
+          height: 58,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.accent : AppColors.card,
+            borderRadius: BorderRadius.circular(AppRadius.sharp),
+            border: selected
+                ? Border.all(color: AppColors.accent, width: 1.5)
+                : Border.all(color: AppColors.textDim.withValues(alpha: 0.4)),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'W$weekInPhase',
+                    style: AppTypography.monoXs.copyWith(
+                      fontSize: 10,
+                      color: fg,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    range.toUpperCase(),
+                    style: AppTypography.monoXs.copyWith(
+                      color: fg.withValues(alpha: 0.85),
+                      fontSize: 7,
+                      letterSpacing: 1,
+                      height: 1.1,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+              if (hasCompletedDay)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Icon(
+                    Icons.check_circle,
+                    size: 10,
+                    color: selected ? AppColors.bgDeep : AppColors.ok,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Roman numeral for any phase (XIII and beyond too). A one-line delegate to
+/// the shared [phaseRoman]; the name stays because a gate and tests pin
+/// `_phaseRoman(widget.currentPhase` (OI-348 Landing 3a).
+String _phaseRoman(int phase) => phaseRoman(phase);
+
+// ── Phase group (label + 4 chips) ───────────────────────────────────────────
+
+class _PhaseGroup extends StatelessWidget {
+  const _PhaseGroup({
+    super.key,
+    required this.label,
+    required this.isPaywalled,
+    required this.weekStart,
+    required this.weekEnd,
+    required this.selected,
+    required this.holdingToday,
+    required this.planStart,
+    required this.completedWeeks,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isPaywalled;
+  final int weekStart;
+  final int weekEnd;
+  final SelectedWeek selected;
+
+  /// True only for the CURRENT phase's group while today is a hold day.
+  final bool holdingToday;
+  final DateTime? planStart;
+  final Set<int> completedWeeks;
+  final ValueChanged<int> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Phase header row: label + optional PRO badge
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: AppTypography.monoXs.copyWith(
+                  fontSize: 9,
+                  letterSpacing: 1.2,
+                  color: isPaywalled ? AppColors.textGhost : AppColors.accent,
+                ),
+              ),
+              if (isPaywalled) ...[
+                const SizedBox(width: 4),
+                Text(
+                  '(PRO)',
+                  style: AppTypography.monoXs.copyWith(
+                    fontSize: 9,
+                    letterSpacing: 1.0,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+
+        // Week chips
+        Row(
+          children: [
+            for (var w = weekStart; w <= weekEnd; w++)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: _WeekChip(
+                  key: ValueKey('week-$w'),
+                  week: w,
+                  isLit: weekChipLit(
+                    week: w,
+                    selected: selected,
+                    holdingToday: holdingToday,
+                  ),
+                  isLocked: isPaywalled,
+                  hasCompletedDay: completedWeeks.contains(w),
+                  planStart: planStart,
+                  onTap: () => onTap(w),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Whether the W chip for [week] is lit (gold) — Unit 3D-b, d80; round 1 B-F6.
+/// The selected week is lit, except during a hold when the user has not picked
+/// a week: then today's H chip is the only "you are here".
+bool weekChipLit({
+  required int week,
+  required SelectedWeek selected,
+  required bool holdingToday,
+}) =>
+    week == selected.week && !(holdingToday && !selected.picked);
+
+// ── Single week chip ─────────────────────────────────────────────────────────
+
+class _WeekChip extends StatelessWidget {
+  const _WeekChip({
+    super.key,
+    required this.week,
+    required this.isLit,
+    required this.isLocked,
+    this.hasCompletedDay = false,
+    required this.planStart,
+    required this.onTap,
+  });
+
+  final int week;
+  final bool isLit;
+  final bool isLocked;
+  final bool hasCompletedDay;
+  final DateTime? planStart;
+  final VoidCallback onTap;
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String? _dateRange() {
+    if (planStart == null) return null;
+    final weekStart = planStart!.add(Duration(days: (week - 1) * 7));
+    final weekEnd = weekStart.add(const Duration(days: 6));
+    if (weekStart.month == weekEnd.month) {
+      return '${_months[weekStart.month - 1]} ${weekStart.day}–${weekEnd.day}';
+    }
+    return '${_months[weekStart.month - 1]} ${weekStart.day}–'
+        '${_months[weekEnd.month - 1]} ${weekEnd.day}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = isLocked
+        ? AppColors.textGhost
+        : (isLit ? AppColors.bgDeep : AppColors.textDim);
+    final bg = isLocked
+        ? AppColors.input
+        : (isLit ? AppColors.accent : AppColors.card);
+
+    // The date sub-label follows the gold (round 1 B-F6): an unlit W4 during a
+    // hold no longer prints its month-old range.
+    final sub = isLit ? _dateRange() : null;
+    final chipHeight = sub != null ? 58.0 : 48.0;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 48,
+        height: chipHeight,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(AppRadius.sharp),
+          border: isLit
+              ? Border.all(color: AppColors.accent, width: 1.5)
+              : Border.all(color: AppColors.line2),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'W$week',
+                  style: AppTypography.monoXs.copyWith(
+                    fontSize: 10,
+                    color: fg,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    height: 1.1,
+                  ),
+                ),
+                if (sub != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    sub.toUpperCase(),
+                    style: AppTypography.monoXs.copyWith(
+                      color: fg.withValues(alpha: 0.85),
+                      fontSize: 7,
+                      letterSpacing: 1,
+                      height: 1.1,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
+            if (isLocked)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Icon(
+                  Icons.lock,
+                  size: 10,
+                  color: AppColors.accent,
+                ),
+              ),
+            // Obs 3a (2026-06-05): ✓ on a current/forward week with ≥1 completed
+            // day (mirrors _PastWeekChip). Never on a locked/preview week.
+            if (hasCompletedDay && !isLocked)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Icon(
+                  Icons.check_circle,
+                  size: 10,
+                  color: AppColors.ok,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

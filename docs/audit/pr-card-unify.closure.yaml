@@ -1,0 +1,65 @@
+# Closure ledger - pr-card-unify (observation 2: one PR card, coach plateau). Gate 40
+# (validate_audit_closure.dart): one terminal_state per entry, no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form.
+
+batch: pr-card-unify
+plan: docs/plans/pr-card-unify.md
+plan_review_record: docs/plan-reviews/pr-card-unify.md
+
+findings:
+  - id: U1
+    title: "Train shows Home's PrSnapshot (PERSONAL RECORDS, VIEW ALL button, D1-D3, D6)"
+    terminal_state: closed_in_commit
+    commit: pr-card-unify@branch
+    verification: >
+      test/contracts/pr_card_unify_behavioral_test.dart (7 tests; mutants K1-K5 red)
+  - id: U2
+    title: "Duplicate PR reader deleted: loadKeyLiftPRs, workoutStatsProvider, its invalidation sites, its gate-set entry"
+    terminal_state: closed_in_commit
+    commit: pr-card-unify@branch
+    verification: >
+      grep of lib/ test/ scripts/ for both symbols: none left; repointed invalidation tests green
+  - id: U3
+    title: "'First logged!' / 'this month' tile text gone"
+    terminal_state: closed_in_commit
+    commit: pr-card-unify@branch
+    verification: >
+      pr_card_unify_behavioral_test asserts no 'First logged' text (closed by U1)
+  - id: U4
+    title: "Train's hand copy of the PR list sheet gone"
+    terminal_state: closed_in_commit
+    commit: pr-card-unify@branch
+    verification: >
+      pr_card_unify_behavioral_test: the button opens Home's sheet with sparks and PrTrendSheet (closed by U1)
+  - id: U5
+    title: "Dead PrStatsGrid deleted"
+    terminal_state: closed_in_commit
+    commit: pr-card-unify@branch
+    verification: >
+      no reference before deletion (grep); analyze clean
+  - id: U6
+    title: "Coach plateau insight on the shared e1RM scan (exact names, reps count, D5, D7)"
+    terminal_state: closed_in_commit
+    commit: pr-card-unify@branch
+    verification: >
+      test/contracts/coach_plateau_insight_behavioral_test.dart (15 tests; mutants C1-C12 red); plan-engine plateau tests green untouched
+  - id: U7
+    title: "weeksStuck always 12"
+    terminal_state: closed_in_commit
+    commit: pr-card-unify@branch
+    verification: >
+      weeks = spanDays ~/ 7; coach test 40 days -> 5, 49 -> 7 (mutants C7, C8 red)
+  - id: U8
+    title: "Stale Home doc ('by volume')"
+    terminal_state: closed_in_commit
+    commit: pr-card-unify@branch
+    verification: >
+      lib/features/home/CLAUDE.md row 8 now says most recently set
+  - id: U9
+    title: "Orphan WorkoutRepository.getExtendedWeeklyWorkoutCounts (review round 2)"
+    terminal_state: closed_in_commit
+    commit: pr-card-unify@branch
+    verification: >
+      deleted; grep shows no caller; analyze clean
+
+closed_count: 9

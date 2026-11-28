@@ -1,0 +1,88 @@
+# Closure ledger - oi507-formcues (OI-507 unit A, getFormCues lookup follow-ups)
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no `deferred:` key.
+# `<branch>@branch` is the in-branch commit form (precedent: unitb-deload-reason.closure.yaml).
+# The ai-proxy deploy (founder go) was the last row; it is closed by the commit that closes OI-507.
+
+batch: oi507-formcues
+plan_review_record: docs/plan-reviews/oi507-formcues.md
+bpass_review: docs/reviews/oi507-formcues-bpass.md
+diagnose_docs:
+  - docs/diagnoses/2026-11-23-getformcues-lookup-followups-d7e3a9.md
+
+findings:
+  - id: D1
+    title: "OI-507 item 1 - stage 2 has no tie-break (limit(1) with no ORDER BY)"
+    terminal_state: closed_in_commit
+    commit: oi507-formcues@branch
+    verification: >
+      ORDER BY name, id on all three reads (getFormCues.ts); tests T2 and T7 list candidates in the wrong order
+      and T10 pins the id tie-break; mutants (order removed) red.
+  - id: D2
+    title: "OI-507 item 2 - ilike wildcards (% _ \\ and PostgREST *) are not escaped"
+    terminal_state: closed_in_commit
+    commit: oi507-formcues@branch
+    verification: >
+      _shared/like_escape.ts escapeLike on both getFormCues ilike stages and on getExerciseHistory and
+      getPRTimeline; T3, like_escape_test.ts; live REST 2026-11-24: ilike.\% and ilike.\_ answer 0 rows, unescaped
+      ilike.% answers 870.
+  - id: D3
+    title: "OI-507 item 3 - the tool never reads name_aliases"
+    terminal_state: closed_in_commit
+    commit: oi507-formcues@branch
+    verification: >
+      Alias stage between exact and partial, fail open; T1, T4, T8, T11; live REST 2026-11-24: neq.{} answers exactly
+      the 13 active aliased rows. The wrong-movement lunge alias was removed first by unit B (PR 331, migration 183).
+  - id: D4
+    title: "OI-507 item 4 - history names retired exercises (10 sets), a miss gave a bare found:false"
+    terminal_state: closed_in_commit
+    commit: oi507-formcues@branch
+    verification: >
+      Donkey Calf Raise (4 sets) resolves through the kept alias; Negative Pull Up (6 sets) answers found:false with
+      the general-cues hint (T6). The 10 sets themselves are tester rows and are not rewritten.
+  - id: D5
+    title: "OI-507 item 5 - a user's own custom exercise is not in exercise_library"
+    terminal_state: verified_clean
+    evidence: >
+      The not-found hint and the tool-description sentence cover it (T6, T9); the residual for a custom name that is a
+      substring of a library name is accepted and recorded in the diagnose.
+  - id: B1
+    title: "B-pass P2 - the fake cannot observe neq {} or an escaped ilike; fail-open hides a dead alias stage"
+    terminal_state: closed_in_commit
+    commit: oi507-formcues@branch
+    verification: >
+      Live read-only REST checks 2026-11-24 recorded in the diagnose (live_rest_check) and the review; post-deploy smoke
+      for "Quad Stretch" written into the plan and the diagnose.
+  - id: B2
+    title: "B-pass P3 - ORDER BY name ties on two same-name active rows"
+    terminal_state: closed_in_commit
+    commit: oi507-formcues@branch
+    verification: ".order(\"id\") on all three reads; T10; mutant red (1 test)."
+  - id: B3
+    title: "B-pass P3 - the alias-stage try/catch is untested"
+    terminal_state: closed_in_commit
+    commit: oi507-formcues@branch
+    verification: "T11 makes the alias read throw; mutant (try/catch removed) red (1 test)."
+  - id: B4
+    title: "B-pass P3 - * is removed, not neutralised"
+    terminal_state: verified_clean
+    evidence: >
+      Declined with its reason: removal is a recorded plan decision (rev 2), no library name contains *, and the only
+      affected input is a tester-typed custom exercise with an asterisk (own-data scope, accepted regression in the diagnose).
+  - id: B5
+    title: "B-pass P3 - three doc drifts (board sentence, 9.x heading, readers line cite)"
+    terminal_state: closed_in_commit
+    commit: oi507-formcues@branch
+    verification: "board sentence reworded, heading renamed, cite points at the handler (line 65)."
+  - id: B6
+    title: "B-pass P3 - exercise_name has no length cap (rule 18)"
+    terminal_state: closed_in_commit
+    commit: oi507-formcues@branch
+    verification: ".max(200) on the schema; T12; mutant red (1 test)."
+  - id: DEPLOY
+    title: "ai-proxy deploy of the merged getFormCues (and its post-deploy smoke)"
+    terminal_state: closed_in_commit
+    commit: oi507-close@branch
+    verification: >
+      ai-proxy v112 deployed 2026-11-24 on the founder's explicit go (HTTP 201, smoke 401 = booted); functional smoke on
+      live data: Quad Stretch -> alias, Donkey Calf Raise -> alias, Reverse Lunge / % / _ -> found:false with the hint.
+      Recorded in the diagnose `deploy_record`.

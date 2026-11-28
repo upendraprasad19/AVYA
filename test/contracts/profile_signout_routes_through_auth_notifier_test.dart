@@ -1,0 +1,130 @@
+// C-10 (audit-2026-05-11) — regression test that
+// `ProfileScreen._performSignOut` delegates to
+// `AuthNotifier.signOut()` instead of hand-rolling Supabase signOut +
+// `UserRepository.clearAllData()`. Pre-fix the screen-local
+// implementation skipped `HiveUserSession.deleteAllFilesForCurrentUser`,
+// leaving per-user namespaced box files on disk — re-opening the
+// cross-account leak class `lib/features/auth/CLAUDE.md` documents as
+// closed (`auth_hive_owner_agreement`). Was root §19 until the
+// 2026-05-18 declutter retired that list.
+//
+// Source-grep style — the production code touches GoRouter +
+// Riverpod + Hive lifecycle, so unit testing the flow is not
+// tractable. The contract we pin instead: the signout path on the
+// profile screen MUST route through AuthNotifier.
+
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import '../helpers/read_screen_source.dart';
+
+String _src(String relPath) => File(relPath).readAsStringSync();
+
+void main() {
+  group('C-10 ProfileScreen._performSignOut routes through AuthNotifier', () {
+    test(
+      '_performSignOut delegates to authNotifierProvider.signOut()',
+      () {
+        final src = readScreenSource('profile');
+        final idx = src.indexOf('Future<void> _performSignOut() async');
+        expect(idx, greaterThan(0));
+        // Slice generously — the method body is short; stop at the
+        // next sibling method declaration (`\n  /// ` or `\n  Future`).
+        final endA = src.indexOf('\n  /// ', idx + 10);
+        final endB = src.indexOf('\n  Future<', idx + 10);
+        final candidateEnds =
+            [endA, endB].where((i) => i > idx).toList()..sort();
+        final endIdx = candidateEnds.isEmpty ? src.length : candidateEnds.first;
+        final body = src.substring(idx, endIdx);
+
+        expect(
+          body,
+          contains('ref.read(authNotifierProvider.notifier).signOut()'),
+          reason:
+              '_performSignOut must route through AuthNotifier.signOut() so '
+              'every sign-out gets the canonical teardown — telemetry, '
+              'UserRepository.clearAllData, HiveUserSession.deleteAllFilesForCurrentUser, '
+              'and state reset. Pre-fix the screen path skipped '
+              'deleteAllFilesForCurrentUser and left per-user namespaced '
+              'Hive files on disk.',
+        );
+      },
+    );
+
+    test(
+      '_performSignOut does NOT call UserRepository.clearAllData directly',
+      () {
+        final src = readScreenSource('profile');
+        final idx = src.indexOf('Future<void> _performSignOut() async');
+        final endA = src.indexOf('\n  /// ', idx + 10);
+        final endB = src.indexOf('\n  Future<', idx + 10);
+        final candidateEnds =
+            [endA, endB].where((i) => i > idx).toList()..sort();
+        final endIdx = candidateEnds.isEmpty ? src.length : candidateEnds.first;
+        final body = src.substring(idx, endIdx);
+
+        expect(
+          body.contains('UserRepository.instance.clearAllData'),
+          isFalse,
+          reason:
+              'Pre-fix this method called clearAllData directly. The '
+              'canonical AuthNotifier.signOut() now owns that call '
+              '(plus deleteAllFilesForCurrentUser). Duplicating it here '
+              'risks drift if AuthNotifier evolves.',
+        );
+      },
+    );
+
+    test(
+      'AuthNotifier.signOut still calls deleteAllFilesForCurrentUser',
+      () {
+        // Belt-and-suspenders — if the sign-out path ever drops the
+        // namespaced-file cleanup, the cross-account leak comes back.
+        //
+        // UPDATED 2026-08-09 (diagnose b7e4c1, B-pass finding 1): the teardown
+        // moved out of signOut() into _teardown(), because signOut() is now a
+        // join-or-start dispatcher (a second caller must join the in-flight
+        // Future rather than race it) and _performSignOut() wraps the whole
+        // sequence in a timeout so a wedged auth.signOut() cannot strand the
+        // router guard. The old slice anchored on `signOut() async`, which no
+        // longer exists — so it failed on a MOVE, not on a regression.
+        //
+        // Pinning the delegation chain AND the call, rather than one span:
+        // a span-based test silently re-passes if the calls land in some other
+        // method that nothing invokes.
+        final src = _src('lib/features/auth/providers/auth_provider.dart');
+
+        final signOutIdx = src.indexOf('Future<void> signOut()');
+        expect(signOutIdx, greaterThan(0), reason: 'signOut must exist');
+        final performIdx = src.indexOf('Future<void> _performSignOut()');
+        expect(performIdx, greaterThan(0),
+            reason: 'signOut delegates to _performSignOut');
+        final teardownIdx = src.indexOf('Future<void> _teardown()');
+        expect(teardownIdx, greaterThan(0),
+            reason: '_performSignOut delegates to _teardown');
+
+        // The chain is actually wired, not just present.
+        final dispatcher = src.substring(signOutIdx, performIdx);
+        expect(dispatcher, contains('_performSignOut()'),
+            reason: 'signOut() must actually invoke _performSignOut');
+        final perform = src.substring(performIdx, teardownIdx);
+        expect(perform, contains('_teardown()'),
+            reason: '_performSignOut must actually invoke _teardown');
+
+        // And the cleanup lives at the end of that chain.
+        final endIdx = src.indexOf('\n  /// OI-51', teardownIdx);
+        final teardown =
+            src.substring(teardownIdx, endIdx > teardownIdx ? endIdx : src.length);
+        expect(
+          teardown,
+          contains('HiveUserSession.deleteAllFilesForCurrentUser'),
+          reason:
+              'the sign-out path must delete the per-user namespaced '
+              'Hive files. Without this the next sign-in re-opens those '
+              'files and Android Auto Backup / legacy migration sweeps '
+              'can re-leak the previous user.',
+        );
+      },
+    );
+  });
+}

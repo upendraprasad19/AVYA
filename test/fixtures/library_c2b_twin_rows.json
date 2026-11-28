@@ -1,0 +1,76 @@
+{
+ "_meta": {
+  "note": "Batch C2b (OI-462): depth fields of the four twin rows (G1368 G1489 G2567 G0474) in the shape of library_c2_base_depth.json rows. The removals generator and the depth test add these rows to the frozen base so a removal is judged with its twin present. Built from a scratch importer run after the injury builder; the last group of test/contracts/library_depth_rule_test.dart mirrors it against the shipped G rows and pins its sha256 to the removals file `_meta.twin_fixture_sha256`.",
+  "plan": "docs/plans/2026-11-05-library-batch-c2b-twins.md",
+  "oi": "OI-462"
+ },
+ "rows": [
+  {
+   "id": "G1368",
+   "name": "Ankle Circles",
+   "discipline": "mobility",
+   "movement_pattern": [
+    "warmup"
+   ],
+   "injury_contraindications": [
+    "ankle"
+   ],
+   "equipment_tier": [
+    "bodyweight",
+    "home_dumbbells",
+    "basic_gym",
+    "full_gym"
+   ]
+  },
+  {
+   "id": "G1489",
+   "name": "Sissy Squat",
+   "discipline": "strength",
+   "movement_pattern": [
+    "knee_dominant"
+   ],
+   "injury_contraindications": [
+    "knee"
+   ],
+   "equipment_tier": [
+    "bodyweight",
+    "home_dumbbells",
+    "basic_gym",
+    "full_gym"
+   ]
+  },
+  {
+   "id": "G2567",
+   "name": "Seated Piriformis Stretch",
+   "discipline": "mobility",
+   "movement_pattern": [
+    "flexibility"
+   ],
+   "injury_contraindications": [
+    "hip"
+   ],
+   "equipment_tier": [
+    "bodyweight",
+    "home_dumbbells",
+    "basic_gym",
+    "full_gym"
+   ]
+  },
+  {
+   "id": "G0474",
+   "name": "Toes to Bar",
+   "discipline": "calisthenics_skill",
+   "movement_pattern": [
+    "core"
+   ],
+   "injury_contraindications": [
+    "lower_back",
+    "shoulder"
+   ],
+   "equipment_tier": [
+    "basic_gym",
+    "full_gym"
+   ]
+  }
+ ]
+}

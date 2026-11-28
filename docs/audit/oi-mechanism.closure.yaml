@@ -1,0 +1,90 @@
+# Closure ledger — revive the evergreen backlog as a repo-tracked, cross-session
+# source of truth. DATA HALF ONLY.
+#
+# Gate 40 (validate_audit_closure.dart). One terminal_state per finding; no
+# `deferred:` key. Branch: oi-mechanism.
+#
+# SCOPE NOTE: this batch originally also built the enforcement MECHANISM (a
+# SessionStart digest + two gates). Two independent review rounds found 5 P1s —
+# two of them INTRODUCED by the round-1 corrections — so per §4.12.1 the unit was
+# split and the mechanism was withdrawn wholesale, not shipped partially. Every
+# finding from both rounds is preserved in OI-68/OI-69 so a re-attempt starts
+# from the scars rather than rediscovering them. That is a split, not a deferral:
+# the withdrawn work is tracked in the very backlog this batch ships.
+#
+# The 26 OPEN items in docs/audit/open_issues.md are NOT findings of this batch —
+# they are the backlog it makes visible. An evergreen board is non-terminal by
+# design; that is its function.
+
+batch: oi-mechanism
+total_findings: 5
+closed_count: 5
+
+_commit: &wip "oi-mechanism (uncommitted at authoring)"
+
+findings:
+  - id: D1
+    title: "The evergreen backlog was 70 days stale and invisible outside this machine"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "docs/audit/open_issues.md — 26 non-terminal items, repo-tracked, therefore readable from any machine, any session, and on GitHub"
+    notes: >-
+      Founder's question is what exposed the real gap: MEMORY.md lives under
+      ~/.claude/projects/…/memory/, outside git, so it answers "what is pending"
+      only on this machine. An earlier recommendation to make MEMORY.md the single
+      source of truth was wrong twice over — it contradicted the 2026-05-17
+      decision AND would have moved the tracker to the one place it is invisible.
+      A repo-tracked file answers the question by existing; that half needs no
+      code and carries no risk, which is exactly why it could ship while the
+      mechanism could not.
+
+  - id: D2
+    title: "16 pending work items existed only in conversation and harness-local memory"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "OI-52…OI-67 appended with blockers; OI-52 (/build-apk) flagged as fronting four dependents"
+    notes: >-
+      Sourced from every open thread, not only audit findings — founder-gated
+      items, blocked items, and loose ends alike. Six carry `Blocked on: FOUNDER`.
+
+  - id: D3
+    title: "The reconciliation claimed 'All verified STILL OPEN / every citation refreshed' — both FALSE"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "docs/audit/open_issues.md reconciliation table — per-OI verified vs NOT-audited, un-refreshed citations listed"
+    notes: >-
+      4 of 8 audited, 3 of ~20 citations refreshed. OI-51 is PARTLY CLOSED
+      (razorpay_service `_onUserChanged()` nulls the callbacks, added AFTER the OI
+      was filed); OI-48 is materially stale (`e78e2c7e` batched the per-user
+      reads). Third instance in one day of
+      feedback_mistake_unverified_done_claims. Corrected with a visible retraction
+      rather than a quiet edit — the whole value of a backlog is that its claims
+      can be trusted, so a false claim inside it is worse than an absent one.
+
+  - id: D4
+    title: "A 97-day-stale repo-tracked memory/MEMORY.md would mislead any cloud session that found it"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "memory/MEMORY.md replaced with a pointer stub; filename preserved for its citations"
+    notes: >-
+      Its own header read 'Keep both files in sync' — an abandoned MIRROR, not an
+      oversight. Most of its links pointed at files existing only in the harness
+      dir, so from the repo they were dead. The stub also corrects its own first
+      draft's overstatement (7 citations → 5 cite the harness path, 2 are
+      repo-relative) and names the two zero-citation siblings honestly rather than
+      implying the whole directory is live.
+
+  - id: D5
+    title: "The enforcement MECHANISM was built, reviewed twice, and withdrawn — findings preserved, not lost"
+    terminal_state: closed_in_commit
+    commit: *wip
+    verification: "OI-68 (mechanism + 3 generations of parser scars) and OI-69 (staleness still undetectable) filed in docs/audit/open_issues.md"
+    notes: >-
+      Withdrawn wholesale rather than shipped partially. Round 1 found 5 P1s;
+      round 2 found 5 more, of which TWO were introduced by the round-1 fixes —
+      including a parser that fixed an exact-string match by becoming permissive
+      enough to swallow a prose bullet, and a tier promotion of the data file that
+      would have demanded a ×2 review to tick one OI closed. §4.12.1's split
+      signal fired for the third time in this batch's life. The scars are recorded
+      at OI-68 in enough detail that a re-attempt starts ahead of where this one
+      ended.
