@@ -46,37 +46,42 @@ const LEDGER_PATH = path.join(ROOT, 'backups', 'applied_migrations.json');
 // What the generated file says about itself. Edit this block for the next batch. The header text below is derived from it,
 // from the kept-row records and from the removals file.
 const BATCH = {
-  label: 'library v28, OI-523',
-  diagnose: '2026-11-23-lunge-alias-v28-b4d9e1',
-  // Rows the Batch C1 importer wrote carry this `source` literal: the C1 rows, the four Batch C2b twins and the S1b-2 nine.
+  label: 'library v30, OI-443',
+  diagnose: '2026-11-28-media-two-new-two-retag-c41a7e',
+  // Rows the Batch C1 importer wrote carry this `source` literal: the C1 rows, the four Batch C2b twins, the S1b-2 nine
+  // and the two v30 rows.
   newRowSource: 'exercise-gif-set',
   // The removals file carries `removed_in` ('c2a' | 'c2b') per remove entry: ALL are deactivated (idempotent), but a batch's
-  // rollback reactivates only the ones it removed itself. OI-523 (library v28) removes and merges no row (its tag matches no entry
+  // rollback reactivates only the ones it removed itself. Library v30 removes and merges no row (its tag matches no entry
   // of either file).
-  batchTag: 'v28',
+  batchTag: 'v30',
   removalsFile: path.join(ROOT, 'scripts', 'data', 'library_batch_c2_removals.json'),
-  // Kept-row records ({id, before, after} rows for ONE cloud column each): the library row must equal `after` (a record that
-  // drifted from the library would seed one thing and roll back to another); `before` is what the inline rollback restores.
-  // OI-523: name_aliases on G3470 Forward Lunge (the alias "Reverse Lunge" goes; the cloud value becomes NULL). The F2
-  // movement_pattern record is live (migration 176) and the S1b-3 name_aliases record is live (migration 175): both re-seed as
-  // unchanged rows, so neither is a record of this batch.
+  // Kept-row records ({id, before, after} rows for ONE cloud column each; one row may sit in several records, once per
+  // column): the library row must equal `after` (a record that drifted from the library would seed one thing and roll back
+  // to another); `before` is what the inline rollback restores. Library v30: E027 equipment and cues, E120 equipment. The
+  // OI-523 name_aliases record is live (migration 183) and re-seeds as an unchanged row, so it is not a record of this batch.
   keptRowRecords: [
     {
-      file: path.join(ROOT, 'scripts', 'data', 'library_v28_lunge_alias.json'),
-      column: 'name_aliases',
-      note: 'name_aliases: the wrong-movement alias "Reverse Lunge" removed from G3470 Forward Lunge (1 row; the cloud value becomes NULL)',
+      file: path.join(ROOT, 'scripts', 'data', 'library_v30_equipment.json'),
+      column: 'equipment_needed',
+      note: 'equipment_needed: E027 barbell to machines (plate-loaded T-bar station), E120 barbell to dumbbells (weight plate)',
+    },
+    {
+      file: path.join(ROOT, 'scripts', 'data', 'library_v30_t_bar_cues.json'),
+      column: 'coaching_cues',
+      note: 'coaching_cues: E027 rewritten for the standing station',
     },
   ],
-  // Rows this batch INSERTs. The cloud never deletes, so the rollback would deactivate them. OI-523 adds none.
-  newRowIds: [],
-  newRowNote: 'none',
+  // Rows this batch INSERTs. The cloud never deletes, so the rollback would deactivate them.
+  newRowIds: ['G0592', 'G0979'],
+  newRowNote: 'Machine Preacher Curl and Band Pallof Press',
   // The importer's merges record ({id, name, into, merged_in}): rows retired INTO a kept row. The rows whose merged_in is
   // batchTag are this batch's own: deactivated here for the first time, and reactivated (with their own cues from the
-  // previous seed) by its rollback. A missing file is a hard stop. OI-523 owns no merge; the S1b-3 merge (E053 into
+  // previous seed) by its rollback. A missing file is a hard stop. Library v30 owns no merge; the S1b-3 merge (E053 into
   // G1373) re-runs as an idempotent retire UPDATE.
   mergesFile: path.join(ROOT, 'scripts', 'data', 'library_s1b3_merges.json'),
   // The seed migration this one follows: its text is the other half of the rollback sentence.
-  previousMigration: '176',
+  previousMigration: '183',
 };
 
 function fail(msg) {
@@ -434,6 +439,8 @@ const rollbackRowSentence = ownsNothing
     ownRemoved.length ? 'it reactivates the rows this batch removed' : null,
   ].filter(Boolean).join('; ');
 const changed = [];
+// First pass: each record entry against the library, collected per row.
+const perRow = new Map();
 for (const rec of BATCH.keptRowRecords) {
   if (!fs.existsSync(rec.file)) fail(`kept-row record not found: ${path.relative(ROOT, rec.file)}`);
   if (!CLOUD_COLUMNS.has(rec.column)) fail(`kept-row record ${path.relative(ROOT, rec.file)} names ${rec.column}, which is not a cloud column`);
@@ -447,23 +454,40 @@ for (const rec of BATCH.keptRowRecords) {
     if (JSON.stringify(row[rec.column] ?? null) !== JSON.stringify(e.after)) {
       fail(`${e.id} ${rec.column} differs from the record's after (run scripts/add_library_batch_c_v15.js, or update the record)`);
     }
-    // `before` is what the rollback restores, so it must be what the previous seed gave the row: the row rebuilt with
-    // `before` (every other column as now, since a kept-row record changes ONE column) must equal its tuple there.
-    const prevTuple = previousTuples.get(idOf(e.id));
-    if (!prevTuple) fail(`kept-row record names ${e.id}, which has no tuple in the previous seed migration (${BATCH.previousMigration})`);
-    if (tupleOf({ ...row, [rec.column]: e.before }) !== prevTuple) {
-      fail(`${e.id}: the row with the record's before is not the tuple the previous seed migration (${BATCH.previousMigration}) wrote (a wrong before, or another column changed too)`);
-    }
-    changed.push({ id: e.id, name: row.name, column: rec.column, note: rec.note,
-      rollback: `UPDATE exercise_library SET ${rec.column} = ${restoreValue(rec.column, e.before)} WHERE id = '${idOf(e.id)}';` });
+    const entries = perRow.get(e.id) || [];
+    if (entries.some((x) => x.rec.column === rec.column)) fail(`two kept-row records name ${e.id} ${rec.column}`);
+    entries.push({ rec, e, row });
+    perRow.set(e.id, entries);
   }
 }
+// Second pass: `before` is what the rollback restores, so it must be what the previous seed gave the row: the row rebuilt with
+// EVERY record's `before` for that id (every other column as now) must equal its tuple there. Reverting one column at a time
+// would refuse an honest two-column change.
+for (const [id, entries] of perRow) {
+  const prevTuple = previousTuples.get(idOf(id));
+  if (!prevTuple) fail(`kept-row record names ${id}, which has no tuple in the previous seed migration (${BATCH.previousMigration})`);
+  const reverted = { ...entries[0].row };
+  for (const x of entries) reverted[x.rec.column] = x.e.before;
+  if (tupleOf(reverted) !== prevTuple) {
+    fail(`${id}: the row with the record's before is not the tuple the previous seed migration (${BATCH.previousMigration}) wrote (a wrong before, or another column changed too)`);
+  }
+  for (const x of entries) {
+    changed.push({ id, name: x.row.name, column: x.rec.column, note: x.rec.note,
+      rollback: `UPDATE exercise_library SET ${x.rec.column} = ${restoreValue(x.rec.column, x.e.before)} WHERE id = '${idOf(id)}';` });
+  }
+}
+// The header counts ROWS: one row with two changed columns is one changed row.
+const changedIds = [...new Set(changed.map((c) => c.id))];
+const changedLabel = (id) => {
+  const mine = changed.filter((c) => c.id === id);
+  return `${id} ${mine[0].name} (${mine.map((c) => c.column).join(', ')})`;
+};
 const changedSentence = changed.length
-  ? `the ${changed.length} changed row(s) are ${changed.map((c) => `${c.id} ${c.name} (${c.column})`).join(', ')} (${[...new Set(changed.map((c) => c.note))].join('; ')}); their other cloud columns do not change`
+  ? `the ${changedIds.length} changed row(s) are ${changedIds.map(changedLabel).join(', ')} (${[...new Set(changed.map((c) => c.note))].join('; ')}); their other cloud columns do not change`
   : 'no kept row changes';
 
 const sql = `-- Intent: RE-SEED cloud exercise_library from bundled assets/data/exercise_library.json (${data.length} exercises, ${BATCH.label}): UPSERTS all ${data.length} rows with their bundled values; ${changedSentence}; ${ownsNoRow}; the other ${newRows - insertedIds.filter((i) => data.some((item) => item.id === i && item.source === BATCH.newRowSource)).length} rows with source '${BATCH.newRowSource}' and every other row are re-written with the values the previous seed (${BATCH.previousMigration}) gave them; runs the ${retiredPairs} retire UPDATEs (${retiredPairs - ownMerged.length} idempotent, their rows already inactive in live cloud${ownMerged.length ? `; ${ownMerged.length} first-time, this batch's merge of ${mergedNames}` : ''}) and repeats the ${removedEntries.length} idempotent deactivations of the rows Batch C2a (${removedBy('c2a')}) and C2b (${removedBy('c2b')}) removed (already inactive in live cloud).
--- Destructive?: yes   -- UPSERT REWRITES ROWS (supabase/migrations/CLAUDE.md): ON CONFLICT (id) DO UPDATE re-writes every column of all ${data.length - insertedIds.length} existing rows (${changed.length} carry new values) and INSERTs ${insertedIds.length} new row(s). Also repeats is_active = false on the ${removedEntries.length} removed rows (already inactive)${ownMerged.length ? `, and sets is_active = false (and the kept row's cues) on the ${ownMerged.length} row(s) this batch merged away (${mergedNames})` : ''}. No DELETE, DROP, TRUNCATE or constraint change.
+-- Destructive?: yes   -- UPSERT REWRITES ROWS (supabase/migrations/CLAUDE.md): ON CONFLICT (id) DO UPDATE re-writes every column of all ${data.length - insertedIds.length} existing rows (${changedIds.length} carry new values) and INSERTs ${insertedIds.length} new row(s). Also repeats is_active = false on the ${removedEntries.length} removed rows (already inactive)${ownMerged.length ? `, and sets is_active = false (and the kept row's cues) on the ${ownMerged.length} row(s) this batch merged away (${mergedNames})` : ''}. No DELETE, DROP, TRUNCATE or constraint change.
 -- Rollback strategy: inline   -- ${[...changed.map((c) => c.rollback), ...mergedReactivateLines, deactivateNewLine].filter(Boolean).join(' ')}  (restores the changed cloud columns to the values the previous seed (${BATCH.previousMigration}) gave them; ${rollbackRowSentence}; commented block at the end of this file). NOT a DELETE: promotions and logs may point at a row once users see it.
 -- Linked diagnose-doc: ${BATCH.diagnose}
 

@@ -599,6 +599,12 @@ paths:
   - { glob: "scripts/data/library_f2_movement_pattern.json", tier: account }
   # OI-523 (2026-11-23): the lunge-alias record decides what the seed migration's rollback restores for G3470's name_aliases.
   - { glob: "scripts/data/library_v28_lunge_alias.json", tier: account }
+  # Library v30 (2026-11-28, OI-443): the E027 / E120 retag records decide what the importer writes into those rows
+  # (equipment, tier, cues); the two v30 cloud records decide what the seed migration's rollback restores.
+  - { glob: "scripts/data/library_e027_retag.json", tier: account }
+  - { glob: "scripts/data/library_e120_retag.json", tier: account }
+  - { glob: "scripts/data/library_v30_equipment.json", tier: account }
+  - { glob: "scripts/data/library_v30_t_bar_cues.json", tier: account }
   - { glob: "docs/**", tier: feature }
   - { glob: "scripts/**", tier: feature }
   - { glob: "test/**", tier: feature }

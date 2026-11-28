@@ -3,9 +3,9 @@
     "bucket": "exercise-media",
     "ledger_completed_at": "2026-10-18T03:13:14.150Z",
     "old_rows": {
-      "entries": 140,
+      "entries": 142,
       "omitted": 0,
-      "sha256": "247b004ed1ad32c9c79da9921874176a9b8a659bca4f092fa162adb8740454c3"
+      "sha256": "011535b28fb409d562be03ea74f29b62385087b1a5f29cbb3f65fa9efeccd44e"
     },
     "origin": "AI recreation of the GIF set in `assets/exercise animations/forgetrainer_animations/gifs`; licensing risk accepted by the founder (D9, 2026-10-21)",
     "taken_down": [],
@@ -6415,6 +6415,25 @@
       "webp_bytes": 602828,
       "webp_sha256": "166823b93cbc0264ecdeabe8bfea176237da927b55eb0d01556cf4d4655b4018"
     },
+    "0592-preacher-curl": {
+      "frames": 12,
+      "gif": "0592",
+      "ledger_id": "0592_Preacher_Curl",
+      "source_gif_sha256": "455472f24c179321e7995d0f860045d650779f4b37e43d661199763e65b4329a",
+      "status": "active",
+      "thumb_bytes": 7074,
+      "thumb_sha256": "6626a2aefcba53f711dbd7be4eff803d34c1c09952b44887023d403aa3401304",
+      "versions": [
+        {
+          "file": "webp-720/0592_Preacher_Curl_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 540044,
+          "webp_sha256": "2e0c1bc67a24d89fe0dd451495f40503101eaf77740bf08e5e3e9fbb9acf51bb"
+        }
+      ],
+      "webp_bytes": 540044,
+      "webp_sha256": "2e0c1bc67a24d89fe0dd451495f40503101eaf77740bf08e5e3e9fbb9acf51bb"
+    },
     "0594-seated-calf-raise": {
       "frames": 12,
       "gif": "0594",
@@ -6566,6 +6585,25 @@
       ],
       "webp_bytes": 480900,
       "webp_sha256": "03de6603b8f137737557e7f7c021989613b8b6db69c96702c88b72056f83bcaa"
+    },
+    "0606-t-bar-row": {
+      "frames": 12,
+      "gif": "0606",
+      "ledger_id": "0606_T-Bar_Row",
+      "source_gif_sha256": "e81db9688f591eeaa0a44ea52c4338487f5896718c032077000ad1d06b995748",
+      "status": "active",
+      "thumb_bytes": 5872,
+      "thumb_sha256": "1d678bdca28b6aa0a01d916edb63c3d211a8d1d2a17ab06470fbbbe846609d28",
+      "versions": [
+        {
+          "file": "webp-720/0606_T-Bar_Row_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 359982,
+          "webp_sha256": "883a15ff6c51acf3f9ae7aa80f20b9eefb0ceca13cd91bd3a6c9bac2ae4b5b7c"
+        }
+      ],
+      "webp_bytes": 359982,
+      "webp_sha256": "883a15ff6c51acf3f9ae7aa80f20b9eefb0ceca13cd91bd3a6c9bac2ae4b5b7c"
     },
     "0607-tricep-extension": {
       "frames": 12,
@@ -8011,6 +8049,25 @@
       "webp_bytes": 424086,
       "webp_sha256": "a3489fcf0ec8ec8d8b6586ce11f8886526710cbcffde15249d715ce238e4db51"
     },
+    "0856-weighted-svend-press": {
+      "frames": 12,
+      "gif": "0856",
+      "ledger_id": "0856_Weighted_Svend_Press",
+      "source_gif_sha256": "bb6e323a21e0d31891326313b0d8ce45d56f102c50e455a9a52bb97dfdd2b6bb",
+      "status": "active",
+      "thumb_bytes": 3656,
+      "thumb_sha256": "ec4be44a3328dc7f1d678412e03b11cf13a3558545ade8e3eda68d042214a3b8",
+      "versions": [
+        {
+          "file": "webp-720/0856_Weighted_Svend_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 299120,
+          "webp_sha256": "6ab51d9e86bd7a107d3b83edd31eed220b421460d7c7fc1dedc96c0dc54d69a8"
+        }
+      ],
+      "webp_bytes": 299120,
+      "webp_sha256": "6ab51d9e86bd7a107d3b83edd31eed220b421460d7c7fc1dedc96c0dc54d69a8"
+    },
     "0857-wheel-rollout": {
       "frames": 12,
       "gif": "0857",
@@ -8371,6 +8428,25 @@
       ],
       "webp_bytes": 337680,
       "webp_sha256": "fed56d687933112c29d81c2f004dacecc99d615543c5aa5ff9b5d4f97b0e60f4"
+    },
+    "0979-band-horizontal-pallof-press": {
+      "frames": 12,
+      "gif": "0979",
+      "ledger_id": "0979_Band_Horizontal_Pallof_Press",
+      "source_gif_sha256": "311d372f53b58c00143077c324462e88c184cc9415ec8bff2c2ccd5121667788",
+      "status": "active",
+      "thumb_bytes": 3942,
+      "thumb_sha256": "85b5f32a6dbceebaaf9fa47636e4f2f77939d1436e8917d1f8799aa73cebe2e8",
+      "versions": [
+        {
+          "file": "webp-720/0979_Band_Horizontal_Pallof_Press_wardroom_720.webp",
+          "media_version": 1,
+          "webp_bytes": 288742,
+          "webp_sha256": "630e22bb8008869224630c5b2bf0e7ba5dc1d2b26adee5152a6f1e4d5f8c3891"
+        }
+      ],
+      "webp_bytes": 288742,
+      "webp_sha256": "630e22bb8008869224630c5b2bf0e7ba5dc1d2b26adee5152a6f1e4d5f8c3891"
     },
     "0980-band-bent-over-kickback": {
       "frames": 12,
@@ -14479,6 +14555,7 @@
     "E024": "0292-dumbbell-single-arm-bent-over-row",
     "E025": "0198-cable-lat-pulldown",
     "E026": "0861-cable-seated-row",
+    "E027": "0606-t-bar-row",
     "E029": "0489-hyperextension",
     "E031": "0031-barbell-curl",
     "E032": "0294-dumbbell-bicep-curl",
@@ -14544,6 +14621,7 @@
     "E113": "0343-dumbbell-lying-single-arm-press",
     "E117": "1269-cable-standing-crossovers",
     "E118": "0596-seated-fly",
+    "E120": "0856-weighted-svend-press",
     "E123": "1326-chinup",
     "E127": "1423-reverse-hyper-on-flat-bench",
     "E129": "0074-barbell-rack-pull",
@@ -14857,6 +14935,7 @@
     "G0587": "0587-military-press",
     "G0588": "0588-narrow-grip-seated-row",
     "G0591": "0591-overhand-tricep-dip",
+    "G0592": "0592-preacher-curl",
     "G0595": "0595-seated-crunch",
     "G0599": "0599-seated-leg-curl",
     "G0602": "0602-seated-reverse-fly",
@@ -14935,6 +15014,7 @@
     "G0976": "0976-band-concentration-curl",
     "G0977": "0977-band-front-lateral-raise",
     "G0978": "0978-band-front-raise",
+    "G0979": "0979-band-horizontal-pallof-press",
     "G0980": "0980-band-bent-over-kickback",
     "G0981": "0981-band-jack-knife-situp",
     "G0983": "0983-band-kneeling-single-arm-pulldown",

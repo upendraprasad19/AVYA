@@ -5,7 +5,7 @@
 // rejected; 104 library rows gain 148 injury tags (additions only). This file
 // pins, in three layers:
 //  (A) DATA — every founder call as a literal on a name, the closed vocabulary,
-//      the table the applier reads, the 55-row safe pool (26 of the original 33 that are still rows + 29 from Batch C1;
+//      the table the applier reads, the 57-row safe pool (26 of the original 33 that are still rows, plus the Batch C1, S1b-2 and library v30 additions;
 //      nothing else left untagged). Batch C2a (OI-460) removed 50 sheet-drop rows: the FROZEN table keeps their ids, so
 //      every reader here filters to ids that are still library rows and computes its denominator.
 //  (B) BEHAVIOUR — the REAL PlanGenerator.generateV4 (the path users
@@ -186,16 +186,16 @@ void main() {
       final rows = library.where((r) => (r['movement_pattern'] as List)
           .any((p) => p == 'elbow_flexion' || p == 'elbow_extension'));
       final removedElbow = _c2Removed.where((i) => (_c2BaseRows[i]!['movement_pattern'] as List).any((p) => p == 'elbow_flexion' || p == 'elbow_extension')).length;
-      expect(rows.length, 147 - removedElbow,
-          reason: 'denominator: 30 original rows in the two patterns + 117 Batch C1 rows, minus the $removedElbow Batch C2a removed');
+      expect(rows.length, 148 - removedElbow,
+          reason: 'denominator: 30 original rows in the two patterns + 117 Batch C1 rows + 1 library v30 row (G0592), minus the $removedElbow Batch C2a removed');
       for (final r in rows) {
         expect(toks(r['injury_contraindications']), contains('elbow'),
             reason: '${r['id']} ${r['name']}');
       }
     });
 
-    test('the safe pool: 56 named rows (26 original + 29 from Batch C1 + Dumbbell Glute Bridge from Library Batch S1b-2) stay untagged, and nothing else does', () {
-      expect(kV14SafePool.length, 56);
+    test('the safe pool: 57 named rows (26 original + 29 from Batch C1 + Dumbbell Glute Bridge from Library Batch S1b-2 + Band Pallof Press from library v30) stay untagged, and nothing else does', () {
+      expect(kV14SafePool.length, 57);
       for (final n in kV14SafePool) {
         expect(tagsOf(n), isEmpty, reason: '"$n" must stay untagged (low-load / rehab)');
       }

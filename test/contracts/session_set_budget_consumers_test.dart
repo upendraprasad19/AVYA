@@ -373,12 +373,10 @@ void main() {
         // The count-forced excuse above is used by exactly these days, by exactly these seconds (B review, seat 2
         // finding 3): a new forced day, or a deeper overrun, is a change to look at, not a pass.
         expect(over, <String, double>{
-          '16/0/0': 90.0, '16/1/0': 90.0, '16/2/0': 90.0, //
-          '54/0/1': 66.0, '54/0/2': 75.6, '54/1/1': 66.0, '54/1/2': 75.6, '54/2/1': 66.0, '54/2/2': 75.6, //
-          // Unit 3A (2026-11-15): plan 55's week-2 day 1 no longer needs the excuse under the goal's band (attributed by
-          // re-running with the goal training off: '55/1/1': 10.8 returns).
-          '55/0/4': 54.0, '55/2/4': 54.0, //
-          '57/0/1': 10.8, '57/1/1': 10.8, '57/2/1': 10.8,
+          // Library v30 (OI-443, 2026-11-28; library data only, no plan-engine code change):
+          // the sweep draws rows by index, so the whole sample changed and every entry was re-measured.
+          '16/0/2': 75.6, '16/1/2': 75.6, '16/2/2': 75.6, //
+          '40/0/1': 10.8, '40/1/1': 10.8, '40/2/1': 10.8,
         });
       });
     });
