@@ -117,14 +117,14 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
 
   List<Map<String, dynamic>> get _filteredLibrary {
     if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
+      final q = exerciseDuplicateKey(_searchQuery);
       return _allLibraryExercises.where((e) {
-        final name = (e['name'] as String?)?.toLowerCase() ?? '';
+        final name = exerciseDuplicateKey(e['name'] as String? ?? '');
         if (name.contains(q)) return true;
         final aliases = e['name_aliases'];
         if (aliases is List) {
           return aliases
-              .any((a) => a.toString().toLowerCase().contains(q));
+              .any((a) => exerciseDuplicateKey(a.toString()).contains(q));
         }
         return false;
       }).toList();
@@ -138,9 +138,9 @@ class _ExerciseSwapSheetState extends State<ExerciseSwapSheet> {
 
   List<Map<String, dynamic>> get _filteredCustom {
     if (_searchQuery.isEmpty) return _customExercises;
-    final q = _searchQuery.toLowerCase();
+    final q = exerciseDuplicateKey(_searchQuery);
     return _customExercises.where((e) {
-      final name = (e['name'] as String?)?.toLowerCase() ?? '';
+      final name = exerciseDuplicateKey(e['name'] as String? ?? '');
       return name.contains(q);
     }).toList();
   }

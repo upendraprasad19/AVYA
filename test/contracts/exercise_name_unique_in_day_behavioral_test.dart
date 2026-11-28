@@ -284,6 +284,199 @@ void main() {
     });
   });
 
+  // The community pull stores an approved row under its cloud id, which for its
+  // author is the id of their own custom (diagnose e7c4a1).
+  group('swapExerciseInDay: an own custom beside its approved community copy',
+      () {
+    const date = '2099-01-07';
+    const sharedId = '0f0e0d0c-1111-4222-8333-444455556666';
+
+    setUp(() async {
+      await HiveService.instance.userBox
+          .put('profile', <String, dynamic>{'equipment_access': 'bodyweight'});
+      await putDay(date, [planned('Z9', 'Row'), planned('Z8', 'Curl')]);
+    });
+
+    Future<void> community() => HiveService.instance.exerciseBox.put(sharedId, {
+          'id': sharedId,
+          'name': 'My Move',
+          'source': 'community',
+          'equipment_needed': <String>[],
+        });
+
+    Future<void> ownCustom({List<String> equipment = const []}) =>
+        HiveService.instance.customBox.put('custom_exercise_77', {
+          'id': sharedId,
+          'type': 'exercise',
+          'name': 'My Move',
+          'equipment_needed': equipment,
+        });
+
+    Future<void> swap() => engine.swapExerciseInDay(
+        date: date, fromExerciseId: 'Z8', toExerciseId: sharedId);
+
+    test('the swap uses the own custom and is not refused', () async {
+      await community();
+      await ownCustom();
+      await swap();
+      expect(dayNames(date), ['Row', 'My Move']);
+    });
+
+    test('mirror: a community row with no own custom stays refused', () async {
+      await community();
+      await expectLater(
+          swap(),
+          throwsA(isA<SwapExerciseException>()
+              .having((e) => e.code, 'code', 'equipment_unavailable')));
+      expect(dayNames(date), ['Row', 'Curl']);
+    });
+
+    test('mirror: the own custom is still held to equipment it does name',
+        () async {
+      await community();
+      await ownCustom(equipment: ['barbell']);
+      await expectLater(
+          swap(),
+          throwsA(isA<SwapExerciseException>()
+              .having((e) => e.code, 'code', 'equipment_unavailable')));
+    });
+
+    test('mirror: a library row wins over a custom with the same id', () async {
+      await HiveService.instance.exerciseBox.put(sharedId, {
+        'id': sharedId,
+        'name': 'Library Move',
+        'equipment_needed': <String>['bodyweight'],
+      });
+      await ownCustom();
+      await swap();
+      expect(dayNames(date), ['Row', 'Library Move']);
+    });
+  });
+
+  // The planner reads the planned exercise's muscles, which its author can edit;
+  // the community copy keeps the old ones (diagnose e7c4a1).
+  group('InjurySwapPlanner: an own custom beside its community copy', () {
+    const sharedId = '0f0e0d0c-1111-4222-8333-999988887777';
+
+    Future<List<Object?>> planFor(
+        {required String communityMuscle, String? ownMuscle}) async {
+      final today = istDateStr(DateTime.now());
+      await HiveService.instance.exerciseBox.put(sharedId, {
+        'id': sharedId,
+        'name': 'My Move',
+        'source': 'community',
+        'category': 'legs',
+        'primary_muscles': [communityMuscle],
+      });
+      if (ownMuscle != null) await HiveService.instance.customBox.put('custom_exercise_78', {
+        'id': sharedId,
+        'type': 'exercise',
+        'name': 'My Move',
+        'category': 'legs',
+        'primary_muscles': [ownMuscle],
+      });
+      await HiveService.instance.exerciseBox.put('SAFE', {
+        'id': 'SAFE',
+        'name': 'Safe Move',
+        'category': 'legs',
+        'primary_muscles': ['calves'],
+      });
+      await putDay(today, [planned(sharedId, 'My Move')]);
+      final swaps = await InjurySwapPlanner.instance
+          .plan(bodyPart: 'knee', severity: 'moderate', daysAhead: 1);
+      return [for (final s in swaps) s.fromName];
+    }
+
+    test('the own muscles are the ones judged', () async {
+      expect(await planFor(communityMuscle: 'chest', ownMuscle: 'quads'),
+          ['My Move']);
+    });
+
+    test('mirror: with no own custom the community muscles are judged',
+        () async {
+      expect(await planFor(communityMuscle: 'quads'), ['My Move']);
+    });
+
+    test('mirror: a stale community muscle does not force a swap', () async {
+      expect(await planFor(communityMuscle: 'quads', ownMuscle: 'chest'),
+          isEmpty);
+    });
+  });
+
+  // A substitute offered from a community copy is written as the author's own
+  // custom, so the own row is the one judged (diagnose e7c4a1).
+  group('InjurySwapPlanner: a substitute that is a copy of an own custom', () {
+    // Sorts before 'SAFE', so the planner meets it first.
+    const sharedId = '0f0e0d0c-1111-4222-8333-777766665555';
+
+    Future<List<Object?>> substitutes({
+      required String communityMuscle,
+      String? ownMuscle,
+      String ownCategory = 'legs',
+    }) async {
+      final today = istDateStr(DateTime.now());
+      final box = HiveService.instance.exerciseBox;
+      await box.clear();
+      await box.put(sharedId, {
+        'id': sharedId,
+        'name': 'My Move',
+        'source': 'community',
+        'category': 'legs',
+        'primary_muscles': [communityMuscle],
+      });
+      if (ownMuscle != null) {
+        await HiveService.instance.customBox.put('custom_exercise_79', {
+          'id': sharedId,
+          'type': 'exercise',
+          'name': 'My Move',
+          'category': ownCategory,
+          'primary_muscles': [ownMuscle],
+        });
+      }
+      for (final (id, name, muscle) in [
+        ('QUAD', 'Quad Move', 'quads'),
+        ('SAFE', 'Safe Move', 'calves'),
+      ]) {
+        await box.put(id, {
+          'id': id,
+          'name': name,
+          'category': 'legs',
+          'primary_muscles': [muscle],
+        });
+      }
+      await putDay(today, [planned('QUAD', 'Quad Move')]);
+      final swaps = await InjurySwapPlanner.instance
+          .plan(bodyPart: 'knee', severity: 'moderate', daysAhead: 1);
+      return [for (final s in swaps) s.toName];
+    }
+
+    test('an own custom that now loads the injury is not offered', () async {
+      expect(await substitutes(communityMuscle: 'chest', ownMuscle: 'quads'),
+          ['Safe Move']);
+    });
+
+    test('mirror: a stale community muscle does not hide a safe own custom',
+        () async {
+      expect(await substitutes(communityMuscle: 'quads', ownMuscle: 'chest'),
+          ['My Move']);
+    });
+
+    test('mirror: with no own custom the community muscles are judged',
+        () async {
+      expect(await substitutes(communityMuscle: 'chest'), ['My Move']);
+      expect(await substitutes(communityMuscle: 'quads'), ['Safe Move']);
+    });
+
+    test('mirror: the own category is the one matched', () async {
+      expect(
+          await substitutes(
+              communityMuscle: 'chest',
+              ownMuscle: 'chest',
+              ownCategory: 'push'),
+          ['Safe Move']);
+    });
+  });
+
   group('InjurySwapPlanner', () {
     final planner = InjurySwapPlanner.instance;
     final today = istDateStr(DateTime.now());

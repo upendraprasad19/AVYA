@@ -73,7 +73,8 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
   }
 
   void _applyFilter() {
-    final query = _searchController.text.toLowerCase();
+    final typed = _searchController.text;
+    final query = typed.isEmpty ? '' : exerciseDuplicateKey(typed);
     setState(() {
       _filtered = _allExercises.where((e) {
         // Category filter
@@ -83,12 +84,12 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
         }
         // Search filter
         if (query.isNotEmpty) {
-          final name = (e['name'] as String?)?.toLowerCase() ?? '';
+          final name = exerciseDuplicateKey(e['name'] as String? ?? '');
           if (!name.contains(query)) {
             final aliases = e['name_aliases'];
             if (aliases is List) {
-              final aliasMatch = aliases.any(
-                  (a) => a.toString().toLowerCase().contains(query));
+              final aliasMatch = aliases.any((a) =>
+                  exerciseDuplicateKey(a.toString()).contains(query));
               if (!aliasMatch) return false;
             } else {
               return false;

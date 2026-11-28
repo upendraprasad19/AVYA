@@ -18,6 +18,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import 'auto_appended_custom.dart' show isLibraryRow;
 import 'day_swap/day_swap_allowance.dart';
 import 'day_swap/day_swap_copy.dart';
 import 'day_swap/day_swap_result.dart';
@@ -680,9 +681,11 @@ class SwapService {
     // valid swap target; library rows stay fail-closed.
     bool targetIsCustom = false;
     final libRaw = _hive.exerciseBox.get(toExerciseId);
-    if (libRaw is Map) {
-      newLib = Map<String, dynamic>.from(libRaw);
-    } else {
+    if (libRaw is Map) newLib = Map<String, dynamic>.from(libRaw);
+    // An approved community row is stored under its cloud id, which for its
+    // author is the id of their own custom. The own custom is what the pickers
+    // offered, so it wins over a community row (never over a library row).
+    if (newLib == null || !isLibraryRow(newLib)) {
       for (final key in _hive.customBox.keys) {
         if (key is! String || !key.startsWith('custom_exercise_')) continue;
         final candidate = _hive.customBox.get(key);
