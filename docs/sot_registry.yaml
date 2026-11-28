@@ -9492,21 +9492,19 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 501-532
+        line_range: 498-521
         method: isNameTaken
         semantic: filter
-        fields_read: [name, name_aliases, type, source, equipment_needed]
+        fields_read: [name, name_aliases, type]
         notes: |
           The create guard's one question (f2a6c8): list rows' name and
           name_aliases, then customNamesLower (the user's exercise rows only,
-          so templates in customBox are never compared). While the equipment
-          rule is on (resolveCapabilityFromProfile is not null), a list row
-          is skipped when it is a community row (`source: community`) whose
-          equipment_needed holds nothing the app can read: canPerform refuses
-          it under every setting, so no picker shows it (_noPickerCanShow,
-          founder 2026-11-26).
+          so templates in customBox are never compared). No row is skipped:
+          every hand-pick list shows every exercise, so a taken name can be
+          found by search (founder 2026-11-28; the 2026-11-26 exception for a
+          row no list could show is gone).
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 476-499
+        line_range: 474-497
         method: getCustomExercises
         semantic: filter
         fields_read: [name, category, logging_type, type]
@@ -11578,7 +11576,7 @@ concepts:
     reader_manifest_complete: true
     readers:
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 424-434
+        line_range: 422-432
         method: queryV4 injury match
         semantic: flag-check
         fields_read: [injury_contraindications]
@@ -13602,10 +13600,6 @@ concepts:
         method: PickerRows.arrange (the swap sheet, the mid-workout picker, the template builder and the coach's swap list)
         semantic: ordering
         notes: a hand-pick list is ORDERED by the floor and never filtered by it (founder 2026-11-28); canPerform for library rows, canOfferInPicker(isCustom) for own ones. Test test/contracts/picker_rows_behavioral_test.dart
-      - file: lib/shared/repositories/exercise_repository.dart
-        method: isNameTaken / _noPickerCanShow
-        semantic: advisory
-        notes: while the floor is on, a community row with no readable equipment does not take its name (no picker can show it); founder 2026-11-26
       - file: lib/features/ai_coach/services/ai_snapshot_builder.dart
         method: buildAiContext ('equipment_effective', flag-gated, key omitted when OFF)
         semantic: advisory
@@ -13797,7 +13791,7 @@ concepts:
         semantic: a missing injury field = never excluded; muscle_primary was invisible
         notes: the E252 knee safety hole + muscle-invisibility
       - file: lib/shared/repositories/exercise_repository.dart
-        line_range: 52-126
+        line_range: 50-124
         method: getByExactName / hasExactNameWhere (exact loop, then name_aliases) + search (name or alias substring)
         semantic: a retired name resolves to its kept twin; an exact name always wins over an alias
       - file: supabase/functions/_shared/tools/exercise/getFormCues.ts

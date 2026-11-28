@@ -60,7 +60,11 @@ mutation_proof: |
   Mutate, run, restore; every file restored byte for byte. PickerRows: 7 mutations, 7 RED. The four
   lists: 11 mutations, 11 RED (each list with its non-matching rows dropped and with unarranged
   rows; the picker chip ignoring a replaced row's category; the swap sheet chip applied to own
-  exercises; the template search capped at 30 again).
+  exercises; the template search capped at 30 again). Swap write and injury planner: 9 mutations,
+  9 RED (the planner's equipment skip; its own-row lookup; the old refusal restored; each unplaced
+  entry dropped; "Workouts updated" for no swap; the sheet's no-swap announcement; the preview
+  block hidden; "nothing hits" said with exercises unplaced). The name guard: the old community
+  skip restored, 3 RED.
 impact_analysis: |
   A user can now pick any exercise by hand, in four lists and through the coach after APPLY. With
   the equipment rule off or no profile the order is the old one. App-made paths (generator, repeat
