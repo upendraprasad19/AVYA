@@ -235,13 +235,16 @@ class InjurySwapPlanner {
       if (ex is! Map) continue;
       final id = (ex['id'] ?? key).toString();
       if (id == fromId) continue;
-      final cat = ex['category']?.toString().toLowerCase();
+      // A community candidate may be a stale copy of the user's own custom,
+      // which is the row the swap would write: judge that one (e7c4a1).
+      final row = isLibraryRow(ex) ? ex : (_resolveLibraryEntry(id) ?? ex);
+      final cat = row['category']?.toString().toLowerCase();
       if (wantedCat != null && cat != null && cat != wantedCat) continue;
 
       // Skip if this candidate hits the affected muscles too.
-      if (_exerciseHitsMuscles(ex, avoidMuscles)) continue;
+      if (_exerciseHitsMuscles(row, avoidMuscles)) continue;
 
-      final name = (ex['name'] ?? id).toString();
+      final name = (row['name'] ?? id).toString();
       if (takenNames.contains(exerciseNameKey(name))) continue;
       return (id: id, name: name);
     }

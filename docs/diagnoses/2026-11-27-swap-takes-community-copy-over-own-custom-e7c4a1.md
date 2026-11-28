@@ -89,3 +89,17 @@ Tests: the planner group about an own custom beside its community copy (own musc
 stale community muscle forces no swap; with no own custom the community muscles are judged).
 Mutations: the community row preferred again, 2 RED; the community row lost with no own custom,
 1 RED.
+
+## Third review (2026-11-28): the substitute half of the planner
+
+The second pass changed only how the planner reads the exercise being replaced.
+`_findSubstitute` still judged each candidate from the exercise box, so a stale community copy
+could offer the author's own custom into an injury plan, judged on old muscles, and the swap
+then wrote the own row. The same code is on main. A community candidate is now resolved through
+`_resolveLibraryEntry` before its category, muscles and name are read; a library row is read as
+it is.
+
+Tests: the planner group about a substitute that is a copy of an own custom (a now-injuring own
+custom is not offered; a safe one still is; with no own custom the community muscles decide; the
+own category is matched). Mutation: the candidate judged from the exercise box again, 3 RED.
+
