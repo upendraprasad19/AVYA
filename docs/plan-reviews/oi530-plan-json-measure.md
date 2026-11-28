@@ -44,3 +44,16 @@ bpass_review: docs/reviews/oi530-landing-a-bpass.md
 ## B-pass
 - `docs/reviews/oi530-landing-a-bpass.md`: one fresh Sonnet seat on `a23e72622eed`; 3 P2 registry cites (the
   TS file's sibling cites not shifted), all fixed; reviewer mutants M1-M3 each reddened a test.
+
+## Deploy (founder go 2026-11-28)
+- `restore-user-snapshot` v16 -> v17 at 22:16 IST from `251f4858` (host-shell `emit_payload --auto` +
+  `deploy_via_api`, verify_jwt true, 4 files). Before: live v16 decoded files equal `main` `bde20648` (4/4) =
+  rollback source. After: decoded v17 files equal `251f4858` (4/4); anon-Bearer boot-verify = the module's own
+  401 `{error: unauthenticated}`.
+- Real-token check (founder, iPhone Safari, web build 1.0.0+51): two restores, both 200, 240,663 bytes (v16
+  restores of the same size class were 333-336 KB), `restore_timings` with no `workout_plan_ms` (the plan read
+  is skipped). The first load hung on the splash: telemetry shows a sign-out followed by a fresh OAuth session,
+  then `HiveError: Box not found` across restore writers and providers = OI-526 (session close gap), not this
+  change (the EF changes only which rows the server reads). A fresh tab loaded Home.
+- Rollback: `RESTORE_SINGLE_PLAN_READ_OFF=true` (no redeploy) or `deploy_via_api.js --rollback
+  restore-user-snapshot bde20648`.
