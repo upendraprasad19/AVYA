@@ -389,11 +389,12 @@ void main() {
         return (r.stdout as String).trim();
       }
 
-      final base = Map<String, String>.from(Platform.environment)
-        ..removeWhere((k, _) => k.toUpperCase() == 'TZ');
-      final machine = await offsetUnder(base, 'offset with no TZ (machine zone)');
+      // The helper builds both environments, so this file never copies the whole parent
+      // itself (spawn_sites_guard G2).
+      final machine = await offsetUnder(
+          hermeticEnvironment(remove: {'TZ'}), 'offset with no TZ (machine zone)');
       final gate = await offsetUnder(
-          catalogChildEnvironment({...base, 'TZ': 'Asia/Kolkata'}),
+          catalogChildEnvironment(hermeticEnvironment(extra: {'TZ': 'Asia/Kolkata'})),
           'offset under the catalog child env');
       expect(gate, machine);
     }, skip: Platform.isWindows ? false : 'Windows only; POSIX is covered by date +%z above');

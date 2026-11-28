@@ -47,6 +47,16 @@ ProcessResult _git(List<String> args, String cwd) => runSpawn('git', args,
     runInShell: true,
     why: 'sweep fixture: git ${args.join(' ')}');
 
+/// The parent a scenario injects through runSpawn's `parentEnvironment:` seam: this
+/// process's environment with [overrides] winning under any spelling of the key. The
+/// ONE place this file reads the whole environment (spawn_sites_guard G2 allows one).
+Map<String, String> _parentWith(Map<String, String> overrides) {
+  final replaced = overrides.keys.map((k) => k.toUpperCase()).toSet();
+  return Map<String, String>.from(Platform.environment)
+    ..removeWhere((k, _) => replaced.contains(k.toUpperCase()))
+    ..addAll(overrides);
+}
+
 class _Repo {
   late String tmp;    // the temp root holding origin.git + work/ + the stub
   late String dir;    // the clone (HEAD has one unpushed commit = the "push range")
@@ -176,11 +186,7 @@ concepts:
   // covered in regression_catalog_lib_test.dart.
   test('the flutter child gets India time off Windows and no TZ on Windows, whatever the parent had', () {
     for (final parentTz in <String>['UTC', 'Asia/Kolkata']) {
-      final res = run([], parent: {
-        for (final e in Platform.environment.entries)
-          if (e.key.toUpperCase() != 'TZ') e.key: e.value,
-        'TZ': parentTz,
-      });
+      final res = run([], parent: _parentWith({'TZ': parentTz}));
       expect(res.exitCode, 0, reason: '${res.stdout}${res.stderr}');
       expect(File('${r.record}.tz').readAsStringSync().trim(),
           Platform.isWindows ? '[]' : '[Asia/Kolkata]',
@@ -233,7 +239,7 @@ concepts:
   test('a parent environment carrying CONTRACT_SWEEP_NESTED / CONTRACT_SWEEP_SKIP does NOT reach the runner under test', () {
     for (final poison in const ['CONTRACT_SWEEP_NESTED', 'CONTRACT_SWEEP_SKIP']) {
       if (File(r.record).existsSync()) File(r.record).deleteSync();
-      final parent = {...Platform.environment, poison: '1'};
+      final parent = _parentWith({poison: '1'});
       // PRECONDITIONS, so this test cannot pass vacuously: the poison is in the parent, it
       // SURVIVES the filter this file used to carry (GIT_*, GITHUB_*, PUSH_BEFORE only), and
       // the helper's environment for that same parent does not contain it.

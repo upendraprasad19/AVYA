@@ -93,3 +93,14 @@ Git's `sh.exe` the file runs and skips its POSIX-only tests), and the 730-day fr
   nothing about a value with a slash.)
 - The 730-day speed test fails when the machine is loaded (723 ms against 400 ms in one blocked walk). It is not
   part of this fix; it is changed separately in diagnose 5e91a7.
+
+## Added after PR #360's CI (head cd0711da)
+
+The first version of this fix failed `test/contracts/spawn_sites_guard_test.dart` (rule G2) in unit shard 3: it
+added a second whole-environment read to `contract_sweep_e2e_test.dart` and a first one to
+`regression_catalog_lib_test.dart`. The five files first run locally for the fix did not include that guard, and
+the guard and its allow-list are unchanged. Now the sweep test reads the environment in one place (`_parentWith`)
+and the catalog test builds both environments through `hermeticEnvironment`. Run on Windows 2026-11-28: the
+guard, those two files, `spawn_env_manifest_test.dart` and `spawn_helper_test.dart`: 122 passed, 1 skipped (POSIX
+only). With `applySuiteZone`'s Windows branch disabled (grep count 1) the two rewritten files had 4 failures,
+including both rewritten tests; the file was restored byte for byte (cmp).
