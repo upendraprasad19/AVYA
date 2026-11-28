@@ -14,7 +14,7 @@ import '../widgets/profile_row.dart';
 /// Hub behind the single "Photos" row on the Profile tab.
 ///
 /// Two destinations, deliberately NOT merged: Progress Photos (1 free upload
-/// per IST week, PRO unlimited, dated body-progress timeline in the
+/// per IST week, no cap for PRO, dated body-progress timeline in the
 /// `progress-photos` bucket)
 /// and Saved Photos (photos the user consented to keep from AI Coach chat, in
 /// the `coach-media` bucket). The hub only routes; each destination keeps its

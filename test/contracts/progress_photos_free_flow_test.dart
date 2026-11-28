@@ -5,7 +5,7 @@
 //   - the weekly-used snackbar carries a GO PRO action only in a build that can
 //     sell PRO (`showsUpgradeAffordance()`: razorpay and play_billing yes, none
 //     no, ADR-0022), and the paywall opens ONLY from that action, with the
-//     'Unlimited Progress Photos' letterhead;
+//     'No-Limit Progress Photos' letterhead;
 //   - a used slot opens nothing by itself (no paywall, no sheet, no capture);
 //   - a slot check that returns normally proceeds to the source sheet, the angle
 //     sheet and exactly one capture, in that order (slot, then capture);
@@ -176,7 +176,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(paywall, findsOneWidget);
-      expect(find.text('Unlimited Progress Photos is a PRO feature'),
+      expect(find.text('No-Limit Progress Photos is a PRO feature'),
           findsOneWidget);
       expect(captureCalls, 0);
     });

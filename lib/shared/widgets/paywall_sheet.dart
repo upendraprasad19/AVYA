@@ -150,7 +150,7 @@ class _PaywallSheetState extends ConsumerState<PaywallSheet> {
     'AI food analysis & meal scanning (camera)',
     'Generate new plans after Week 4 (all phases, no end point)',
     'Weekly AI nutrition report',
-    'Unlimited progress photos & body composition tracking',
+    'Progress photos with no weekly limit & body composition tracking',
     'Reasoning tab for advanced coaching',
     'PRO tips on every exercise',
     'Diet plan PDF download',

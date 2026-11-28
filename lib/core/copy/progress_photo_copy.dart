@@ -1,5 +1,7 @@
 /// Copy for the progress-photo free weekly cap (OI-348 Landing 3c, founder
-/// call 2026-11-26: 1 free photo per IST week, PRO unlimited).
+/// call 2026-11-26: 1 free photo per IST week, no cap for PRO).
+/// No line says "unlimited": the paywall surfaces ban the word
+/// (`chat_limit_part_b_client_test.dart`).
 ///
 /// Const-only, no em dashes. Every line except [goPro] is neutral and safe in
 /// a build that sells nothing (`PurchaseMode.none`, ADR-0022); [goPro] is
@@ -22,10 +24,10 @@ class ProgressPhotoCopy {
 
   /// The Photos hub's Progress subtitle for a user who is not PRO.
   static const String hubSubtitleFree =
-      '1 free photo a week · PRO unlimited';
+      '1 free photo a week · no limit with PRO';
 
   /// The paywall feature label (letterhead: "<label> is a PRO feature").
-  static const String paywallFeature = 'Unlimited Progress Photos';
+  static const String paywallFeature = 'No-Limit Progress Photos';
 
   /// The paywall subtitle for [paywallFeature].
   static const String paywallSubtitle =
