@@ -20,7 +20,12 @@
 //     index.ts BEFORE assembleTables is called; the paged readers re-validate it.
 //   • Fail-closed: the first rejected read makes assembleTables reject (nothing new starts; the
 //     reads already in flight settle first), and index.ts answers the same 500.
-//   • The three user_progress reads stay three (freezes projection parity, H-1).
+//   • The freezes projection stays its own read (H-1). OI-530 Landing A
+//     (docs/plans/oi530-landing-a-one-plan-read.md): with `singlePlanRead` (index.ts, env
+//     RESTORE_SINGLE_PLAN_READ_OFF not "true") the `workout_plan` read is NOT issued; its slot is
+//     kept and filled from the `user_progress` row by `deriveWorkoutPlan`, which also drops
+//     `plan_json` from that row, so the bundle (often 0.3-1 MB) crosses the wire once instead of
+//     twice. Two user_progress reads then, three with the switch (today's code, verbatim).
 //
 // ── KINDS ──
 //   "query": a PostgREST builder; assembleTables wraps it as q(name, builder) (destructures
@@ -250,9 +255,36 @@ export function timingLogLine(o: {
   ].join(" ");
 }
 
+/** The READS slot whose request `singlePlanRead` skips (OI-530 Landing A). */
+export const DERIVED_PLAN_READ = "workout_plan";
+
+/**
+ * OI-530 Landing A. PURE: returns a copy of `tables` where `workout_plan` is what the live
+ * `user_progress select("plan_json").eq(user_id).limit(1)` read returns (`[]` with no row,
+ * `[{plan_json: null}]` for a null or missing column) and `user_progress[0]` is a COPY of the row
+ * without `plan_json`. Never mutates an input object: a stored row can be shared by several
+ * slots (the freezes projection reads the same row), and the caller's tables keep their key order
+ * because `workout_plan` is assigned to an existing key.
+ */
+export function deriveWorkoutPlan(tables: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...tables };
+  const progress = tables["user_progress"];
+  const row = Array.isArray(progress) && progress.length > 0 ? progress[0] : null;
+  if (row === null || typeof row !== "object") {
+    out[DERIVED_PLAN_READ] = [];
+    return out;
+  }
+  const { plan_json: planJson, ...rest } = row as Record<string, unknown>;
+  out[DERIVED_PLAN_READ] = [{ plan_json: planJson ?? null }];
+  out["user_progress"] = [rest, ...(progress as unknown[]).slice(1)];
+  return out;
+}
+
 /**
  * Assembles the whole bundle for an ALREADY-VALIDATED vUid. Rejects on the first failed read
  * (fail-closed; index.ts maps it to the 500). Logs the timing line in a `finally`.
+ * `opts.singlePlanRead` (default false = the pre-Landing-A behaviour): skip the `workout_plan`
+ * request and derive that slot from `user_progress` (`deriveWorkoutPlan`).
  */
 export async function assembleTables(
   db: DbLike,
@@ -264,8 +296,10 @@ export async function assembleTables(
     requestId: string;
     clock?: () => number;
     log?: (line: string) => void;
+    singlePlanRead?: boolean;
   },
 ): Promise<{ tables: Record<string, unknown>; timings: Record<string, number> }> {
+  const singlePlanRead = opts.singlePlanRead === true;
   const clock = opts.clock ?? (() => performance.now());
   const log = opts.log ?? ((line: string) => console.log(line));
   const timings: Record<string, number> = {};
@@ -281,7 +315,11 @@ export async function assembleTables(
   };
   try {
     const values = await runLimited(
-      READS.map(([name, kind, f]) => () => run(name, kind, f)),
+      READS.map(([name, kind, f]) => () =>
+        singlePlanRead && name === DERIVED_PLAN_READ
+          ? Promise.resolve(null) // placeholder: no request; filled by deriveWorkoutPlan below
+          : run(name, kind, f)
+      ),
       limit,
     );
     const tables: Record<string, unknown> = {};
@@ -289,7 +327,7 @@ export async function assembleTables(
       tables[name] = values[i];
     });
     ok = true;
-    return { tables, timings };
+    return { tables: singlePlanRead ? deriveWorkoutPlan(tables) : tables, timings };
   } finally {
     log(timingLogLine({
       requestId: opts.requestId,

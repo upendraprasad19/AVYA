@@ -86,10 +86,12 @@ void main() {
     }
   });
 
-  test('every same_movement_as names an existing row that carries no link itself, and only the nine carry one', () {
+  test('every same_movement_as names an existing row that carries no link itself, and only the nine and G0574 carry one', () {
     final linked = [for (final r in lib) if (r.containsKey('same_movement_as')) r['id']];
-    expect(linked.toSet(), _rows.keys.toSet());
-    for (final id in _rows.keys) {
+    // Seed v30 (founder 2026-11-28): G0574 Landmine T-Bar Row is not a loaded version; it never shares a day with E027.
+    expect(linked.toSet(), {..._rows.keys, 'G0574'});
+    expect(byId['G0574']!['same_movement_as'], 'E027');
+    for (final id in linked.cast<String>()) {
       final target = byId[byId[id]!['same_movement_as']];
       expect(target, isNotNull, reason: '$id links a missing row');
       expect(target!.containsKey('same_movement_as'), isFalse, reason: '$id links a linked row');

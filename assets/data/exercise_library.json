@@ -2185,7 +2185,7 @@
       "Lower Back"
     ],
     "equipment_needed": [
-      "barbell"
+      "machines"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "intermediate",
@@ -2201,10 +2201,10 @@
     "cal_per_set_est": 11.0,
     "breathing_cue": "Exhale on pull",
     "coaching_cues": [
-      "Wide stance",
-      "hip hinge",
-      "chest on pad",
-      "pull to lower chest"
+      "Stand on the platform with your feet planted",
+      "Hinge at the hips",
+      "Keep your back flat",
+      "Pull towards your lower chest"
     ],
     "common_mistakes": [
       "Rounding back",
@@ -2228,7 +2228,6 @@
       "Mid Back (Thickness)"
     ],
     "equipment_tier": [
-      "basic_gym",
       "full_gym"
     ],
     "standard_swap": "",
@@ -2245,7 +2244,10 @@
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "row"
+    "variant_family": "row",
+    "media_slug": "0606-t-bar-row",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E029",
@@ -8852,7 +8854,7 @@
     ],
     "secondary_muscles": [],
     "equipment_needed": [
-      "barbell"
+      "dumbbells"
     ],
     "logging_type": "weight_reps",
     "difficulty_level": "beginner",
@@ -8891,6 +8893,7 @@
       "Mid Chest"
     ],
     "equipment_tier": [
+      "home_dumbbells",
       "basic_gym",
       "full_gym"
     ],
@@ -8900,10 +8903,13 @@
     "is_foundational": false,
     "core_levels": [],
     "discipline": "strength",
-    "gym_availability": "standard_gym",
+    "gym_availability": "home",
     "requires_coaching": false,
     "high_impact": false,
-    "variant_family": "chest_fly"
+    "variant_family": "chest_fly",
+    "media_slug": "0856-weighted-svend-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   },
   {
     "id": "E121",
@@ -60357,12 +60363,16 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "8-12",
-    "core_levels": [],
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "row",
+    "same_movement_as": "E027",
     "media_slug": "0574-bent-over-row",
     "media_version": 1,
     "media_source": "wardroom"
@@ -67992,5 +68002,156 @@
     "high_impact": false,
     "variant_family": "rotation_core",
     "same_movement_as": "E059"
+  },
+  {
+    "id": "G0592",
+    "name": "Machine Preacher Curl",
+    "category": "pull",
+    "movement_pattern": [
+      "elbow_flexion"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Biceps"
+    ],
+    "secondary_muscles": [
+      "Brachialis",
+      "Forearms"
+    ],
+    "equipment_needed": [
+      "machines"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "intermediate",
+    "suitable_for": [
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 6.0,
+    "breathing_cue": "Exhale curling up, inhale lowering",
+    "coaching_cues": [
+      "Set the seat so your upper arms rest flat on the pad",
+      "Hold the handles with your palms up",
+      "Curl without lifting your elbows",
+      "Lower slowly, stopping just before your arms are fully straight"
+    ],
+    "common_mistakes": [
+      "Lifting your elbows",
+      "Dropping the weight and snapping your elbows straight",
+      "Shrugging because the seat is poorly adjusted"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Stop just short of lockout to spare the elbow tendon.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [
+      "elbow"
+    ],
+    "is_bilateral": true,
+    "cns_demand": 1,
+    "target_focus": [
+      "Biceps (Short Head)"
+    ],
+    "equipment_tier": [
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3,
+    "rep_range": "10-12",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "well_equipped_gym",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "preacher_curl",
+    "media_slug": "0592-preacher-curl",
+    "media_version": 1,
+    "media_source": "wardroom"
+  },
+  {
+    "id": "G0979",
+    "name": "Band Pallof Press",
+    "category": "core",
+    "movement_pattern": [
+      "core"
+    ],
+    "exercise_type": [
+      "isolation"
+    ],
+    "primary_muscles": [
+      "Core",
+      "Obliques"
+    ],
+    "secondary_muscles": [
+      "Front Delts"
+    ],
+    "equipment_needed": [
+      "resistance band"
+    ],
+    "logging_type": "weight_reps",
+    "difficulty_level": "beginner",
+    "suitable_for": [
+      "Beginner",
+      "Intermediate",
+      "Advanced"
+    ],
+    "default_sets": 3,
+    "default_reps": "10-12 each side",
+    "default_rest_secs": 60,
+    "tempo": "2-1-2-0",
+    "met_value": 3.5,
+    "cal_per_set_est": 6.0,
+    "breathing_cue": "Exhale pressing out",
+    "coaching_cues": [
+      "Stand sideways to the anchor with the band at chest height",
+      "Brace your core",
+      "Press straight forward without turning",
+      "Pause for one second, return slowly, and repeat on both sides"
+    ],
+    "common_mistakes": [
+      "Twisting toward the anchor",
+      "Leaning away",
+      "Shrugging or rushing"
+    ],
+    "warmup_protocol": "",
+    "pro_tip": "Step further from the anchor for more tension.",
+    "is_indian_context": false,
+    "indian_alternative": "",
+    "source": "exercise-gif-set",
+    "is_active": true,
+    "is_foundational": false,
+    "injury_contraindications": [],
+    "is_bilateral": false,
+    "cns_demand": 1,
+    "target_focus": [
+      "Core/Obliques"
+    ],
+    "equipment_tier": [
+      "home_dumbbells",
+      "basic_gym",
+      "full_gym"
+    ],
+    "standard_swap": "",
+    "priority_tier": 3,
+    "rep_range": "10-12",
+    "core_levels": [],
+    "discipline": "strength",
+    "gym_availability": "home",
+    "requires_coaching": false,
+    "high_impact": false,
+    "variant_family": "anti_rotation",
+    "media_slug": "0979-band-horizontal-pallof-press",
+    "media_version": 1,
+    "media_source": "wardroom"
   }
 ]

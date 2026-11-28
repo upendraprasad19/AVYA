@@ -329,7 +329,8 @@ class _TemplateBuilderScreenState
         takenNames: _takenNames,
         onSelect: (exercise) {
           // OI-358: the one writer of this list. A picked row is never taken
-          // (the sheet greys those), but a just-created custom can share a name.
+          // (the sheet greys those), but a just-created custom can still match a
+          // template row whose name is in no list (an old or coach-made row).
           final name = exerciseRowName(exercise);
           if (name != null && _takenNames.contains(exerciseNameKey(name))) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -596,10 +597,10 @@ class _ExerciseSearchSheetState extends State<_ExerciseSearchSheet> {
       bundled = doable(repo.getAll()).take(30).toList();
       matchedCustom = custom;
     } else {
-      final q = query.toLowerCase();
+      final q = exerciseDuplicateKey(query);
       bundled = doable(repo.search(query)).take(30).toList();
       matchedCustom = custom.where((e) {
-        final name = (e['name'] as String?)?.toLowerCase() ?? '';
+        final name = exerciseDuplicateKey(e['name'] as String? ?? '');
         return name.contains(q);
       }).toList();
     }

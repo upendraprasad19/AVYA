@@ -80,6 +80,35 @@ void main() {
       expect(find.byType(BottomSheet), findsOneWidget, reason: 'nothing happened');
     });
 
+    testWidgets(
+        'search ignores curly apostrophes and extra spaces, for the list and own exercises',
+        (tester) async {
+      await _pump(tester, [
+        {'exercise_name': _bench, 'sets': 3, 'reps': '8'},
+      ]);
+      await tester.runAsync(() => HiveService.instance.customBox.put(
+          'custom_exercise_zed', <String, dynamic>{
+        'id': 'custom_exercise_zed',
+        'name': "Zed's Row",
+        'type': 'exercise',
+        'logging_type': 'weight_reps',
+      }));
+      await _openSearch(tester);
+      final quote = String.fromCharCode(0x2019);
+      final search = _inSheet(find.byType(TextField)).first;
+
+      await tester.enterText(search, 'seated  cable');
+      await _settle(tester);
+      expect(_inSheet(find.text(_row)), findsOneWidget);
+      expect(_inSheet(find.text("Zed's Row")), findsNothing,
+          reason: 'mirror: the search still narrows');
+
+      await tester.enterText(search, 'zed${quote}s  row');
+      await _settle(tester);
+      expect(_inSheet(find.text("Zed's Row")), findsOneWidget);
+      expect(_inSheet(find.text(_row)), findsNothing);
+    });
+
     testWidgets('a new name adds to the template', (tester) async {
       await _pump(tester, [
         {'exercise_name': _bench, 'sets': 3, 'reps': '8'},
@@ -93,7 +122,7 @@ void main() {
   });
 
   group('the writer refuses what no row controls', () {
-    testWidgets('a custom created with a name already in the template',
+    testWidgets('a custom created with a name already in the template: refused in the sheet',
         (tester) async {
       await _pump(tester, [
         {'exercise_name': _bench, 'sets': 3, 'reps': '8'},
@@ -106,17 +135,55 @@ void main() {
       await tester.ensureVisible(_inSheet(find.text('SAVE')));
       await tester.pump();
       await tapWithRealIo(tester, _inSheet(find.text('SAVE')));
-      // The sheet closes, and onCreated runs, only after the real write.
-      final sheet = find.byType(CreateCustomExerciseSheet);
-      await pumpUntilRealIoDone(tester, () => sheet.evaluate().isEmpty,
-          what: 'saving the custom exercise');
+      // Founder 2026-11-25 (A16): a name the exercise list holds is refused where the custom
+      // is created. The sheet stays open with the message and nothing is stored.
+      final message = find.text(WardroomCopy.customExerciseNameTakenTemplate
+          .replaceAll('{exercise}', _bench));
+      await pumpUntilRealIoDone(tester, () => message.evaluate().isNotEmpty,
+          what: 'the duplicate-name refusal');
       await _settle(tester);
 
-      expect(_card(_bench), findsOneWidget, reason: 'still one row');
+      expect(find.byType(CreateCustomExerciseSheet), findsOneWidget);
+      expect(find.text('1 ADDED'), findsOneWidget,
+          reason: 'still one row (the name also shows in the open sheets, so count the badge)');
+      expect(
+          HiveService.instance.customBox.values
+              .whereType<Map>()
+              .any((m) => m['name'] == _bench),
+          isFalse);
       expect(
           find.text(WardroomCopy.templateAlreadyAddedTemplate
               .replaceAll('{exercise}', _bench)),
-          findsOneWidget);
+          findsNothing,
+          reason: 'refused before it reaches the template');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'a custom named like a template row that is in NO list: the builder refuses it and says so',
+        (tester) async {
+      // An old or coach-made template row whose name is in neither the library nor the
+      // customs: the create is allowed, so the builder's one writer must refuse it.
+      const oldRow = 'Zercher Hold';
+      await _pump(tester, [
+        {'exercise_name': oldRow, 'sets': 3, 'reps': '8'},
+      ]);
+      await _openSearch(tester);
+      await tester.tap(_inSheet(find.textContaining('CUSTOM')).first);
+      await _settle(tester);
+      await tester.enterText(_inSheet(find.byType(TextField)).first, oldRow);
+      await tester.pump();
+      await tester.ensureVisible(_inSheet(find.text('SAVE')));
+      await tester.pump();
+      await tapWithRealIo(tester, _inSheet(find.text('SAVE')));
+      final message = find.text(WardroomCopy.templateAlreadyAddedTemplate
+          .replaceAll('{exercise}', oldRow));
+      await pumpUntilRealIoDone(tester, () => message.evaluate().isNotEmpty,
+          what: 'the builder refusal');
+      await _settle(tester);
+
+      expect(message, findsOneWidget);
+      expect(find.text('1 ADDED'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

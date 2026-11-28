@@ -12,6 +12,17 @@ library;
 /// to one log row. Pinned by `exercise_name_unique_in_day_behavioral_test.dart`.
 String exerciseNameKey(String name) => name.toLowerCase().trim();
 
+/// The key for "is this name already taken" when a custom exercise is created:
+/// [exerciseNameKey], with every run of spaces (non-breaking ones too) read as
+/// one space and curly apostrophes read as straight ones, so neither "Barbell
+/// Bench  Press" nor "Child’s Pose" can pose as a new name. Exercise search
+/// compares with it too, so a name the guard calls taken is one search finds.
+/// NOT the log identity: `exlogKey` and the one-per-day rules keep
+/// [exerciseNameKey].
+String exerciseDuplicateKey(String name) => exerciseNameKey(name
+    .replaceAll(RegExp('[‘’ʼ]'), "'")
+    .replaceAll(RegExp(r'\s+'), ' '));
+
 /// The name on a stored row. Both shapes exist: `exercise_name` on schedule
 /// rows and `createTemplate` rows, `name` on library rows and in the template
 /// builder, both on restored templates. Null when the row has neither, which

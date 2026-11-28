@@ -50,6 +50,20 @@ Future<ScreenHarness> _pump(WidgetTester tester, List<String> names) async {
       libraryRows: _library);
 }
 
+const _pose = "Child's Pose";
+const _ownApostrophe = "Zed's Hold";
+
+/// What a phone with smart punctuation types: a curly apostrophe, two spaces.
+final _typedPose = 'child${String.fromCharCode(0x2019)}s  pose';
+
+Future<ScreenHarness> _pumpWithPose(WidgetTester tester) async {
+  await ensureHive(tester);
+  await tester.runAsync(() => HiveService.instance.customBox.clear());
+  return pumpScreen(tester,
+      exercises: [exercise(name: _bench), exercise(name: _row)],
+      libraryRows: [..._library, _lib('E5', _pose)]);
+}
+
 Future<void> _settle(WidgetTester tester) async {
   for (var i = 0; i < 6; i++) {
     await tester.pump(const Duration(milliseconds: 100));
@@ -91,6 +105,29 @@ Future<void> _createCustom(WidgetTester tester, String name) async {
       what: 'saving the custom exercise');
   await _settle(tester);
 }
+
+/// SAVE a name the exercise list already holds (founder 2026-11-25, A16: "why should there be
+/// duplicate names?"): the sheet refuses with a message and STAYS open, so the user can type
+/// another name or search for the existing exercise. Waits on the message, not the sheet.
+Future<void> _createCustomRefused(WidgetTester tester, String name) async {
+  await tester.enterText(
+      find.descendant(
+          of: find.byType(BottomSheet).last, matching: find.byType(TextField)).first,
+      name);
+  await tester.pump();
+  await tester.ensureVisible(_inSheet(find.text('SAVE')));
+  await tester.pump();
+  await tapWithRealIo(tester, _inSheet(find.text('SAVE')));
+  final message = find.text(
+      WardroomCopy.customExerciseNameTakenTemplate.replaceAll('{exercise}', name));
+  await pumpUntilRealIoDone(tester, () => message.evaluate().isNotEmpty,
+      what: 'the duplicate-name refusal');
+  await _settle(tester);
+}
+
+bool _customNamed(String name) => HiveService.instance.customBox.values
+    .whereType<Map>()
+    .any((m) => m['name'] == name);
 
 /// The swap sheet's own "+ ADD EXERCISE": create a custom, auto-swap it in.
 Future<void> _swapToNewCustom(WidgetTester tester, int cardIndex, String name) async {
@@ -156,6 +193,42 @@ void main() {
       expect(find.byType(BottomSheet), findsOneWidget, reason: 'nothing happened');
     });
 
+    // f2a6c8: a name the create guard calls taken must be one the search finds,
+    // or the refusal sends the user to look for something search cannot show.
+    testWidgets('Add picker search ignores curly apostrophes and extra spaces',
+        (tester) async {
+      await _pumpWithPose(tester);
+      await _openAddPicker(tester);
+      await tester.enterText(_inSheet(find.byType(TextField)).first, _typedPose);
+      await _settle(tester);
+      expect(_inSheet(find.text(_pose)), findsOneWidget);
+      expect(_inSheet(find.text(_curl)), findsNothing,
+          reason: 'mirror: the search still narrows');
+    });
+
+    testWidgets('Swap sheet search does too, for the list and for own exercises',
+        (tester) async {
+      await _pumpWithPose(tester);
+      await tester.runAsync(() => HiveService.instance.customBox.put(
+          'custom_exercise_zed', <String, dynamic>{
+        'id': 'custom_exercise_zed',
+        'name': _ownApostrophe,
+        'type': 'exercise',
+        'category': 'Push',
+        'logging_type': 'weight_reps',
+      }));
+      await _openSwapSheet(tester, 0);
+      await tester.enterText(_inSheet(find.byType(TextField)).first, _typedPose);
+      await _settle(tester);
+      expect(_inSheet(find.text(_pose)), findsOneWidget);
+      expect(_inSheet(find.text(_curl)), findsNothing);
+
+      await tester.enterText(_inSheet(find.byType(TextField)).first,
+          'zed${String.fromCharCode(0x2019)}s  hold');
+      await _settle(tester);
+      expect(_inSheet(find.text(_ownApostrophe)), findsOneWidget);
+    });
+
     testWidgets('a new name still adds and closes the sheet', (tester) async {
       final h = await _pump(tester, [_bench]);
       await _openAddPicker(tester);
@@ -165,23 +238,66 @@ void main() {
       expect(find.byType(BottomSheet), findsNothing);
     });
 
-    testWidgets('create-custom named like a session exercise: refused with a message',
+    testWidgets('create-custom named like a session exercise: refused in the sheet, nothing created',
         (tester) async {
       final h = await _pump(tester, [_bench, _row]);
       await _openAddPicker(tester);
       await tester.tap(_inSheet(find.text('+ CREATE CUSTOM')));
       await _settle(tester);
-      await _createCustom(tester, _bench);
+      await _createCustomRefused(tester, _bench);
 
       expect(_names(h), [_bench, _row]);
-      expect(find.text(_takenMessage(_bench)), findsOneWidget);
-      expect(find.byType(BottomSheet), findsNothing, reason: 'the picker closed');
-      expect(
-          HiveService.instance.customBox.values
-              .whereType<Map>()
-              .any((m) => m['name'] == _bench),
-          isTrue,
-          reason: 'the custom row stays: it is a library item the user asked for');
+      expect(find.byType(CreateCustomExerciseSheet), findsOneWidget,
+          reason: 'the sheet stays open so the user can change the name');
+      expect(_customNamed(_bench), isFalse,
+          reason: 'founder 2026-11-25: a duplicate name is not kept in the library');
+      expect(find.text(_takenMessage(_bench)), findsNothing,
+          reason: 'refused at the sheet, before it ever reaches the workout');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'create-custom named like a session row that is in NO list: the workout refuses the add and says so',
+        (tester) async {
+      // `Zercher Hold` is in the session (an old plan or coach-made row) but in neither
+      // the library nor the customs, so the create is allowed and the workout's own
+      // guard is the one that refuses.
+      final h = await _pump(tester, [_custom, _row]);
+      await _openAddPicker(tester);
+      await tester.tap(_inSheet(find.text('+ CREATE CUSTOM')));
+      await _settle(tester);
+      await _createCustom(tester, _custom);
+
+      expect(_names(h), [_custom, _row]);
+      expect(find.text(_takenMessage(_custom)), findsOneWidget);
+      expect(_customNamed(_custom), isTrue, reason: 'the new exercise itself is kept');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('create-custom named like a library exercise that is NOT in the session: refused too',
+        (tester) async {
+      final h = await _pump(tester, [_bench, _row]);
+      await _openAddPicker(tester);
+      await tester.tap(_inSheet(find.text('+ CREATE CUSTOM')));
+      await _settle(tester);
+      await _createCustomRefused(tester, _curl);
+
+      expect(_names(h), [_bench, _row]);
+      expect(find.byType(CreateCustomExerciseSheet), findsOneWidget);
+      expect(_customNamed(_curl), isFalse);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('create-custom: case and spaces do not get around it',
+        (tester) async {
+      await _pump(tester, [_bench]);
+      await _openAddPicker(tester);
+      await tester.tap(_inSheet(find.text('+ CREATE CUSTOM')));
+      await _settle(tester);
+      await _createCustomRefused(tester, 'barbell CURL');
+
+      expect(find.byType(CreateCustomExerciseSheet), findsOneWidget);
+      expect(_customNamed('barbell CURL'), isFalse);
       expect(tester.takeException(), isNull);
     });
   });
@@ -235,11 +351,30 @@ void main() {
       expect(find.byType(BottomSheet), findsOneWidget, reason: 'nothing happened');
     });
 
-    testWidgets('auto-swap into a session name: message, no UNDO', (tester) async {
+    testWidgets(
+        'auto-swap into a session name that is in NO list: message, slot unchanged, no UNDO',
+        (tester) async {
+      final h = await _pump(tester, [_custom, _row]);
+      await _swapToNewCustom(tester, 1, _custom);
+
+      expect(_names(h), [_custom, _row]);
+      expect(find.text(_takenMessage(_custom)), findsOneWidget);
+      expect(find.text('UNDO'), findsNothing,
+          reason: 'nothing was swapped, so there is nothing to undo');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('auto-swap into a session name: refused in the create sheet, slot unchanged, no UNDO',
+        (tester) async {
       final h = await _pump(tester, [_bench, _row]);
-      await _swapToNewCustom(tester, 1, _bench);
+      await _openSwapSheet(tester, 1);
+      await tester.tap(_inSheet(find.text('+ ADD EXERCISE')));
+      await _settle(tester);
+      await _createCustomRefused(tester, _bench);
+
       expect(_names(h), [_bench, _row]);
-      expect(find.text(_takenMessage(_bench)), findsOneWidget);
+      expect(find.byType(CreateCustomExerciseSheet), findsOneWidget);
+      expect(_customNamed(_bench), isFalse);
       expect(find.text('UNDO'), findsNothing);
       expect(tester.takeException(), isNull);
     });

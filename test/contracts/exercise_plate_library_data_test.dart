@@ -36,11 +36,11 @@ void main() {
         reason: 'v11 shipped the plates; the Batch A repair (merges, text, plate swaps) needs 12+');
   });
 
-  test('the library is 870 rows — 285 after Batch A retired 7 duplicates, plus 633 Batch C1/C2b rows, minus 56 removals (50 Batch C2a, 6 Batch C2b), plus 9 Library Batch S1b-2 loaded versions, minus E053 (Library Batch S1b-3)', () {
+  test('the library is 872 rows (library v30 added G0592 and G0979) — 285 after Batch A retired 7 duplicates, plus 633 Batch C1/C2b rows, minus 56 removals (50 Batch C2a, 6 Batch C2b), plus 9 Library Batch S1b-2 loaded versions, minus E053 (Library Batch S1b-3)', () {
     // OI-147: Donkey Calf Raise left in Library Batch S1b-3, merged into G1373
     // Bodyweight Standing Calf Raise, which carries its name as an alias. It had
     // no plate, so the artwork counts below lose one artwork-less row.
-    expect(lib.length, 870);
+    expect(lib.length, 872);
     expect(lib.any((e) => e['name'] == 'Donkey Calf Raise'), isFalse);
     expect(lib.firstWhere((e) => e['id'] == 'G1373')['name_aliases'], contains('Donkey Calf Raise'));
   });
@@ -55,13 +55,13 @@ void main() {
     }
   });
 
-  test('exactly 149 rows carry artwork and 721 do not (870 rows: Batch C2b removed E111 Sissy Squat and its plate; Batch C1 and Library Batch S1b-2 add none, Library Batch S1b-3 removed artwork-less E053, Batch M owns media)', () {
+  test('exactly 149 rows carry artwork and 723 do not (872 rows: library v30 adds two without art; Batch C2b removed E111 Sissy Squat and its plate; Batch C1 and Library Batch S1b-2 add none, Library Batch S1b-3 removed artwork-less E053, Batch M owns media)', () {
     final withArt = lib.where((e) {
       final s = e['demo_slug'];
       return s is String && s.isNotEmpty;
     }).toList();
     expect(withArt.length, 149);
-    expect(lib.length - withArt.length, 721);
+    expect(lib.length - withArt.length, 723);
     for (final e in withArt) {
       expect(e['demo_pair'], isA<bool>(),
           reason: '${e['name']}: demo_slug without demo_pair');

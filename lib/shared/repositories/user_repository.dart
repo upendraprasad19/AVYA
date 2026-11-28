@@ -12,7 +12,8 @@ import 'package:icanbefitter/core/utils/bmr_calculator.dart';
 import 'package:icanbefitter/core/utils/ist_date.dart';
 import 'package:icanbefitter/core/utils/unit_prefs_rule.dart';
 import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show FileOptions, FunctionException;
 
 /// Result of [UserRepository.clearAllData]. Test #10.1 — surfaces
 /// per-box failures so callers (signOut, cross-account guard) can detect
@@ -1459,9 +1460,9 @@ class UserRepository {
   /// Invokes the `assess-body-composition` Edge Function with the given photo
   /// and biometric context.
   ///
-  /// Returns the raw response data map on HTTP 200, or throws a
-  /// [BodyCompositionAssessmentException] carrying the server's `code` and
-  /// `error` fields on any non-200 status.
+  /// Returns the raw response data map on success. Throws a
+  /// [BodyCompositionAssessmentException] for the function's own refusals
+  /// ([bodyCompositionRefusalOf]); any other failure is rethrown as it came.
   static Future<Map<String, dynamic>> assessBodyComposition({
     required String imageBase64,
     required String mimeType,
@@ -1470,32 +1471,59 @@ class UserRepository {
     required String gender,
     required int age,
   }) async {
-    // §2.31: callFunction refreshes the JWT (+ cold-start retry) before the
-    // authed invoke — a stale token would 401 (check_authed_invoke_fresh_token).
-    final response = await SupabaseService.instance.callFunction(
-      'assess-body-composition',
-      body: {
-        'image_base64': imageBase64,
-        'mime_type': mimeType,
-        'weight_kg': weightKg,
-        'height_cm': heightCm,
-        'gender': gender,
-        'age': age,
-      },
-    );
-    if (response.status != 200) {
-      final data = response.data as Map? ?? {};
-      final code = data['code'] as String?;
-      final error = data['error'] as String? ?? 'Assessment failed';
-      final nextAllowedAt = data['next_allowed_at'] as String?;
-      throw BodyCompositionAssessmentException(
-        code: code,
-        message: error,
-        status: response.status,
-        nextAllowedAt: nextAllowedAt,
+    try {
+      // §2.31: callFunction refreshes the JWT (+ cold-start retry) before the
+      // authed invoke — a stale token would 401 (check_authed_invoke_fresh_token).
+      final response = await SupabaseService.instance.callFunction(
+        'assess-body-composition',
+        body: {
+          'image_base64': imageBase64,
+          'mime_type': mimeType,
+          'weight_kg': weightKg,
+          'height_cm': heightCm,
+          'gender': gender,
+          'age': age,
+        },
+        // The function records the month's one assessment before it answers,
+        // so a re-send after a gateway error is refused and the result is lost.
+        spendsQuotaPerCall: true,
       );
+      return Map<String, dynamic>.from(response.data as Map);
+    } on FunctionException catch (e) {
+      // `functions.invoke` THROWS on any non-2xx answer: a refusal arrives
+      // here, never as a response status.
+      final refusal = bodyCompositionRefusalOf(e);
+      if (refusal != null) throw refusal;
+      rethrow;
     }
-    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  /// The refusal codes `assess-body-composition` answers with.
+  static const _bodyCompositionRefusalCodes = {
+    'pro_required',
+    'rate_limited',
+    'unsuitable_image',
+  };
+
+  /// The function's own refusal inside a thrown [FunctionException]; null for
+  /// anything else (a server error, a gateway answer, no network).
+  @visibleForTesting
+  static BodyCompositionAssessmentException? bodyCompositionRefusalOf(
+      FunctionException e) {
+    final details = e.details;
+    if (details is! Map) return null;
+    final code = details['code'];
+    if (code is! String || !_bodyCompositionRefusalCodes.contains(code)) {
+      return null;
+    }
+    final error = details['error'];
+    final nextAllowedAt = details['next_allowed_at'];
+    return BodyCompositionAssessmentException(
+      code: code,
+      message: error is String ? error : 'Assessment failed',
+      status: e.status,
+      nextAllowedAt: nextAllowedAt is String ? nextAllowedAt : null,
+    );
   }
 
   // ── Sanitize ─────────────────────────────────────────────────────────────

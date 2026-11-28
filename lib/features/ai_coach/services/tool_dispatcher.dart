@@ -655,11 +655,9 @@ class ToolDispatcher {
       unawaited(ErrorTelemetry.logEvent(
           'tool_dispatch_create_custom_exercise_failed',
           message: '${e.code}: ${e.message}'));
-      return ToolExecutionResult.failure(
-        e.code == 'duplicate_name'
-            ? 'You already have an exercise called "$name".'
-            : e.message,
-      );
+      // The repository's words: they are true for a list name and for one of the
+      // user's own, which "You already have an exercise called …" was not.
+      return ToolExecutionResult.failure(e.message);
     }
   }
 

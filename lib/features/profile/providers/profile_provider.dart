@@ -27,6 +27,7 @@ import 'package:icanbefitter/core/services/supabase_service.dart';
 import 'package:icanbefitter/core/services/sync_service.dart';
 import 'package:icanbefitter/core/theme/colors.dart';
 import 'package:icanbefitter/features/profile/services/profile_target_recompute.dart';
+import 'package:icanbefitter/features/profile/services/profile_write_service.dart';
 import 'package:icanbefitter/features/auth/providers/auth_invalidation_provider.dart';
 import 'package:icanbefitter/shared/repositories/user_repository.dart';
 import '../utils/profile_image_url.dart';
@@ -92,6 +93,18 @@ class UserProfileNotifier extends Notifier<Map<String, dynamic>> {
   Future<void> updateProfile(Map<String, dynamic> fields) async {
     await UserRepository.instance.updateProfileFields(fields);
     state = UserRepository.instance.getProfile() ?? {};
+  }
+
+  /// [updateProfile] whose decision is made under the profile write lock (see
+  /// `ProfileWriteService.patchProfileWith`). False means nothing was written.
+  Future<bool> updateProfileIf(
+    Map<String, dynamic>? Function(Map<String, dynamic> current) build, {
+    required bool Function() stillOwner,
+  }) async {
+    final wrote = await ProfileWriteService.instance
+        .patchProfileWith(build, stillOwner: stillOwner);
+    if (wrote) state = UserRepository.instance.getProfile() ?? {};
+    return wrote;
   }
 
   /// THE write door for the user's food type (`diet_preference`), used by the

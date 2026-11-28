@@ -42,6 +42,8 @@ const List<String> kV14SafePool = [
   // safe_pool_additions in scripts/data/library_injury_additions_v15.json (asserted by library_batch_c_injury_coverage_test.dart).
   // Low-load or rehab rows only: seated and supported rows, pelvic tilts, bridges, band rear-delt work, low-impact cardio.
   'Band Hip Lift',
+  // Library v30: founder 2026-11-28, no injury restriction.
+  'Band Pallof Press',
   'Band Reverse Fly',
   'Band Standing Rear Delt Row',
   'Barbell Incline Row',
