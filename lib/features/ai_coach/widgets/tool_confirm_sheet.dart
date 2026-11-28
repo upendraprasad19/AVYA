@@ -57,13 +57,23 @@ class _ToolConfirmSheetState extends ConsumerState<ToolConfirmSheet> {
       messenger.showSnackBar(
         SnackBar(content: Text(result.errorMessage ?? 'Failed')),
       );
-    } else if (profileInjuryAdded(result) != null) {
+    } else if (profileInjuryAdded(result) != null ||
+        _changedNoWorkout(result.data)) {
       // Unit 3C (d77, B-pass seat B F1): a destructive intent is confirmed here, not on the chat card, so the
       // injury the coach saved to the profile is announced here: `Workouts updated · Knee added to your injuries`.
+      // An injury change that swapped nothing says so, or the tap looks like it did something.
       messenger.showSnackBar(
         SnackBar(content: Text(executedMessageFor(widget.intent, result.data))),
       );
     }
+  }
+
+  bool _changedNoWorkout(Object? data) {
+    if (widget.intent.type != 'modify_workout_for_injury' || data is! Map) {
+      return false;
+    }
+    final swaps = data['swaps'];
+    return swaps is List && swaps.isEmpty;
   }
 
   void _cancel() {

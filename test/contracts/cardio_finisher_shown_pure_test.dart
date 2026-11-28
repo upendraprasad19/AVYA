@@ -271,8 +271,15 @@ void main() {
     });
     test('a coach injury saved to the profile says so', () {
       expect(executedMessageFor(_intent('modify_workout_for_injury'), {'swaps': [], 'profile_injury_added': 'knee'}),
-          'Workouts updated · Knee added to your injuries');
-      expect(executedMessageFor(_intent('modify_workout_for_injury'), {'swaps': []}), 'Workouts updated');
+          'No workouts changed · Knee added to your injuries');
+      expect(executedMessageFor(_intent('modify_workout_for_injury'), {'swaps': []}), 'No workouts changed');
+      expect(
+          executedMessageFor(_intent('modify_workout_for_injury'), {
+            'swaps': [
+              {'date': '2026-11-28', 'from': 'A', 'to': 'B'}
+            ]
+          }),
+          'Workouts updated');
       expect(executedMessageFor(_intent('modify_workout_for_injury'), null), 'Workouts updated');
     });
   });

@@ -481,7 +481,11 @@ class _ToolConfirmCardState extends ConsumerState<ToolConfirmCard> {
 /// The confirm card's executed line for [intent], with what its execution reported in [resultData] (Unit 3C, OI-396:
 /// d79 `Workout shortened · finisher removed`, d77 `Workouts updated · Knee added to your injuries`).
 String executedMessageFor(ToolIntent intent, Object? resultData) {
-  final base = _executedMessage(intent);
+  var base = _executedMessage(intent);
+  if (intent.type == 'modify_workout_for_injury' && resultData is Map) {
+    final swaps = resultData['swaps'];
+    if (swaps is List && swaps.isEmpty) base = 'No workouts changed';
+  }
   if (intent.type == 'shorten_workout' && resultData is ShortenDayResult && resultData.finisherDropped) {
     return '$base · finisher removed';
   }

@@ -1,7 +1,8 @@
 // Unit 3C (OI-396, d77; B-pass seat B F1): `modifyWorkoutForInjury` is a DESTRUCTIVE intent, so the user confirms it on
 // `ToolConfirmSheet` (chat_area.dart sends every destructive intent there), not on `ToolConfirmCard`. After a confirm
 // that saved the injury to the profile, the sheet announces it: `Workouts updated · Knee added to your injuries`. A
-// success with nothing added says nothing (as before); a failure keeps its error text.
+// success that changed no workout says `No workouts changed` (founder 2026-11-28 batch); a success that swapped and
+// added nothing says nothing (as before); a failure keeps its error text.
 @Timeout(Duration(minutes: 2))
 library;
 
@@ -21,6 +22,10 @@ final _intent = ToolIntent(
   previewSummary: 'Swap knee-loaded exercises',
   createdAt: DateTime(2026, 11, 16),
 );
+
+const _oneSwap = <Object>[
+  <String, String>{'date': '2026-11-16', 'from': 'Squat', 'to': 'Leg Curl'},
+];
 
 /// Returns [result] from `confirm` without touching the dispatcher.
 class _FakeIntents extends PendingToolIntentsNotifier {
@@ -57,13 +62,24 @@ Future<void> _confirmWith(WidgetTester tester, ToolExecutionResult result) async
 void main() {
   testWidgets('a saved injury is announced after the sheet closes', (tester) async {
     await _confirmWith(
-        tester, const ToolExecutionResult.success(data: {'swaps': <Object>[], 'profile_injury_added': 'knee'}));
+        tester, const ToolExecutionResult.success(data: {'swaps': _oneSwap, 'profile_injury_added': 'knee'}));
     expect(find.byType(ToolConfirmSheet), findsNothing);
     expect(find.text('Workouts updated · Knee added to your injuries'), findsOneWidget);
   });
 
-  testWidgets('a success that added nothing says nothing (unchanged)', (tester) async {
+  testWidgets('no swap made: the announcement says no workout changed', (tester) async {
+    await _confirmWith(
+        tester, const ToolExecutionResult.success(data: {'swaps': <Object>[], 'profile_injury_added': 'knee'}));
+    expect(find.text('No workouts changed · Knee added to your injuries'), findsOneWidget);
+  });
+
+  testWidgets('no swap made and nothing added: still said', (tester) async {
     await _confirmWith(tester, const ToolExecutionResult.success(data: {'swaps': <Object>[]}));
+    expect(find.text('No workouts changed'), findsOneWidget);
+  });
+
+  testWidgets('a success that swapped and added nothing says nothing (unchanged)', (tester) async {
+    await _confirmWith(tester, const ToolExecutionResult.success(data: {'swaps': _oneSwap}));
     expect(find.byType(SnackBar), findsNothing);
   });
 

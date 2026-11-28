@@ -23,6 +23,9 @@ class InjuryModifyDiff extends StatefulWidget {
 
 class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
   List<InjurySwap>? _swaps;
+
+  /// Affected exercises with no substitute: they stay in the plan, and the preview names them.
+  List<InjuryUnplaced> _unplaced = const [];
   String? _error;
 
   /// Unit 3C (d77 / d78): the token confirming will add to the profile, or null (no line).
@@ -36,16 +39,18 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
 
   Future<void> _compute() async {
     try {
-      final swaps = await InjurySwapPlanner.instance.plan(
+      final plan = await InjurySwapPlanner.instance.plan(
         bodyPart: widget.intent.payload['bodyPart'] as String,
         severity: widget.intent.payload['severity'] as String,
         daysAhead: (widget.intent.payload['daysAhead'] as num?)?.toInt() ?? 7,
       );
+      final swaps = plan.swaps;
       InjurySwapPlanner.instance.cacheSwaps(widget.intent.id, swaps);
       final adds = coachInjuryTokenToAdd(widget.intent.payload['bodyPart'] as String?);
       if (mounted) {
         setState(() {
           _swaps = swaps;
+          _unplaced = plan.unplaced;
           _addsToken = adds;
         });
       }
@@ -88,17 +93,46 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
               style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.accent),
             ),
           );
+    final unplacedBlock = _unplaced.isEmpty
+        ? null
+        : Padding(
+            key: const ValueKey('injury_unplaced_block'),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No substitute found for these. They stay in your plan:',
+                  style: AppTypography.bodySm.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                ),
+                ..._unplaced.map(
+                  (u) => Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      '${u.date} · ${u.exerciseName}',
+                      style: AppTypography.bodySm.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
     if (_swaps!.isEmpty) {
+      final confirmLine = _addsToken == null
+          ? 'Confirm to record the injury anyway.'
+          : 'Confirm to save the injury to your profile.';
       return Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ?addsLine,
+            ?unplacedBlock,
             Text(
-              _addsToken == null
-                  ? 'No exercises in the next $daysAhead days hit this body part — no changes needed. Confirm to record the injury anyway.'
-                  : 'No exercises in the next $daysAhead days hit this body part — no changes needed. Confirm to save the injury to your profile.',
+              // "Nothing hits this body part" is said only when nothing does.
+              _unplaced.isEmpty
+                  ? 'No exercises in the next $daysAhead days hit this body part — no changes needed. $confirmLine'
+                  : confirmLine,
               style: AppTypography.bodyM.copyWith(color: AppColors.textSecondary),
             ),
           ],
@@ -116,6 +150,7 @@ class _InjuryModifyDiffState extends State<InjuryModifyDiff> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ?addsLine,
+        ?unplacedBlock,
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
