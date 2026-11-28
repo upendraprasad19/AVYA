@@ -5,15 +5,15 @@ blast_radius: platform
 review_rounds: 3
 ground_truth_verified: true
 verdict: converged
-bpass: pending
+bpass: accepted
+bpass_review: docs/reviews/oi530-landing-a-bpass.md
 ---
 
 # Plan Review — OI-530 Landing A (a restore reads the plan bundle once)
 
 - **Scope of this branch:** Landing A only (`docs/plans/oi530-landing-a-one-plan-read.md`). The wider plan
   `docs/plans/oi530-per-day-schedule-sync.md` (Landings B/C, schedule sync by week row) is committed here as a
-  design document; it has NOT converged (rounds 1-3 each found material issues) and no B/C code is in this
-  branch. Split under CLAUDE.md §4.12.1.
+  design document; it converged at review round 8 (draft 8) and no B/C code is in this commit range. Split under CLAUDE.md §4.12.1.
 - **Blast radius:** `platform` (`scripts/blast_radius_from_diff.dart` over the branch paths).
 - **Founder decision:** Option C + the quick win, 2026-11-28. EF deploy needs its own go (§4.3).
 
@@ -40,3 +40,7 @@ bpass: pending
   3 of 25 `restore_reads_test.ts` tests.
 - Client: (1) swallow the shared-read error (the marker test reddened), (2) ignore the kill switch (the
   switch test reddened); the builder-caching defect itself reddened the request-count test before the fix.
+
+## B-pass
+- `docs/reviews/oi530-landing-a-bpass.md`: one fresh Sonnet seat on `a23e72622eed`; 3 P2 registry cites (the
+  TS file's sibling cites not shifted), all fixed; reviewer mutants M1-M3 each reddened a test.

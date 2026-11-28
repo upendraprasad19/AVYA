@@ -3878,7 +3878,7 @@ concepts:
           The ONLY place the paged reads are built. The user scope, the explicit order
           directions, the 51-page per-table ceiling and the shared budget live here.
       - file: supabase/functions/restore-user-snapshot/index.ts
-        line_range: 97-165
+        line_range: 97-167
         method: serve handler
         notes: |
           Creates ONE budget per request (inside the handler) and hands it to
@@ -8243,7 +8243,7 @@ concepts:
     reader_manifest_complete: false
     readers:
       - { file: lib/core/services/sync/sync_profile.dart, line_range: 1170-1261, method: _restoreUserPreferences, semantic: pass-through, notes: "Generic .select() on user_preferences pulls the whole row, incl. coaching_notes, into Hive on restore. The client never writes this key back (see class_constraints below) — reader_manifest_complete is false because nothing in lib/ currently parses this JSON's individual keys client-side; it round-trips opaquely." }
-      - { file: supabase/functions/restore-user-snapshot/restore_reads.ts, line: 56, method: "READS user_preferences tuple (OI-348 B10: moved from index.ts)", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
+      - { file: supabase/functions/restore-user-snapshot/restore_reads.ts, line: 61, method: "READS user_preferences tuple (OI-348 B10: moved from index.ts)", semantic: pass-through, notes: "Server-side restore endpoint selects user_preferences.* (incl. coaching_notes) back to a fresh install / reinstall." }
     cloud:
       table: user_preferences
       columns: [user_id, coaching_notes]
@@ -18932,7 +18932,7 @@ concepts:
         fields_read: [referral_redemptions.code, referral_redemptions.referrer_id, referral_redemptions.referee_id, referral_redemptions.days_granted_each, referral_redemptions.created_at]
         notes: Selects the rows where the user is either party and stores them raw in Hive (`referral_redemption_history`, which nothing reads); no field is parsed, so a NULL party is carried through. The three 159 columns are deliberately NOT in the select (no reader).
       - file: supabase/functions/restore-user-snapshot/restore_reads.ts
-        line_range: 135-140
+        line_range: 140-145
         method: restore snapshot, referral_redemptions READS tuple
         semantic: restore-raw
         fields_read: [referral_redemptions.code, referral_redemptions.referrer_id, referral_redemptions.referee_id, referral_redemptions.days_granted_each, referral_redemptions.created_at]
@@ -19126,7 +19126,7 @@ concepts:
         semantic: restore
         fields_read: [code, expires_at]
       - file: supabase/functions/restore-user-snapshot/restore_reads.ts
-        line_range: 131-134
+        line_range: 136-139
         method: the single-call restore read of the own LIVE code (gt expires_at now), injected into _restoreReferralCodes(preFetched:)
         semantic: restore
         fields_read: [code, expires_at, created_at]
