@@ -55,7 +55,8 @@ const _quadsUnder = <String, int>{
 const _repeatsAtMost = <int, int>{3: 0, 4: 48, 5: 102};
 
 /// The OFF grid's digest on the tree before 2C (HEAD c6b1ee48, the switch key unread there), recorded 2026-11-14.
-const _offDigest = '8d2554d169175c89fe0c2ebcf5d4cfca7a5717b3c8ed28bea8af9461efa98c7e';
+/// Library v30 (OI-443, 2026-11-28; library data only, no plan-engine code change): was 8d2554d1....
+const _offDigest = 'bb7f3849df98ad75495902c7d55dd1c01ab98a4030c293601a7fbb52cee81957';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

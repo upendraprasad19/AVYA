@@ -808,20 +808,24 @@ void main() {
       // The count-forced excuse is used by exactly these days, by exactly these seconds (B review, seat 2 finding 3).
       // Unit 3A (2026-11-15): plan 95 (a Cut / Maintain plan under the goal's lower band) joins, 57.6 s on day 4 of
       // both variants; attributed by re-running with the goal training off (the old map back exactly).
+      // Library v30 (OI-443, 2026-11-28; library data only, no plan-engine code change): the sweep
+      // draws rows by index, so the whole sample changed; `over` and the floor counts below were re-measured.
       expect(over, <String, double>{
-        '15/A/1': 90.0, '37/A/0': 10.8, '37/B/0': 118.8, '68/A/1': 10.8, '95/A/4': 57.6, '95/B/4': 57.6,
-        '100/A/1': 10.8, '100/A/3': 198.0,
-        '100/B/1': 10.8, '100/B/3': 198.0, '101/B/0': 90.0, '106/A/1': 54.0, '106/A/2': 10.8, '106/B/2': 10.8,
-        '131/A/3': 54.0, '131/A/4': 10.8, '142/A/3': 54.0, '149/A/0': 75.6, '149/A/2': 10.8, '149/B/0': 75.6,
-        '149/B/2': 10.8, '151/A/2': 10.8, '151/B/2': 10.8, '182/A/0': 154.8, '182/A/2': 10.8, '182/B/2': 10.8,
-        '215/B/1': 10.8,
+        '8/A/1': 10.8, '8/B/1': 10.8, '13/B/1': 66.0, '20/A/0': 22.8, '37/A/0': 75.6, '37/B/0': 75.6,
+        '37/B/4': 10.8, '39/A/2': 10.8, '39/B/2': 10.8, '58/A/1': 10.8, '58/B/1': 10.8, '77/A/3': 22.8,
+        '78/A/4': 75.6, '88/A/0': 10.8, '88/B/0': 10.8, '89/A/0': 10.8, '89/A/1': 10.8, '89/B/0': 10.8,
+        '89/B/1': 10.8, '117/B/1': 10.8, '120/A/5': 54.0, '129/B/1': 154.8, '132/A/2': 10.8,
+        '132/B/4': 10.8, '140/A/5': 10.8, '148/A/1': 54.0, '148/A/4': 75.6, '154/A/3': 10.8,
+        '160/B/1': 10.8, '160/B/2': 10.8, '192/B/1': 75.6, '200/A/0': 10.8, '200/B/0': 10.8,
+        '208/A/2': 10.8, '208/B/2': 10.8, '213/B/3': 54.0,
       });
       // ignore: avoid_print
       print('seeded sweep: floor seats $floorSeats, past a top $floorOverTop, past the clock $floorOverClock');
       // Measured 2026-11-13: 12 seats, every one past a top (the reason the week check reads the oracle), none past
       // the clock (so the pinned `over` map above is unchanged by the floor). Unit 3A (2026-11-15): 21 / 21 / 0, the
       // Cut / Maintain plans' lower tops leave more days thin (12 again with the goal training off).
-      expect((floorSeats, floorOverTop, floorOverClock), (21, 21, 0));
+      // Library v30 (OI-443, 2026-11-28; library data only, no plan-engine code change): 27 / 27 / 0 on the new sample.
+      expect((floorSeats, floorOverTop, floorOverClock), (27, 27, 0));
       // `guarded` is reported, not asserted: random picks seldom empty a whole day,
       // and the guard itself is pinned by the crafted 'guard' test above.
       // ignore: avoid_print

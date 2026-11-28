@@ -56,7 +56,8 @@ const _groups = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Ha
 /// with the goal training off everywhere 2E's 794121ba... measured back exactly), and on 421cd2d2 for
 /// generator-killswitch-3a3c (the finisher built unreserved through `CardioFinisher.debugReserve` instead of the deleted
 /// 3C key: only the `finisher` maps moved, every count above unchanged; plan §6).
-const _onDigest = '328f7b13da8163bc94fa4981ece9b8c41d01638d9be6791e57c80566484454b7';
+/// Library v30 (OI-443, 2026-11-28; library data only, no plan-engine code change): was 328f7b13....
+const _onDigest = '78bf8e6fefa4e61de0859d6fd79834500a6c894cba948fe0ef2663c09298c045';
 
 const _fallback = {'build_muscle|3|advanced|bodyweight|30|2', 'build_muscle|3|advanced|bodyweight|30|3'};
 
@@ -278,7 +279,9 @@ void main() {
     expect(rowDiff, isEmpty, reason: 'd44: the allowance adds sets, never an exercise');
     // Unit 2E (d51) closed the Biceps 13 / Triceps 9 pairs; Calves 49 is unchanged (d45 / d49).
     expect(zeroOn, {'Calves': 49});
-    expect(zeroOff, {'Biceps': 14, 'Triceps': 19, 'Core': 42, 'Calves': 57});
+    // Library v30 (OI-443, 2026-11-28; library data only, no plan-engine code change):
+    // the OFF world's Core zero weeks 42 -> 45; every ON count above is unchanged.
+    expect(zeroOff, {'Biceps': 14, 'Triceps': 19, 'Core': 45, 'Calves': 57});
     expect(maxOver, lessThanOrEqualTo(6), reason: 'd47');
 
     // 9. ON byte for byte.

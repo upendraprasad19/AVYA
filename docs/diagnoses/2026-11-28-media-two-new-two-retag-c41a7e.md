@@ -77,6 +77,32 @@ gets `core_levels: [intermediate, advanced]`; it also carries `same_movement_as:
 T-bar rows on one day. Both keys change in `scripts/data/library_batch_c_source.json`; neither is a cloud column, and the
 regenerated cloud draft is identical to the one before the change.
 
+## Plan snapshots and pins re-recorded for library v30
+
+Attribution: main's CI at the base `d2d92832` is green with the old library. Since then `lib/` changed only the seed
+version and comments (plus the plan-engine guide), so every moved value comes from library data: E027 out of basic_gym,
+E120 into home_dumbbells, G0592 and G0979 added, G0574 on the core list and linked to E027. Values were taken from the CI
+run of `f87869cd` (every gate prints its counters), except the allocator's `over` map, its floor counts and the weekly
+ON digest, which are cut off or unreached there and were printed locally.
+
+| What | Moved |
+|---|---|
+| generator golden | 80 of 1,010 personas (76 grid, 4 injury) |
+| balanced-week / loaded-wins / lead-first switch-off goldens | 122 / 122 / 134 of 1,010 |
+| day-floor fixture | 328 combo keys; OFF digests of phases 1 and 4 for home_dumbbells, basic_gym, full_gym |
+| day-floor counts | home_dumbbells: phase 1 thin-off 76 -> 80, knock-on 6 -> 9; phase 4 thin-off 188 -> 168 |
+| goal-training baseline | 88 of 1,152 build and strength hashes (52 basic_gym, 36 full_gym); other sections untouched |
+| goal-training counts | week-1 mains at a range bound 3601 -> 3591; both digests |
+| weekly minimum | switch-off Core zero weeks 42 -> 45; ON digest |
+| titration / plateau | per-goal counters and their totals (see the diff of the lib) |
+| three random sweeps | they draw rows by index, so two new rows change every draw: digest, both `over` maps, floor seats 21 -> 27 |
+
+Safety readings on the new values: day floor, 12 blocks, 6,720 persona runs, 0 days under 3 with the floor on, nothing in
+`bad`; allocator floor seats past the clock 0 (the largest forced overrun in that sample is 154.8 s, was 198.0 s);
+goal training 0 rep misses and no muscle group newly at zero; weekly minimum ON verdicts, new majors (0), over-time
+maximum (6) unchanged; titration failure list empty and, for each goal, no more flat weeks under the band bottom with the
+feature on than off.
+
 ## Frozen row reference
 
 `test/fixtures/exercise_library_v12_row_hashes.json` is re-recorded for exactly **E027** (equipment_needed, equipment_tier,
