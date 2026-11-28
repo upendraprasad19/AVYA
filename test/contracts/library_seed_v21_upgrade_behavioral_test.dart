@@ -52,8 +52,8 @@ void main() {
   setUp(() async => tempDir = await setUpHiveForTests());
   tearDown(() async => tearDownHiveForTests(tempDir));
 
-  test('precondition: 35 rows differ from the fixture (Table A as amended by S1b-1: E038 out, G0168 and E109 in)', () {
-    expect(_changedIds().length, 35);
+  test('precondition: 36 rows differ from the fixture (Table A as amended by S1b-1: E038 out, G0168 and E109 in; seed v30: G0574 in)', () {
+    expect(_changedIds().length, 36);
   });
 
   test('a v20 box with the old levels ends at the current version (v30) with the new levels, and every other row unchanged', () async {

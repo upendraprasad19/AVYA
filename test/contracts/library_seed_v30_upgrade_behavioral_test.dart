@@ -19,7 +19,7 @@ import 'package:icanbefitter/core/services/seed_service.dart';
 import '../helpers/hive_test_setup.dart';
 import '../helpers/library_v30_rows.dart';
 
-const _touched = {'E027', 'E120', 'G0592', 'G0979'};
+const _touched = {'E027', 'E120', 'G0592', 'G0979', 'G0574'};
 
 List<Map<String, dynamic>> _bundled() =>
     (jsonDecode(File('assets/data/exercise_library.json').readAsStringSync()) as List).cast<Map<String, dynamic>>();
@@ -43,13 +43,13 @@ void main() {
   tearDown(() async => tearDownHiveForTests(tempDir));
 
   // sha256 of the shipped v29 asset (d2d92832), computed from git with Python's compact json.dumps (ensure_ascii off).
-  test('the v30 bundle is the v29 bundle plus two rows and the two retags, and nothing else', () {
+  test('the v30 bundle is the v29 bundle plus two rows, the two retags and the G0574 rotation change', () {
     expect(sha256.convert(utf8.encode(jsonEncode(beforeV30(_bundled())))).toString(),
         '93a39007e24f1ebe9e81ab621e65add2c95b76c5a85fbc6ba50a5cd4a5907c54');
     expect(_bundled().length, beforeV30(_bundled()).length + newRowIdsV30.length);
   });
 
-  test('a v29 box ends at v30: the four rows are written as bundled, every other row is unchanged', () async {
+  test('a v29 box ends at v30: the five rows are written as bundled, every other row is unchanged', () async {
     final hive = HiveService.instance;
     await _seedV29(hive, markedVersion: 29);
     for (final id in newRowIdsV30) {

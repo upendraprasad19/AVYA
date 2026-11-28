@@ -6904,9 +6904,9 @@
       "shipped": 644,
       "core": {
         "beginner": 62,
-        "intermediate": 64,
-        "advanced": 54,
-        "rows": 100
+        "intermediate": 65,
+        "advanced": 55,
+        "rows": 101
       }
     }
   },
@@ -49297,7 +49297,11 @@
       "indian_alternative": "",
       "variant_family": "row",
       "discipline": "strength",
-      "core_levels": [],
+      "core_levels": [
+        "intermediate",
+        "advanced"
+      ],
+      "same_movement_as": "E027",
       "skill_track": null,
       "skill_step": null,
       "regression_to": null,

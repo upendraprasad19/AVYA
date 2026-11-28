@@ -68,6 +68,15 @@ touched_layers_checked:
   - { layer: storage_buckets_objects, status: fixed_in_this_batch, evidence: "four objects (1,487,888 bytes): dry run 4 local files ok, 0 sha mismatch; the upload runs only on the founder's go and is verified with --verify." }
 ---
 
+## G0574 joins the rotation (founder 2026-11-28)
+
+The first CI run on PR #363 showed one real behaviour change: with E027 out of basic_gym, a basic_gym advanced repeat phase
+(week 2) put Cable Low Seated Row on both the Pull and the Upper day (`cross_day_variety_behavioral_test.dart`, 0 -> 1).
+Founder decision: G0574 Landmine T-Bar Row (barbell, basic_gym and full_gym, lower_back, picture checked against its still)
+gets `core_levels: [intermediate, advanced]`; it also carries `same_movement_as: E027`, so a full gym never gets both
+T-bar rows on one day. Both keys change in `scripts/data/library_batch_c_source.json`; neither is a cloud column, and the
+regenerated cloud draft is identical to the one before the change.
+
 ## Frozen row reference
 
 `test/fixtures/exercise_library_v12_row_hashes.json` is re-recorded for exactly **E027** (equipment_needed, equipment_tier,

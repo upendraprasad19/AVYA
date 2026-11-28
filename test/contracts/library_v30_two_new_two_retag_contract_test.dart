@@ -101,6 +101,17 @@ const _expected = <String, Map<String, Object>>{
     'coaching_cues': ['Hold plate between palms', 'squeeze plate hard', 'press forward', 'return slowly'],
     'media_slug': '0856-weighted-svend-press',
   },
+  // Founder 2026-11-28: T-Bar Row left basic gyms, so the barbell landmine row joins the rotation and the two never
+  // share a day.
+  'G0574': {
+    'name': 'Landmine T-Bar Row',
+    'equipment_needed': ['barbell'],
+    'equipment_tier': ['basic_gym', 'full_gym'],
+    'core_levels': ['intermediate', 'advanced'],
+    'same_movement_as': 'E027',
+    'injury_contraindications': ['lower_back'],
+    'media_slug': '0574-bent-over-row',
+  },
 };
 
 void main() {

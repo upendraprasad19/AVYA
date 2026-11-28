@@ -212,3 +212,10 @@ floor or a sweep to pass. No `lib/shared/repositories/plan_engine/**` edit.
 - A workout generated for a basic gym no longer offers T-Bar Row (intended: the station is a machine).
 - Rollback of the app change is whole-batch (the media table test refuses an orphaned `unmapped` file).
 - Uploaded objects are additive; unused objects are harmless and are not deleted by a rollback.
+
+## Addendum (2026-11-28, after the first CI run)
+
+Founder: add G0574 Landmine T-Bar Row to the rotation. Source row: `core_levels: [intermediate, advanced]`,
+`same_movement_as: E027`. Reason: the basic_gym advanced repeat phase repeated Cable Low Seated Row on two days once E027
+became machine-only. Pins that restate the rule move with it (core-level Table A, the linked-row set, the same-day gate's
+pair count, the v29 rebuild helper). Cloud draft unchanged. Plan snapshots are re-recorded after this change.

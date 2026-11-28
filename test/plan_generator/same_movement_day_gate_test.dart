@@ -82,7 +82,8 @@ void main() {
             final orig = originalOf[n];
             if (orig != null) {
               member = true;
-              daysWithLoaded++;
+              // The floor below measures the nine loaded versions (N ids) only; G0574 / T-Bar Row is not one.
+              if (n != 'Landmine T-Bar Row') daysWithLoaded++;
               if (names.contains(orig)) bad.add('${p.key} week ${w + 1} day ${d + 1}: $n with $orig');
             } else if (originalOf.containsValue(n)) {
               member = true;
@@ -92,7 +93,8 @@ void main() {
         }
       }
     }
-    expect(originalOf.length, 9, reason: 'the nine loaded versions (N14 to N22)');
+    expect(originalOf.length, 10, reason: 'the nine loaded versions (N14 to N22) and G0574 (seed v30)');
+    expect(originalOf['Landmine T-Bar Row'], 'T-Bar Row');
     expect(daysWithMember, greaterThan(0), reason: 'non-vacuity: no day held a member of a pair');
     // Measured floors (2026-11-09, 998 personas): OFF 5 placements, ON 977. `> 0` alone let OFF collapse to one day
     // unnoticed (B-pass seat A); a change that moves these on purpose re-measures them here. Unit 1B-Q (2026-11-10):

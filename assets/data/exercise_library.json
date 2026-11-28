@@ -60363,12 +60363,16 @@
     "standard_swap": "",
     "priority_tier": 3,
     "rep_range": "8-12",
-    "core_levels": [],
+    "core_levels": [
+      "intermediate",
+      "advanced"
+    ],
     "discipline": "strength",
     "gym_availability": "well_equipped_gym",
     "requires_coaching": false,
     "high_impact": false,
     "variant_family": "row",
+    "same_movement_as": "E027",
     "media_slug": "0574-bent-over-row",
     "media_version": 1,
     "media_source": "wardroom"
